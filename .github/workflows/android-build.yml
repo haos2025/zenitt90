@@ -32,6 +32,13 @@ jobs:
         run: |
           yes | sdkmanager --licenses || true
 
+      - name: Generate Gradle Wrapper if missing
+        run: |
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Gradle wrapper missing. Generating..."
+            gradle wrapper
+          fi
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
