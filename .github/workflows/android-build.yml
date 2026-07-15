@@ -24,7 +24,6 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: 11076708
-          # Even with the flag, sometimes explicit acceptance is needed
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true
           packages: platforms;android-34 build-tools;34.0.0
@@ -32,6 +31,9 @@ jobs:
       - name: Accept Licenses Manually
         run: |
           yes | sdkmanager --licenses || true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug
