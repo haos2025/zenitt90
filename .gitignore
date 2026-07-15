@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Generated
+*.apk
+*.aab
+
+# Keystore (не коммитить release keystore!)
+# debug.keystore коммитится (пароль "android" — публичный дефолт)
+
+# Python
+__pycache__/
+*.pyc

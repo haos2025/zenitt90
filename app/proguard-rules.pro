@@ -1,0 +1,23 @@
+-keep class com.platinum.ott.data.remote.dto.** { *; }
+-keepclassmembers class com.platinum.ott.data.remote.dto.** { *; }
+-keep class com.platinum.ott.domain.model.** { *; }
+-keep class com.platinum.ott.data.local.entity.** { *; }
+-keepclassmembers class com.platinum.ott.data.local.entity.** { *; }
+-keep class com.platinum.ott.data.local.dao.** { *; }
+-keep class com.platinum.ott.data.local.ZenithDatabase { *; }
+-keep class com.platinum.ott.core.plugin.** { *; }
+-keepclassmembers class com.platinum.ott.core.plugin.** { *; }
+-keepclasseswithmembernames class app.cash.quickjs.** { native <methods>; }
+-keepclassmembers class app.cash.quickjs.QuickJs { public static *** create(); public *** evaluate(java.lang.String); public void close(); }
+-dontwarn app.cash.quickjs.**
+-keep,allowobfuscation,allowshrinking interface com.platinum.ott.data.remote.ZenithApiService
+-keepclassmembers,allowshrinking,allowobfuscation interface * { @retrofit2.http.* <methods>; }
+-keepattributes Signature; -keepattributes *Annotation*
+-dontwarn sun.misc.**; -keep class com.google.gson.** { *; }
+-dontwarn okhttp3.**; -dontwarn okio.**; -dontwarn coil.**
+-keep class androidx.security.crypto.** { *; }; -dontwarn androidx.security.crypto.**
+-keep class com.platinum.ott.provider.MovieSearchProvider { *; }
+-keep class kotlin.Metadata { *; }; -keepattributes SourceFile,LineNumberTable
+-dontwarn androidx.media3.**; -keep class androidx.media3.decoder.** { *; }
+# TMDB models
+-keep class com.platinum.ott.data.remote.tmdb.dto.** { *; }

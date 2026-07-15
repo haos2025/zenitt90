@@ -1,0 +1,10 @@
+build:
+  maxIssues: 0
+style:
+  MagicNumber: { active: false }
+  ForbiddenComment: { active: false }
+complexity:
+  LongMethod: { threshold: 80 }
+  LongParameterList: { active: false }
+formatting:
+  active: true
