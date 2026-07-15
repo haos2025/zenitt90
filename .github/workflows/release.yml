@@ -21,7 +21,7 @@ jobs:
       - name: Build Release APK
         run: gradle assembleRelease --stacktrace -Pandroid.injected.signing.store.file=/tmp/zenith_release.jks -Pandroid.injected.signing.store.password=${{ secrets.STORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             app/build/outputs/bundle/release/*.aab
