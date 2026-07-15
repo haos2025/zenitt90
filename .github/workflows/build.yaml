@@ -38,6 +38,18 @@ jobs:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true
 
+      - name: Accept Licenses and Install SDK Components
+        run: |
+          # Принятие лицензий
+          mkdir -p "$ANDROID_HOME/licenses"
+          echo -e "\n8933bad161af4178b1185d1a37fbf41ea5261c55" > "$ANDROID_HOME/licenses/android-sdk-license"
+          echo -e "\n84835b845110d7dd34d6074219488357f8670c5e" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+          echo -e "\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_HOME/licenses/android-googletv-license"
+          echo -e "\n33b6a2b64608f118c8bf4157e84931a293373727" > "$ANDROID_HOME/licenses/android-googlexr-license"
+          
+          # Установка необходимых компонентов
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
