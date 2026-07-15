@@ -1,42 +1,63 @@
-name: Android CI Build
+name: Android TV CI Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:
+    name: Build Android TV App
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      # 1. Получаем исходный код из репозитория
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Настраиваем Java (рекомендуется 17 версия для современного Kotlin и Compose)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
+      # 3. Настраиваем и кэшируем Gradle (значительно ускоряет повторные сборки)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # 4. Инициализируем Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          # Автоматическое принятие лицензий для исправления ошибки 6 of 7 SDK package licenses not accepted
-          accept-android-sdk-licenses: true
-          # Указание компонентов SDK, необходимых для Media3, Compose и работы проекта
-          packages: >
-            platforms;android-34
-            build-tools;34.0.0
-            platform-tools
-            extras;google;m2repository
-            extras;android;m2repository
 
+      # 5. Принудительно принимаем ВСЕ лицензии (решение проблемы с зависанием)
+      - name: Automatically accept all Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+
+      # 6. Установка NDK и CMake 
+      # (Необходимо, если в проекте собирается JS-движок QuickJS или используется JNI)
+      - name: Install NDK and CMake
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" "cmake;3.22.1"
+
+      # 7. Даем права на запуск Gradle-обертки
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        run: chmod +x ./gradlew
 
-      - name: Build with Gradle
-        # Сборка проекта для отладочной версии[cite: 6]
-        run: ./gradlew assembleDebug
+      # 8. Запуск проверок кода (Lint) и юнит-тестов (Clean Architecture)
+      - name: Run Linters and Unit Tests
+        run: ./gradlew lint testDebugUnitTest --no-daemon
+
+      # 9. Сборка Debug APK 
+      # (Если у вас модульная архитектура и ТВ-модуль называется 'app', оставляем так. 
+      # Если модуль называется 'tv', замените на assembleTvDebug)
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      # 10. Сохранение собранного APK-файла в артефакты GitHub
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tv-app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
