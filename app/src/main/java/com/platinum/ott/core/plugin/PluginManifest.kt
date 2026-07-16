@@ -39,16 +39,16 @@ data class PluginSetting(
 
 /** Результат парсинга manifest-блока из JS-файла */
 fun parseManifestFromScript(script: String): PluginManifest? {
-    val regex = Regex("/\*([\\\\s\\\\S]*?)\*/", RegexOption.MULTILINE)
+    val regex = Regex("/\\*([\\s\\S]*?)\\*/", RegexOption.MULTILINE)
     val block = regex.find(script)?.groupValues?.getOrNull(1) ?: return null
     if (!block.contains("plugin")) return null
 
     fun extract(key: String): String? {
-        val r = Regex("$key:\\\\s*['\"]?([^'\",\\n]+)", RegexOption.IGNORE_CASE)
+        val r = Regex("$key:\\s*['\"]?([^'\",\\n]+)", RegexOption.IGNORE_CASE)
         return r.find(block)?.groupValues?.getOrNull(1)?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
     }
     fun extractList(key: String): List<String> {
-        val r = Regex("$key:\\\\s*\\[([^\\]]*)\\]", RegexOption.IGNORE_CASE)
+        val r = Regex("$key:\\s*\\[([^\\]]*)\\]", RegexOption.IGNORE_CASE)
         return r.find(block)?.groupValues?.getOrNull(1)
             ?.split(",")?.map { it.trim().removeSurrounding("\"").removeSurrounding("'") }?.filter { it.isNotEmpty() } ?: emptyList()
     }

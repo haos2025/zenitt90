@@ -30,7 +30,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 state.metadata?.let { m ->
                     m.genres?.let { Text(it, color = Color.Gray) }
                     m.voteAverage?.let { Text("★ $it", color = Color(0xFFFFC107)) }
-                    m.overview?.let { Text(it, color = Color.White.copy(0.8f), Modifier.padding(top = 8.dp)) }
+                    m.overview?.let { Text(it, color = Color.White.copy(0.8f), modifier = Modifier.padding(top = 8.dp)) }
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
