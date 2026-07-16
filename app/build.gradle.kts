@@ -11,62 +11,99 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-val keystorePropsFile = rootProject.file("keystore.properties")
-val keystoreProps = Properties().apply { if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile)) }
 val gitCommitHashProvider: Provider<String> = providers.exec {
-    commandLine("git", "rev-parse", "--short=7", "HEAD"); isIgnoreExitValue = true
+    commandLine("git", "rev-parse", "--short=7", "HEAD")
+    isIgnoreExitValue = true
 }.standardOutput.asText.map { it.trim().ifBlank { "unknown" } }.orElse("unknown")
 
 android {
     namespace = "com.platinum.ott"
     compileSdk = 35
+
     defaultConfig {
         applicationId = "com.platinum.ott"
-        minSdk = 26; targetSdk = 35
+        minSdk = 26
+        targetSdk = 35
         versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1
         versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "3.0.0-dev"
+
         buildConfigField("String", "GIT_COMMIT", "\"${gitCommitHashProvider.get()}\"")
-        val tmdbKeyValue = providers.environmentVariable("TMDB_API_KEY").orNull ?: ""
-        buildConfigField("String", "TMDB_API_KEY", "\"${tmdbKeyValue}\"")
+        buildConfigField("String", "TMDB_API_KEY", "\"${providers.environmentVariable("TMDB_API_KEY").getOrElse("")}\"")
+        
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
+
     signingConfigs {
         create("release") {
+            // Приоритет переменным окружения из GitHub Actions
             val envKeystorePath = providers.environmentVariable("KEYSTORE_PATH").orNull
-            val envKeyAlias = providers.environmentVariable("KEY_ALIAS").orNull
-            val envKeyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
-            val envStorePassword = providers.environmentVariable("STORE_PASSWORD").orNull
-            when {
-                envKeystorePath != null && envKeyAlias != null -> {
-                    storeFile = file(envKeystorePath); keyAlias = envKeyAlias
-                    keyPassword = envKeyPassword; storePassword = envStorePassword
-                }
-                keystoreProps.getProperty("storeFile") != null -> {
-                    storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
-                    keyAlias = keystoreProps.getProperty("keyAlias")
-                    keyPassword = keystoreProps.getProperty("keyPassword")
-                    storePassword = keystoreProps.getProperty("storePassword")
-                }
+            if (envKeystorePath != null) {
+                storeFile = file(envKeystorePath)
+                keyAlias = providers.environmentVariable("KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+                storePassword = providers.environmentVariable("STORE_PASSWORD").orNull
             }
         }
         getByName("debug") {
             val committed = rootProject.file("debug.keystore")
-            if (committed.exists()) { storeFile = committed; storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android" }
+            if (committed.exists()) {
+                storeFile = committed
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
+
     buildTypes {
-        release { isMinifyEnabled = true; isShrinkResources = true; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"); val rc = signingConfigs.findByName("release"); if (rc?.storeFile != null) signingConfig = rc }
-        debug { applicationIdSuffix = ".debug" }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            val rc = signingConfigs.findByName("release")
+            if (rc?.storeFile != null) {
+                signingConfig = rc
+            }
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+        }
     }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true; buildConfig = true }
-    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}"; excludes += "/META-INF/*.kotlin_module" } }
-    lint { abortOnError = false; checkReleaseBuilds = true; disable += setOf("MissingTranslation", "ExtraTranslation") }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/*.kotlin_module"
+        }
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = true
+        disable += setOf("MissingTranslation", "ExtraTranslation")
+    }
 }
 
-detekt { config.setFrom(files("$rootDir/config/detekt/detekt.yml")); buildUponDefaultConfig = true }
-ktlint { version.set("1.3.1"); android.set(true); ignoreFailures.set(false) }
+detekt {
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+}
+
+ktlint {
+    version.set("1.3.1")
+    android.set(true)
+    ignoreFailures.set(false)
+}
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
@@ -103,7 +140,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.androidx.security.crypto)
-    // П3: QR
+    
+    // QR / Camera
     implementation(libs.zxing.core)
     implementation(libs.zxing.android.embedded)
     implementation(libs.camerax.core)
@@ -111,11 +149,12 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.mlkit.barcode)
-    // П4, П6, П7: WorkManager
+    
+    // WorkManager
     implementation(libs.work.runtime.ktx)
-    // П11: LeakCanary
+    
+    // Testing & Debug
     debugImplementation(libs.leakcanary)
-    // П11: Tests
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

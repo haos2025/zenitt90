@@ -1,60 +1,60 @@
-name: Android TV Build (Zenith)
+name: Android CI Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "master", "main" ]
 
 jobs:
-  build-tv-apk:
-    name: Build Native TV Media App
+  build:
     runs-on: ubuntu-latest
+    # Передача секретов в переменные окружения для gradle
+    env:
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
+          distribution: 'temurin'
           java-version: '17'
-          distribution: 'zulu'
-          # Автоматическое кэширование Gradle для ускорения следующих сборок
-          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          cmdline-tools-version: 12266719
-          packages: tools platform-tools
-          accept-android-sdk-licenses: true 
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
+          accept-android-sdk-licenses: true
 
-      - name: Force accept all Android SDK licenses
-        # Тот самый фикс, чтобы сборка не зависала на ожидании ввода "y"
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+      # Дополнительный шаг для гарантии принятия всех лицензий
+      - name: Accept remaining Android SDK licenses
+        run: yes | sdkmanager --licenses || true
 
-      - name: Cache native build files and ExoPlayer/QuickJS dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      # Декодирование keystore из base64 секрета
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK (Clean Architecture)
-        # Собираем дебаг-версию (для релиза нужно добавить этап подписи APK)
-        run: ./gradlew clean assembleDebug --stacktrace
+      - name: Build with Gradle
+        run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/keystore.jks
+          VERSION_NAME: "3.0.0-${{ github.run_number }}"
+          # Оптимизация памяти для CI
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=512m"
 
-      - name: Upload TV APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Zenith-TV-App-Debug
-          # Путь к собранному APK. Убедитесь, что ваш модуль называется 'app'
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+          name: app-release
+          path: app/build/outputs/apk/release/
