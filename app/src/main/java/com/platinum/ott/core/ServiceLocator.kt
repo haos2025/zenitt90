@@ -63,7 +63,7 @@ object ServiceLocator {
         logoutUseCase = LogoutUseCase(authRepository)
         getCatalogUseCase = GetCatalogUseCase(movieRepository)
         getMovieByIdUseCase = GetMovieByIdUseCase(movieRepository)
-        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, authRepository)
+        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, authRepository)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         clearCacheUseCase = ClearCacheUseCase(database.movieDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, RetrofitFactory.createApi(RetrofitFactory.createOkHttpClient(authPreferences)))

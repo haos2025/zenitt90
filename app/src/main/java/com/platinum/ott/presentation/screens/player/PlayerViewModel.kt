@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.ServiceLocator
@@ -20,6 +21,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(application).build()
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
+
+    // Раньше PlayerScreen передавал useController=false и не выводил вообще
+    // никакого UI управления — PlayerController.kt/QualityMenuOverlay.kt
+    // лежали неиспользуемыми. isPlaying нужен PlayerController для иконки
+    // play/pause; у ExoPlayer нет готового Flow под это, поэтому слушаем
+    // через Player.Listener и прокидываем в StateFlow.
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying
+
+    init {
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { _isPlaying.value = isPlaying }
+        })
+    }
+
+    fun togglePlayPause() { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }
+    fun seekForward() {
+        val target = exoPlayer.currentPosition + 10_000
+        val duration = exoPlayer.duration
+        exoPlayer.seekTo(if (duration > 0) target.coerceAtMost(duration) else target)
+    }
+    fun seekBackward() { exoPlayer.seekTo((exoPlayer.currentPosition - 10_000).coerceAtLeast(0)) }
 
     fun loadMovie(movieId: String) {
         viewModelScope.launch {

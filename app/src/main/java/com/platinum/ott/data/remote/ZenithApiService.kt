@@ -8,16 +8,18 @@ import retrofit2.http.*
 interface ZenithApiService {
     @GET("catalog")
     suspend fun getCatalog(@Query("page") page: Int = 1, @Query("genre") genre: String? = null): CatalogResponseDto
-    @GET("movies/{id}")
+    @GET("movie/{id}")
     suspend fun getMovieById(@Path("id") id: String): MovieDto
+    @GET("stream/{id}")
+    suspend fun getStreamVariants(@Path("id") id: String): List<StreamVariantDto>
     @GET("search")
     suspend fun searchMovies(@Query("q") query: String): List<MovieDto>
-    @GET("scripts/manifest")
+    @GET("scripts/manifest.json")
     suspend fun getScriptManifest(): List<ScriptManifestDto>
-    @GET("scripts/{name}")
+    @GET("scripts/{name}.js")
     suspend fun downloadScript(@Path("name") name: String): Response<ResponseBody>
     @GET("sync")
-    suspend fun getSyncData(@Query("since") since: Long): SyncResponseDto
+    suspend fun getSyncData(@Query("device_id") deviceId: String, @Query("since") since: Long): SyncResponseDto
     @POST("sync/push")
-    suspend fun pushSyncData(@Body data: SyncPushDto): Response<ResponseBody>
+    suspend fun pushSyncData(@Query("device_id") deviceId: String, @Body data: SyncPushDto): Response<ResponseBody>
 }

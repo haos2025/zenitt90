@@ -26,6 +26,23 @@ class PluginManager(
 
     data class LoadedPlugin(val manifest: PluginManifest, val entity: PluginEntity, val quickJs: QuickJs? = null, val loadTime: Long = System.currentTimeMillis())
 
+    /**
+     * Мост JS -> Kotlin. app.cash.quickjs 0.9.2 поддерживает именно такой
+     * паттерн: quickJs.set(name, InterfaceClass, instance) регистрирует
+     * Kotlin-объект как JS-глобал, и вызов его метода из JS блокируется
+     * до реального возврата значения — то есть мост синхронный "из коробки",
+     * без городить отдельный event loop на стороне JS.
+     *
+     * call() внутри делает runBlocking { processBridge(...) } — это
+     * безопасно ТОЛЬКО потому что оба места, где живёт QuickJs с этим
+     * мостом (loadPlugin, callPluginFunction), уже сами обёрнуты в
+     * withContext(Dispatchers.IO) — то есть runBlocking стартует новый
+     * event loop на потоке из IO-пула, а не на главном потоке.
+     */
+    interface ZenithBridgeJsInterface {
+        fun call(action: String, dataJson: String): String
+    }
+
     fun getAllPlugins(): Flow<List<PluginEntity>> = pluginDao.getAll()
     fun getEnabledPlugins(): Flow<List<PluginEntity>> = pluginDao.getEnabled()
     fun getEnabledByType(type: PluginType): Flow<List<PluginEntity>> = pluginDao.getEnabledByType(type.key)
@@ -52,7 +69,12 @@ class PluginManager(
             if (script.isEmpty()) return@withContext false
             val manifest = parseManifestFromScript(script) ?: PluginManifest(entity.id, entity.name, entity.version)
             val quickJs = QuickJs.create()
-            try { quickJs.evaluate(buildBridgeScript(entity.id)); quickJs.evaluate(script); try { quickJs.evaluate("typeof start==='function'?start():null") } catch (_: Exception) {} }
+            try {
+                quickJs.set("_ZenithNative", ZenithBridgeJsInterface::class.java, object : ZenithBridgeJsInterface {
+                    override fun call(action: String, dataJson: String): String = runBlocking { processBridge(entity.id, action, dataJson) }
+                })
+                quickJs.evaluate(buildBridgeScript(entity.id)); quickJs.evaluate(script); try { quickJs.evaluate("typeof start==='function'?start():null") } catch (_: Exception) {}
+            }
             catch (e: Exception) { quickJs.close(); throw e }
             loadedPlugins[entity.id] = LoadedPlugin(manifest, entity, quickJs); Log.i(TAG, "Loaded: ${entity.name}"); true
         } catch (e: Exception) { Log.e(TAG, "Load fail: ${entity.id}", e); false }
@@ -91,7 +113,7 @@ class PluginManager(
         s.appendLine("notify:function(title,msg){_zenithCall('notify',JSON.stringify({title:title,message:msg}));}," )
         s.appendLine("cache:{_data:{},set:function(k,v,ttl){this._data[k]={v:v,e:Date.now()+(ttl||3600000)};},get:function(k){var e=this._data[k];return(e&&e.e>Date.now())?e.v:null;},clear:function(){this._data={};}}")
         s.appendLine("};")
-        s.appendLine("var _zenithCall=function(action,data){return '{\"value\":\"\"}' ;};")
+        s.appendLine("var _zenithCall=function(action,data){return _ZenithNative.call(action,data);};")
         return s.toString()
     }
 

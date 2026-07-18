@@ -22,6 +22,12 @@ class PluginRepository(
 ) {
     companion object {
         private const val TAG = "PluginRepository"
+        // TODO: тот же паттерн, что был с baseUrl в RetrofitFactory.kt — это
+        // несуществующий домен-заглушка. fetchCatalog() с дефолтным
+        // параметром сейчас всегда падает на DNS до реального маркетплейса
+        // плагинов. installFromUrl/installFromFile работают независимо от
+        // этого и не затронуты. Заменить на реальный URL, когда/если
+        // появится настоящий каталог плагинов.
         private const val DEFAULT_CATALOG = "https://zenith-plugins.example.com/catalog.json"
     }
 
@@ -41,23 +47,8 @@ class PluginRepository(
         val sha256: String? = null
     )
 
-    /** Получить каталог плагинов с сервера */
-    /** Валидация URL — только http/https, без внутренних адресов */
-    private fun isValidUrl(url: String): Boolean {
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return false
-        try {
-            val uri = java.net.URI(url)
-            val host = uri.host?.lowercase() ?: return false
-            if (host == "localhost" || host == "127.0.0.1" || host == "::1") return false
-            if (host.startsWith("10.") || host.startsWith("192.168.")) return false
-            if (host.startsWith("172.")) {
-                val second = host.split(".").getOrNull(1)?.toIntOrNull() ?: 0
-                if (second in 16..31) return false
-            }
-            if (host.endsWith(".local") || host.endsWith(".internal")) return false
-            return true
-        } catch (_: Exception) { return false }
-    }
+    /** Валидация URL — вынесена в PluginUrlValidator (раньше была продублирована здесь и в PluginApi.kt) */
+    private fun isValidUrl(url: String): Boolean = PluginUrlValidator.isValid(url)
 
     suspend fun fetchCatalog(catalogUrl: String = DEFAULT_CATALOG): Result<List<CatalogEntry>> {
         return withContext(Dispatchers.IO) {

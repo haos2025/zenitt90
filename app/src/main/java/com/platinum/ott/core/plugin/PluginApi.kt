@@ -33,23 +33,8 @@ class PluginApi(private val context: Context) {
 
     private val gson = Gson()
 
-    /** Валидация URL — только http/https, без внутренних адресов */
-    private fun isValidUrl(url: String): Boolean {
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return false
-        try {
-            val uri = java.net.URI(url)
-            val host = uri.host?.lowercase() ?: return false
-            // Block private/internal IPs
-            if (host == "localhost" || host == "127.0.0.1" || host == "::1") return false
-            if (host.startsWith("10.") || host.startsWith("192.168.")) return false
-            if (host.startsWith("172.")) {
-                val second = host.split(".").getOrNull(1)?.toIntOrNull() ?: 0
-                if (second in 16..31) return false
-            }
-            if (host.endsWith(".local") || host.endsWith(".internal")) return false
-            return true
-        } catch (_: Exception) { return false }
-    }
+    /** Валидация URL — вынесена в PluginUrlValidator (раньше была продублирована здесь и в PluginRepository.kt) */
+    private fun isValidUrl(url: String): Boolean = PluginUrlValidator.isValid(url)
 
     /** HTTP GET запрос (для парсеров) */
     suspend fun httpGet(url: String, headers: Map<String, String> = emptyMap()): String = withContext(Dispatchers.IO) {

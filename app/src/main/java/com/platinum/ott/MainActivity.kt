@@ -1,5 +1,6 @@
 package com.platinum.ott
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val context = this
+        val isTv = isTV(context)
+
+        // Раньше ориентация была зашита в AndroidManifest.xml как
+        // android:screenOrientation="landscape" — статически, для ВСЕХ
+        // устройств разом. Манифест не может различить ТВ и телефон на
+        // этапе сборки — поэтому приложение всегда открывалось в landscape
+        // на смартфоне тоже, хотя ZenithNavHost уже правильно выбирает
+        // Phone-экраны (PhoneHomeScreen и т.д., портретный Material3) через
+        // тот же isTV(). Единственное место, которое реально знает тип
+        // устройства — рантайм, поэтому ориентация теперь выставляется здесь.
+        requestedOrientation = if (isTv) {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+
         val intentUri = intent?.data
         val deepLinkMovieId = if (intentUri?.scheme == "zenith" && intentUri.host == "player")
             intentUri.getQueryParameter("id") else null
@@ -27,7 +44,6 @@ class MainActivity : ComponentActivity() {
             else -> "setup"
         }
         setContent {
-            val isTv = remember { isTV(context) }
             ZenithTheme {
                 ZenithNavHost(
                     startDestination = startDestination,
