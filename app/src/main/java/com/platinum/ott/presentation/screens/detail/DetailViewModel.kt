@@ -30,6 +30,16 @@ class DetailViewModel : ViewModel() {
     }
 
     fun toggleFavorite(movieId: String, title: String, poster: String?) {
-        viewModelScope.launch { favorites.toggle(FavoriteEntity(contentId = movieId, title = title, poster = poster)) }
+        viewModelScope.launch {
+            favorites.toggle(FavoriteEntity(contentId = movieId, title = title, poster = poster))
+            // Раньше здесь запись в БД реально проходила, но _uiState никогда
+            // не обновлялся после toggle() — кнопка "В избранное" всегда
+            // показывала старое состояние, выглядело как будто ничего не
+            // происходит, хотя запись/удаление в таблице favorites работали.
+            val current = _uiState.value
+            if (current is DetailUiState.Success) {
+                _uiState.value = current.copy(isFavorite = favorites.isFavorite(movieId))
+            }
+        }
     }
 }
