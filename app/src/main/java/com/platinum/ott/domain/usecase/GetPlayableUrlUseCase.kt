@@ -4,20 +4,26 @@ import com.google.gson.Gson
 import com.platinum.ott.core.js.ScriptProvider
 import com.platinum.ott.data.remote.ZenithApiService
 import com.platinum.ott.data.remote.dto.StreamVariantDto
+import com.platinum.ott.data.repository.PlaylistRepository
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Два независимых, оба рабочих пути получения ссылки на видео —
- * не "или-или", а выбор по префиксу ID:
+ * Три независимых, все рабочих пути получения ссылки на видео — выбор по
+ * префиксу ID:
  *
- *  1. ID с префиксом "yt_"/"ia_" (контент из Zenith backend, YouTube/Archive.org
- *     плагины на Python-стороне) — прямой REST-вызов GET /stream/{id}, минуя
+ *  1. "yt_"/"ia_" (контент из Zenith backend, YouTube/Archive.org плагины
+ *     на Python-стороне) — прямой REST-вызов GET /stream/{id}, минуя
  *     QuickJS полностью.
  *
- *  2. Любой другой ID (контент, добавленный через установленный
+ *  2. "m3u_"/"xt_" (контент из собственного M3U/Xtream-плейлиста
+ *     пользователя) — ссылка уже известна из парсинга плейлиста/Xtream API
+ *     (см. PlaylistRepository), второй сетевой запрос не нужен вообще,
+ *     просто читаем из локального кэша Room по id.
+ *
+ *  3. Любой другой ID (контент, добавленный через установленный
  *     пользователем JS-плагин) — через ScriptProvider + локальный
  *     "player_parser"-скрипт (player_parser.js, скачивается через
  *     /scripts/manifest.json, см. OtaUpdateUseCase).
@@ -39,10 +45,12 @@ import kotlinx.coroutines.withContext
 class GetPlayableUrlUseCase(
     private val scriptProvider: ScriptProvider,
     private val api: ZenithApiService,
+    private val playlistRepository: PlaylistRepository,
     private val authRepo: AuthRepository
 ) {
     companion object {
         private val ZENITH_BACKEND_PREFIXES = setOf("yt", "ia")
+        private val PLAYLIST_PREFIXES = setOf("m3u", "xt")
         private const val PARSER_SCRIPT_NAME = "player_parser" // без .js — см. ScriptProvider.getScript
         private const val PARSER_FUNCTION_NAME = "parseMovie"
     }
@@ -51,20 +59,27 @@ class GetPlayableUrlUseCase(
 
     suspend fun execute(movieId: String): List<StreamVariant> = withContext(Dispatchers.IO) {
         val prefix = movieId.substringBefore('_', missingDelimiterValue = "")
-        if (prefix in ZENITH_BACKEND_PREFIXES) {
-            try {
-                api.getStreamVariants(movieId).map { StreamVariant(it.quality, it.url) }
-            } catch (_: Exception) {
-                emptyList()
+        when {
+            prefix in ZENITH_BACKEND_PREFIXES -> {
+                try {
+                    api.getStreamVariants(movieId).map { StreamVariant(it.quality, it.url) }
+                } catch (_: Exception) {
+                    emptyList()
+                }
             }
-        } else {
-            try {
-                val result = scriptProvider.evaluateScript(PARSER_SCRIPT_NAME, PARSER_FUNCTION_NAME, movieId)
-                    ?: return@withContext emptyList()
-                val parsed = gson.fromJson(result, Array<StreamVariantDto>::class.java) ?: emptyArray()
-                parsed.map { StreamVariant(it.quality, it.url) }
-            } catch (_: Exception) {
-                emptyList()
+            prefix in PLAYLIST_PREFIXES -> {
+                val url = playlistRepository.getStreamUrl(movieId)
+                if (url != null) listOf(StreamVariant("Оригинал", url)) else emptyList()
+            }
+            else -> {
+                try {
+                    val result = scriptProvider.evaluateScript(PARSER_SCRIPT_NAME, PARSER_FUNCTION_NAME, movieId)
+                        ?: return@withContext emptyList()
+                    val parsed = gson.fromJson(result, Array<StreamVariantDto>::class.java) ?: emptyArray()
+                    parsed.map { StreamVariant(it.quality, it.url) }
+                } catch (_: Exception) {
+                    emptyList()
+                }
             }
         }
     }

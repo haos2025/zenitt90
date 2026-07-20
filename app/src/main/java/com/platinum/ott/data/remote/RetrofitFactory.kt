@@ -17,7 +17,7 @@ object RetrofitFactory {
     // локального теста с "uvicorn app.main:app --port 8080" на ПК.
     // Прежний "https://zenith.placeholder.api/" был несуществующим доменом —
     // ZenithApiService не мог получить ответ ни на один запрос.
-    private const val ZENITH_BASE_URL = "https://zenith-backend-eviu.onrender.com/"
+    private const val ZENITH_BASE_URL = "http://10.0.2.2:8080/"
 
     fun createOkHttpClient(authPrefs: AuthPreferences, vararg extraInterceptors: Interceptor = emptyArray()): OkHttpClient {
         val builder = OkHttpClient.Builder()

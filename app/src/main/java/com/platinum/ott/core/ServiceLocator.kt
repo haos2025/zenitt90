@@ -24,6 +24,7 @@ object ServiceLocator {
     val authPreferences: AuthPreferences by lazy { AuthPreferences(appContext) }
     lateinit var authRepository: AuthRepository; private set
     lateinit var movieRepository: MovieRepository; private set
+    lateinit var playlistRepository: com.platinum.ott.data.repository.PlaylistRepository; private set
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
@@ -32,6 +33,7 @@ object ServiceLocator {
     lateinit var loginXtreamUseCase: LoginXtreamUseCase; private set
     lateinit var logoutUseCase: LogoutUseCase; private set
     lateinit var getCatalogUseCase: GetCatalogUseCase; private set
+    lateinit var getPlaylistCatalogUseCase: GetPlaylistCatalogUseCase; private set
     lateinit var getMovieByIdUseCase: GetMovieByIdUseCase; private set
     lateinit var getPlayableUrlUseCase: GetPlayableUrlUseCase; private set
     lateinit var searchMoviesUseCase: SearchMoviesUseCase; private set
@@ -53,6 +55,9 @@ object ServiceLocator {
         val api = RetrofitFactory.createApi(okHttpClient)
         authRepository = AuthRepositoryImpl(authPreferences, okHttpClient)
         movieRepository = MovieRepositoryImpl(api, database.movieDao())
+        // Раньше M3U/Xtream-логин был калиткой без последствий — учётные
+        // данные сохранялись, но контент из плейлиста нигде не читался.
+        playlistRepository = com.platinum.ott.data.repository.PlaylistRepository(authPreferences, database.playlistMovieDao(), okHttpClient)
         val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor())
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)
         tmdbRepository = TmdbRepositoryImpl(tmdbApi, database.metadataDao())
@@ -62,8 +67,9 @@ object ServiceLocator {
         loginXtreamUseCase = LoginXtreamUseCase(authRepository)
         logoutUseCase = LogoutUseCase(authRepository)
         getCatalogUseCase = GetCatalogUseCase(movieRepository)
+        getPlaylistCatalogUseCase = GetPlaylistCatalogUseCase(playlistRepository)
         getMovieByIdUseCase = GetMovieByIdUseCase(movieRepository)
-        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, authRepository)
+        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, authRepository)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         clearCacheUseCase = ClearCacheUseCase(database.movieDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, RetrofitFactory.createApi(RetrofitFactory.createOkHttpClient(authPreferences)))
