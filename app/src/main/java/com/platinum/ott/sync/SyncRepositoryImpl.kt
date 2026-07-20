@@ -63,4 +63,30 @@ class SyncRepositoryImpl(
             Result.success(Unit)
         } catch (e: Exception) { Result.failure(e) }
     }
+
+    override suspend fun createPairingCode(): Result<PairingCode> = withContext(Dispatchers.IO) {
+        try {
+            val deviceId = prefs.getOrCreateSyncToken()
+            val dto = api.createPairingCode(deviceId)
+            Result.success(PairingCode(dto.code, dto.expiresInSeconds))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun redeemPairingCode(code: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val deviceId = prefs.getOrCreateSyncToken()
+            val response = api.redeemPairingCode(deviceId, com.platinum.ott.data.remote.dto.PairingRedeemDto(code))
+            if (response.isSuccessful) {
+                // Успешное сопряжение делает старую историю sync неактуальной —
+                // после него сервер отдаёт данные ГРУППЫ, а не только этого
+                // устройства, поэтому сбрасываем lastSyncTimestamp в 0, чтобы
+                // ближайший sync() подтянул вообще всё, а не только то, что
+                // "изменилось" относительно старой, чисто персональной точки отсчёта.
+                prefs.lastSyncTimestamp = 0
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Код истёк или неверен"))
+            }
+        } catch (e: Exception) { Result.failure(e) }
+    }
 }

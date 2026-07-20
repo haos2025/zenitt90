@@ -38,7 +38,16 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 Text("Каталог и управление плагинами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
-        listOf("Воспроизведение" to "Качество, автовоспроизведение", "Уведомления" to "Каналы, тихий режим", "Интерфейс" to "Тема, язык", "Аккаунт" to "Источник, сменить").forEach { (t, s) ->
+        Card(
+            onClick = { navController.navigate("sync_pairing") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Аккаунт", style = MaterialTheme.typography.titleMedium)
+                Text("Источник, синхронизация между устройствами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        listOf("Воспроизведение" to "Качество, автовоспроизведение", "Уведомления" to "Каналы, тихий режим", "Интерфейс" to "Тема, язык").forEach { (t, s) ->
             Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(16.dp)) { Text(t, style = MaterialTheme.typography.titleMedium); Text(s, color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
         }
     }

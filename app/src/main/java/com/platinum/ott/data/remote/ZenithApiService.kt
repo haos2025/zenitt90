@@ -22,4 +22,8 @@ interface ZenithApiService {
     suspend fun getSyncData(@Query("device_id") deviceId: String, @Query("since") since: Long): SyncResponseDto
     @POST("sync/push")
     suspend fun pushSyncData(@Query("device_id") deviceId: String, @Body data: SyncPushDto): Response<ResponseBody>
+    @POST("sync/pairing/create")
+    suspend fun createPairingCode(@Query("device_id") deviceId: String): PairingCreateDto
+    @POST("sync/pairing/redeem")
+    suspend fun redeemPairingCode(@Query("device_id") deviceId: String, @Body body: PairingRedeemDto): Response<ResponseBody>
 }
