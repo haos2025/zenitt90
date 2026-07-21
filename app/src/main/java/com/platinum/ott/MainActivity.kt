@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
             else -> "setup"
         }
         setContent {
-            ZenithTheme {
+            // Раньше ZenithTheme брал только системную тему, пользовательский
+            // переключатель в настройках ни на что не влиял. darkThemeFlow
+            // готов уже в ServiceLocator.init() — до логина тоже.
+            val darkTheme by ServiceLocator.darkThemeFlow.collectAsState()
+            ZenithTheme(darkTheme = darkTheme) {
                 ZenithNavHost(
                     startDestination = startDestination,
                     isTV = isTv,

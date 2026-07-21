@@ -3,6 +3,7 @@ package com.platinum.ott.presentation.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -21,7 +22,27 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         SettingsSection("Воспроизведение") { SettingsItem("Качество по умолчанию", "Авто"); SettingsItem("Автовоспроизведение", "Вкл"); SettingsItem("Субтитры", "Выкл") }
         SettingsSection("Уведомления") { SettingsItem("Новые серии", "Вкл"); SettingsItem("Новый контент", "Вкл"); SettingsItem("Тихий режим", "23:00-08:00") }
         SettingsSection("Сеть") { SettingsItem("Таймаут", "15 сек"); SettingsItem("Макс. качество на моб.", "720p") }
-        SettingsSection("Интерфейс") { SettingsItem("Тема", "Тёмная"); SettingsItem("Язык", "Русский") }
+        SettingsSection("Интерфейс") {
+            // Раньше "Тема: Тёмная" и "Язык: Русский" были захардкоженными
+            // строками, ни к чему не привязанными. Тема теперь реально
+            // переключает ZenithTheme (см. MainActivity.kt) через
+            // ServiceLocator.darkThemeFlow. Не использую androidx.tv.material3.Switch
+            // — не смог достоверно подтвердить, что такой компонент вообще
+            // есть в этой версии библиотеки, Button безопаснее (уже
+            // используется в этом же файле). Язык оставлен видимым, но
+            // намеренно не нажимается: реальный переключатель потребовал бы
+            // вынести весь текст интерфейса в string-ресурсы (сейчас 0
+            // использований stringResource во всём проекте) — отдельная
+            // большая задача, не в этом заходе.
+            val darkTheme by com.platinum.ott.core.ServiceLocator.darkThemeFlow.collectAsState()
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Тема", color = Color.White, modifier = Modifier.weight(1f))
+                Button(onClick = { com.platinum.ott.core.ServiceLocator.setDarkTheme(!darkTheme) }) {
+                    Text(if (darkTheme) "Тёмная" else "Светлая")
+                }
+            }
+            SettingsItem("Язык", "Скоро")
+        }
         SettingsSection("Плагины") { SettingsItem("Управление плагинами", "Каталог и настройки") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPluginsClick) { Text("Плагины") }

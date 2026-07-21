@@ -15,7 +15,21 @@ import com.platinum.ott.sync.SyncRepositoryImpl
 
 object ServiceLocator {
     private lateinit var appContext: Context
-    fun init(ctx: Context) { appContext = ctx.applicationContext; initAuth() }
+    fun init(ctx: Context) {
+        appContext = ctx.applicationContext
+        interfacePreferences = InterfacePreferences(appContext)
+        darkThemeFlow.value = interfacePreferences.isDarkTheme
+        initAuth()
+    }
+
+    // --- Interface (тема) — независимо от авторизации, нужно ещё на
+    // экране логина, поэтому инициализируется прямо в init(), не в initAuth() ---
+    lateinit var interfacePreferences: InterfacePreferences; private set
+    val darkThemeFlow = kotlinx.coroutines.flow.MutableStateFlow(true)
+    fun setDarkTheme(enabled: Boolean) {
+        interfacePreferences.isDarkTheme = enabled
+        darkThemeFlow.value = enabled
+    }
 
     // --- Database ---
     val database: ZenithDatabase by lazy { ZenithDatabase.getInstance(appContext) }

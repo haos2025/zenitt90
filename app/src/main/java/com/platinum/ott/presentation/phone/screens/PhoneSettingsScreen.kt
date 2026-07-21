@@ -47,8 +47,31 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 Text("Источник, синхронизация между устройствами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
-        listOf("Воспроизведение" to "Качество, автовоспроизведение", "Уведомления" to "Каналы, тихий режим", "Интерфейс" to "Тема, язык").forEach { (t, s) ->
+        listOf("Воспроизведение" to "Качество, автовоспроизведение", "Уведомления" to "Каналы, тихий режим").forEach { (t, s) ->
             Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(16.dp)) { Text(t, style = MaterialTheme.typography.titleMedium); Text(s, color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
+        }
+        // Раньше это была ещё одна карточка без единого обработчика нажатия
+        // из общего списка-заглушки. Тема теперь реально переключает
+        // ZenithTheme (см. MainActivity.kt/ServiceLocator.darkThemeFlow) —
+        // язык оставлен видимым, но намеренно не нажимается: реальный
+        // языковой переключатель потребовал бы вынести весь текст
+        // интерфейса в string-ресурсы (сейчас 0 использований stringResource
+        // во всём проекте) — отдельная большая задача, не в этом заходе.
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Интерфейс", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                val darkTheme by com.platinum.ott.core.ServiceLocator.darkThemeFlow.collectAsState()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Тёмная тема", color = Color.White, modifier = Modifier.weight(1f))
+                    Switch(checked = darkTheme, onCheckedChange = { com.platinum.ott.core.ServiceLocator.setDarkTheme(it) })
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Язык", color = Color.Gray, modifier = Modifier.weight(1f))
+                    Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }
