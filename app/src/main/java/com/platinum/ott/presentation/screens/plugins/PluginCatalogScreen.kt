@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import com.platinum.ott.core.ServiceLocator
@@ -22,7 +23,7 @@ import com.platinum.ott.data.local.entity.PluginEntity
 fun PluginCatalogScreen(
     onBackPressed: () -> Unit,
     onPluginClick: (String) -> Unit,
-    viewModel: PluginViewModel = ServiceLocator.pluginViewModel
+    viewModel: PluginViewModel = viewModel(factory = PluginViewModel.factory(ServiceLocator.pluginManager, ServiceLocator.pluginRepository))
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle()

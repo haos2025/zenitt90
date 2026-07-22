@@ -6,10 +6,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.*
+import com.platinum.ott.core.QualityPreferences
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -19,7 +21,28 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
         Spacer(Modifier.height(32.dp))
         // Sections: Playback, Notifications, Network, Interface, Account, About
-        SettingsSection("Воспроизведение") { SettingsItem("Качество по умолчанию", "Авто"); SettingsItem("Автовоспроизведение", "Вкл"); SettingsItem("Субтитры", "Выкл") }
+        SettingsSection("Воспроизведение") {
+            // Раньше "Качество по умолчанию"/"Автовоспроизведение"/"Субтитры"
+            // были тремя захардкоженными строками подряд. Реально существует
+            // только первое — QualityPreferences уже читается в
+            // PlayerViewModel.loadMovie() как стартовое качество. У
+            // автовоспроизведения следующей серии и субтитров нет вообще
+            // никакой реализации в коде (ни понятия "следующий эпизод", ни
+            // обработки субтитровых дорожек в ExoPlayer/PlayerView) — не
+            // стал выдумывать настройки под несуществующие фичи.
+            val context = LocalContext.current
+            val qualityPrefs = remember { QualityPreferences(context) }
+            val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
+            var selectedQuality by remember { mutableStateOf(qualityPrefs.getSelectedQuality() ?: "Авто") }
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Качество по умолчанию", color = Color.White, modifier = Modifier.weight(1f))
+                Button(onClick = {
+                    val next = qualityOptions[(qualityOptions.indexOf(selectedQuality) + 1) % qualityOptions.size]
+                    if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
+                    selectedQuality = next
+                }) { Text(selectedQuality) }
+            }
+        }
         SettingsSection("Уведомления") { SettingsItem("Новые серии", "Вкл"); SettingsItem("Новый контент", "Вкл"); SettingsItem("Тихий режим", "23:00-08:00") }
         SettingsSection("Сеть") { SettingsItem("Таймаут", "15 сек"); SettingsItem("Макс. качество на моб.", "720p") }
         SettingsSection("Интерфейс") {

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.*
 import com.platinum.ott.core.ServiceLocator
 import com.platinum.ott.data.local.entity.PluginEntity
@@ -17,7 +18,7 @@ import com.platinum.ott.data.local.entity.PluginEntity
 fun PluginDetailScreen(
     pluginId: String,
     onBackPressed: () -> Unit,
-    viewModel: PluginViewModel = ServiceLocator.pluginViewModel
+    viewModel: PluginViewModel = viewModel(factory = PluginViewModel.factory(ServiceLocator.pluginManager, ServiceLocator.pluginRepository))
 ) {
     val plugin by viewModel.getPluginById(pluginId)
         .collectAsStateWithLifecycle(initialValue = null)

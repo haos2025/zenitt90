@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.core.ServiceLocator
 import com.platinum.ott.data.local.entity.PluginEntity
@@ -25,7 +26,7 @@ import com.platinum.ott.presentation.screens.plugins.PluginViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhonePluginCatalogScreen(navController: NavHostController) {
-    val viewModel = ServiceLocator.pluginViewModel
+    val viewModel: PluginViewModel = viewModel(factory = PluginViewModel.factory(ServiceLocator.pluginManager, ServiceLocator.pluginRepository))
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

@@ -1,6 +1,7 @@
 package com.platinum.ott.presentation.screens.plugins
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.core.plugin.PluginManifest
@@ -13,6 +14,23 @@ class PluginViewModel(
     private val pluginManager: PluginManager,
     private val pluginRepository: PluginRepository
 ) : ViewModel() {
+
+    companion object {
+        /**
+         * Раньше PluginViewModel хранился как lateinit var в ServiceLocator —
+         * жил как singleton на всё приложение, а не по жизненному циклу
+         * экрана, где реально используется (как остальные ViewModel в
+         * проекте, через viewModel()). viewModelScope внутри такого
+         * "вечного" ViewModel никогда не отменяется — корутины продолжают
+         * жить даже когда ни один экран плагинов не открыт.
+         */
+        fun factory(pluginManager: PluginManager, pluginRepository: PluginRepository): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    PluginViewModel(pluginManager, pluginRepository) as T
+            }
+    }
 
     sealed interface UiState {
         object Loading : UiState

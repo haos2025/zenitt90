@@ -59,7 +59,6 @@ object ServiceLocator {
     lateinit var seriesTrackerUseCase: SeriesTrackerUseCase; private set
     lateinit var pluginManager: com.platinum.ott.core.plugin.PluginManager; private set
     lateinit var pluginRepository: com.platinum.ott.core.plugin.PluginRepository; private set
-    lateinit var pluginViewModel: com.platinum.ott.presentation.screens.plugins.PluginViewModel; private set
 
     val scriptProvider: ScriptProvider by lazy { ScriptProvider(appContext) }
     val pluginApi: com.platinum.ott.core.plugin.PluginApi by lazy { com.platinum.ott.core.plugin.PluginApi(appContext) }
@@ -86,19 +85,31 @@ object ServiceLocator {
         getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, authRepository)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         clearCacheUseCase = ClearCacheUseCase(database.movieDao())
-        otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, RetrofitFactory.createApi(RetrofitFactory.createOkHttpClient(authPreferences)))
+        // Раньше otaUpdateUseCase создавал СВОЙ отдельный OkHttpClient+api,
+        // хотя api уже был построен строчкой выше — третий клиент на
+        // пустом месте, без единой причины (не нужен отдельный interceptor,
+        // как у tmdbClient). Переиспользуем уже готовый api.
+        otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, api)
         favoritesUseCase = FavoritesUseCase(database.favoritesDao())
         watchHistoryUseCase = WatchHistoryUseCase(database.watchHistoryDao())
         syncUseCase = SyncUseCase(syncRepository)
         seriesTrackerUseCase = SeriesTrackerUseCase(database.seriesScheduleDao(), tmdbRepository)
         pluginManager = com.platinum.ott.core.plugin.PluginManager(appContext, database.pluginDao(), pluginApi)
         pluginRepository = com.platinum.ott.core.plugin.PluginRepository(database.pluginDao(), pluginManager, pluginApi)
-        pluginViewModel = com.platinum.ott.presentation.screens.plugins.PluginViewModel(pluginManager, pluginRepository)
     }
 
     fun reinitWithAuth() {
-        val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences)
-        val api = RetrofitFactory.createApi(okHttpClient)
-        movieRepository = MovieRepositoryImpl(api, database.movieDao())
+        // Раньше пересоздавал только okHttpClient/api/movieRepository —
+        // ~15 остальных зависимостей (playlistRepository, getPlayableUrlUseCase,
+        // syncRepository, tmdbApi, use case'ы избранного/истории, вся система
+        // плагинов) оставались привязаны к СТАРОМУ клиенту/учётным данным
+        // после смены логина. initAuth() — единственный источник истины для
+        // всего графа зависимостей; вызывать его повторно целиком не даёт
+        // этому списку снова разойтись, как разошёлся в первый раз.
+        // pluginManager.destroy() — закрывает живые QuickJs-инстансы
+        // установленных плагинов перед тем, как pluginManager будет
+        // пересоздан заново, иначе они бы просто повисли, не освобождённые.
+        if (::pluginManager.isInitialized) pluginManager.destroy()
+        initAuth()
     }
 }

@@ -16,9 +16,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.presentation.components.MovieCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,9 +49,33 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 Text("Источник, синхронизация между устройствами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
-        listOf("Воспроизведение" to "Качество, автовоспроизведение", "Уведомления" to "Каналы, тихий режим").forEach { (t, s) ->
-            Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(16.dp)) { Text(t, style = MaterialTheme.typography.titleMedium); Text(s, color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
+        // Раньше это была карточка-заглушка из общего списка без единого
+        // обработчика нажатия. "Качество по умолчанию" — единственная
+        // реально существующая часть "Воспроизведения": QualityPreferences
+        // уже читается в PlayerViewModel.loadMovie() как стартовое качество
+        // для любого фильма. "Автовоспроизведение"/"Субтитры" НЕ сделаны —
+        // в коде нет ни понятия "следующая серия", ни обработки субтитровых
+        // дорожек вообще, это была бы иллюзия настройки без реальной фичи
+        // за ней — сознательно оставлено на будущее, не выдумывается здесь.
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Воспроизведение", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                val context = LocalContext.current
+                val qualityPrefs = remember { QualityPreferences(context) }
+                val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
+                var selectedQuality by remember { mutableStateOf(qualityPrefs.getSelectedQuality() ?: "Авто") }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Качество по умолчанию", color = Color.White, modifier = Modifier.weight(1f))
+                    Button(onClick = {
+                        val next = qualityOptions[(qualityOptions.indexOf(selectedQuality) + 1) % qualityOptions.size]
+                        if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
+                        selectedQuality = next
+                    }) { Text(selectedQuality) }
+                }
+            }
         }
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(16.dp)) { Text("Уведомления", style = MaterialTheme.typography.titleMedium); Text("Каналы, тихий режим", color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
         // Раньше это была ещё одна карточка без единого обработчика нажатия
         // из общего списка-заглушки. Тема теперь реально переключает
         // ZenithTheme (см. MainActivity.kt/ServiceLocator.darkThemeFlow) —
