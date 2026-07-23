@@ -63,9 +63,9 @@ fun QualityMenuOverlay(
             ) {
                 items(
                     items = variants,
-                    key   = { it.quality }
+                    key   = { it.url }
                 ) { variant ->
-                    val isSelected = variant.quality == currentVariant.quality
+                    val isSelected = variant.url == currentVariant.url
 
                     Surface(
                         onClick = { onSelectVariant(variant) },
@@ -86,11 +86,22 @@ fun QualityMenuOverlay(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text  = variant.quality,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (isSelected) Color(0xFF6C63FF) else Color.White
-                            )
+                            Column {
+                                Text(
+                                    text  = variant.quality,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (isSelected) Color(0xFF6C63FF) else Color.White
+                                )
+                                // Раньше здесь показывалось только качество —
+                                // пользователь не видел, пришёл ли вариант с
+                                // backend или от установленного плагина
+                                // (Задача 2, гибридная гонка при воспроизведении).
+                                Text(
+                                    text  = variant.source,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
                             if (isSelected) {
                                 Text(
                                     text  = "✓",
