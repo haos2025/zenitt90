@@ -3,6 +3,7 @@ package com.platinum.ott.presentation.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,16 +35,38 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
                 // Раньше здесь был единый LazyVerticalGrid по всем фильмам сразу —
                 // CatalogRow.kt (ряды по жанрам, LazyRow с D-pad навигацией) был
                 // готов, но нигде не импортировался. Группируем уже полученный
-                // (один и тот же) список по Movie.genre — без изменений в
-                // HomeViewModel/GetCatalogUseCase, это чисто UI-перекладка того,
-                // что уже приходит с backend. Фильмы без жанра идут в общий ряд.
+                // список по Movie.genre — без изменений в HomeViewModel/
+                // GetCatalogUseCase на этом этапе. Фильмы без жанра идут в общий ряд.
                 val grouped = remember(state.movies) {
                     state.movies.groupBy { it.genre.ifBlank { "Каталог" } }
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                val listState = rememberLazyListState()
+
+                // Раньше подгрузки следующей страницы не было вообще — весь
+                // каталог = одна страница backend (у Archive.org 20 фильмов).
+                // Триггерим loadMore() когда до конца списка рядов остаётся
+                // 2 или меньше — с запасом, чтобы пользователь не упирался в
+                // видимый край списка прежде чем подгрузка начнётся.
+                LaunchedEffect(listState, grouped.size) {
+                    snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                        .collect { lastVisibleIndex ->
+                            if (lastVisibleIndex != null && lastVisibleIndex >= grouped.size - 2) {
+                                viewModel.loadMore()
+                            }
+                        }
+                }
+
+                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     grouped.forEach { (genre, movies) ->
                         item(key = genre) {
                             CatalogRow(title = genre, movies = movies, onMovieClick = onMovieClick)
+                        }
+                    }
+                    if (state.isLoadingMore) {
+                        item(key = "loading_more") {
+                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
                         }
                     }
                 }

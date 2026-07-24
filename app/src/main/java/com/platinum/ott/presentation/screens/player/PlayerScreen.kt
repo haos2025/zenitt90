@@ -95,7 +95,20 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
         AndroidView(factory = { PlayerView(it).apply { player = viewModel.exoPlayer; useController = false } }, modifier = Modifier.fillMaxSize())
         when (val state = uiState) {
             is PlayerUiState.Loading -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)), Alignment.Center) { Text("Подготовка...", color = Color.White) }
-            is PlayerUiState.Error -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.8f)), Alignment.Center) { Text("⚠ ${state.message}", color = Color(0xFFFF6B6B)); Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") } }
+            is PlayerUiState.Error -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.8f)), Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Раньше здесь была только кнопка "Повторить" — при
+                        // ошибке вроде HTTP 404 (сломанная ссылка, не временный
+                        // сбой) повтор просто получает ту же ошибку снова,
+                        // а выйти можно было только системным жестом назад.
+                        Button(onClick = { onBackPressed() }) { Text("Назад") }
+                        Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") }
+                    }
+                }
+            }
             is PlayerUiState.Ready -> {
                 PlayerController(
                     isVisible = showControls && !state.showQualityMenu,
