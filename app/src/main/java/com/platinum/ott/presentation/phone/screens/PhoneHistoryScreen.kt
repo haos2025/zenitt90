@@ -30,7 +30,10 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
     LazyColumn(Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(history, key = { it.contentId }) { entry ->
             val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
-            Card(Modifier.fillMaxWidth()) { Row(Modifier.padding(12.dp)) { Column(Modifier.weight(1f)) { Text(entry.title, color = Color.White); LinearProgressIndicator({ p }) } } }
+            Card(
+                onClick = { navController.navigate("detail/${entry.contentId}") },
+                modifier = Modifier.fillMaxWidth()
+            ) { Row(Modifier.padding(12.dp)) { Column(Modifier.weight(1f)) { Text(entry.title, color = Color.White); LinearProgressIndicator({ p }) } } }
         }
     }
 }
