@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.ServiceLocator
 import com.platinum.ott.domain.model.StreamVariant
@@ -22,7 +24,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val getMovie = ServiceLocator.getMovieByIdUseCase
     private val watchHistory = ServiceLocator.watchHistoryUseCase
     private val qualityPrefs = QualityPreferences(application)
-    val exoPlayer: ExoPlayer = ExoPlayer.Builder(application).build()
+    // Раньше ExoPlayer собирался с дефолтным ExoPlayer.Builder(application).build()
+    // без кастомного HTTP data source — MediaItem.fromUri() уходил на сервер
+    // с дефолтным User-Agent'ом ExoPlayer'а. Многие IPTV-панели (M3U/Xtream —
+    // ровно то, о чём сообщили как о "http 404, ни каких кнопок") отклоняют
+    // запросы без узнаваемого UA или блокируют кросс-протокольные редиректы
+    // (http→https между балансировщиком и реальным CDN) — оба этих случая
+    // теперь явно разрешены/обработаны.
+    val exoPlayer: ExoPlayer = run {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("ZenithOTT/1.0 (Linux;Android) ExoPlayerLib/media3")
+            .setAllowCrossProtocolRedirects(true)
+        val mediaSourceFactory = DefaultMediaSourceFactory(application).setDataSourceFactory(httpDataSourceFactory)
+        ExoPlayer.Builder(application).setMediaSourceFactory(mediaSourceFactory).build()
+    }
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
 
