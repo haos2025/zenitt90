@@ -4,8 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
@@ -69,7 +71,46 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // технически нельзя — это его компенсирует).
                 if (!isPlaying) viewModelScope.launch { saveHistoryNow() }
             }
+
+            // Раньше слушался только onIsPlayingChanged — реальные ошибки
+            // ExoPlayer (HTTP 404/403 при попытке получить поток, не при
+            // резолвинге ссылки) вообще никогда не долетали до
+            // PlayerUiState.Error, потому что на них никто не был подписан.
+            // Экран просто зависал без плеера и без единой кнопки — именно
+            // то, что было описано как баг ("http 404, ни каких кнопок").
+            override fun onPlayerError(error: PlaybackException) {
+                val current = _uiState.value as? PlayerUiState.Ready
+                val currentIndex = current?.variants?.indexOf(current.currentVariant) ?: -1
+                val nextVariant = current?.variants?.getOrNull(currentIndex + 1)
+                if (current != null && nextVariant != null) {
+                    // Текущий источник не проигрался — пробуем следующий по
+                    // списку автоматически (гибридная гонка backend/плагины
+                    // уже может дать несколько вариантов на один фильм),
+                    // прежде чем сдаваться и показывать ошибку целиком.
+                    playVariant(nextVariant, 0L)
+                    _uiState.value = current.copy(currentVariant = nextVariant)
+                } else {
+                    _uiState.value = PlayerUiState.Error(describePlaybackError(error))
+                }
+            }
         })
+    }
+
+    /**
+     * Раньше error.message от ExoPlayer часто был неинформативным техническим
+     * текстом. HttpDataSource.InvalidResponseCodeException внутри cause-цепочки
+     * содержит реальный HTTP-код ответа сервера — вытаскиваем его явно, чтобы
+     * в UI было видно "HTTP 404", а не общее "ошибка воспроизведения".
+     */
+    private fun describePlaybackError(error: PlaybackException): String {
+        val httpCause = generateSequence(error as Throwable) { it.cause }
+            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+            .firstOrNull()
+        return if (httpCause != null) {
+            "Сервер вернул HTTP ${httpCause.responseCode} — ссылка недоступна"
+        } else {
+            error.message ?: "Не удалось воспроизвести поток"
+        }
     }
 
     fun togglePlayPause() { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }

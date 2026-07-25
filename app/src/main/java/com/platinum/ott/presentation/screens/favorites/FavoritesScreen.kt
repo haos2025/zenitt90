@@ -19,7 +19,7 @@ fun FavoritesScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, v
     val favorites by viewModel.favorites.collectAsState(initial = emptyList())
     val folders by viewModel.folders.collectAsState(initial = emptyList())
     var selectedType by remember { mutableStateOf<String?>(null) }
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
         Text("Избранное", style = MaterialTheme.typography.displaySmall, color = Color.White)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.*
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import com.platinum.ott.presentation.components.CatalogRow
@@ -23,9 +24,10 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
     Column(modifier = modifier.fillMaxSize().background(Color(0xFF101010)).padding(top = 24.dp, bottom = 24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
             Text("ZENITH", style = MaterialTheme.typography.displaySmall, color = Color(0xFF6C63FF), modifier = Modifier.weight(1f))
-            TextButton(onClick = onFavoritesClick) { Text("Избранное") }
-            TextButton(onClick = onHistoryClick) { Text("История") }
-            TextButton(onClick = onSettingsClick) { Text("Настройки") }
+            val ttvColors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+            TextButton(onClick = onFavoritesClick, colors = ttvColors) { Text("Избранное") }
+            TextButton(onClick = onHistoryClick, colors = ttvColors) { Text("История") }
+            TextButton(onClick = onSettingsClick, colors = ttvColors) { Text("Настройки") }
         }
         Spacer(Modifier.height(16.dp))
         when (val state = uiState) {

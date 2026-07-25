@@ -33,7 +33,16 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
             Card(
                 onClick = { navController.navigate("detail/${entry.contentId}") },
                 modifier = Modifier.fillMaxWidth()
-            ) { Row(Modifier.padding(12.dp)) { Column(Modifier.weight(1f)) { Text(entry.title, color = Color.White); LinearProgressIndicator({ p }) } } }
+            ) { Row(Modifier.padding(12.dp)) { Column(Modifier.weight(1f)) {
+                Text(entry.title, color = Color.White)
+                // Раньше здесь был только прогресс-бар без текста — на ТВ
+                // процент показывается, на телефоне не было вообще.
+                Text(
+                    if (entry.completed) "Просмотрено" else "Прогресс: ${(p * 100).toInt()}%",
+                    color = Color.Gray, style = MaterialTheme.typography.bodySmall
+                )
+                LinearProgressIndicator({ p })
+            } } }
         }
     }
 }

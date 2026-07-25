@@ -17,7 +17,7 @@ import com.platinum.ott.presentation.components.MovieCard
 @Composable
 fun HistoryScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, viewModel: HistoryViewModel = viewModel()) {
     val history by viewModel.history.collectAsState(initial = emptyList())
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
         Text("История просмотров", style = MaterialTheme.typography.displaySmall, color = Color.White)
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
