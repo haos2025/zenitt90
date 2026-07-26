@@ -11,10 +11,18 @@ import com.platinum.ott.data.local.entity.PlaylistMovieEntity
  * переупорядочит плейлист; если переупорядочит — избранное/история,
  * привязанные к старому id, перестанут находить совпадение. Осознанный
  * компромисс ради простоты первой версии, не хэш от URL.
+ *
+ * ДОБАВЛЕНО: между #EXTINF и URL многие реальные плейлисты (особенно
+ * русскоязычные, проверено на реальном примере) вставляют
+ * "#EXTVLCOPT:http-user-agent=..."/"http-referrer=..." — конкретный канал
+ * без ЭТОГО заголовка отдаёт 404/403 от источника, общий User-Agent на все
+ * каналы сразу это не покрывает. Раньше эти строки просто пропускались
+ * как обычные комментарии — теперь читаются и сохраняются на канал.
  */
 object M3uPlaylistParser {
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
     private val ATTR_REGEX = Regex("(tvg-logo|group-title)=\"([^\"]*)\"")
+    private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): List<PlaylistMovieEntity> {
         val lines = raw.lines()
@@ -28,9 +36,22 @@ object M3uPlaylistParser {
                 val title = line.substringAfterLast(",", "").trim().ifBlank { "Без названия" }
                 val year = YEAR_REGEX.find(title)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
-                // Следующая непустая, не-# строка — это URL потока
+                // Между #EXTINF и URL могут быть #EXTVLCOPT (заголовки для
+                // этого конкретного канала) и другие строки-комментарии —
+                // собираем первые, пропускаем вторые, пока не дойдём до URL.
+                var userAgent: String? = null
+                var referrer: String? = null
                 var j = i + 1
-                while (j < lines.size && (lines[j].isBlank() || lines[j].trim().startsWith("#"))) j++
+                while (j < lines.size && (lines[j].isBlank() || lines[j].trim().startsWith("#"))) {
+                    val trimmed = lines[j].trim()
+                    val vlcMatch = VLCOPT_REGEX.find(trimmed)
+                    if (vlcMatch != null) {
+                        val (key, value) = vlcMatch.destructured
+                        if (key.equals("http-user-agent", ignoreCase = true)) userAgent = value.trim()
+                        if (key.equals("http-referrer", ignoreCase = true)) referrer = value.trim()
+                    }
+                    j++
+                }
                 val url = if (j < lines.size) lines[j].trim() else null
 
                 if (!url.isNullOrBlank()) {
@@ -41,7 +62,9 @@ object M3uPlaylistParser {
                             year = year,
                             poster = attrs["tvg-logo"],
                             genre = attrs["group-title"]?.ifBlank { null } ?: "Мой плейлист",
-                            streamUrl = url
+                            streamUrl = url,
+                            userAgent = userAgent,
+                            referrer = referrer
                         )
                     )
                     index++

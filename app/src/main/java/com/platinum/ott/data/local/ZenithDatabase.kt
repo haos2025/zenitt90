@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 5, exportSchema = true
+    version = 6, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -44,10 +44,22 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Раньше #EXTVLCOPT:http-user-agent=.../http-referrer=... из M3U
+        // полностью терялся при парсинге — оба столбца NULLABLE, ADD COLUMN
+        // без DEFAULT в SQLite для nullable-столбца безопасен, существующие
+        // строки playlist_movies просто получат NULL (перекачаются заново
+        // при следующем refresh() всё равно, TTL 1 час).
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `userAgent` TEXT")
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `referrer` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

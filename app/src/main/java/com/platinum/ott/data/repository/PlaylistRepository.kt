@@ -45,8 +45,18 @@ class PlaylistRepository(
         dao.getAll().map { it.toMovie() }
     }
 
-    suspend fun getStreamUrl(movieId: String): String? = withContext(Dispatchers.IO) {
-        dao.getById(movieId)?.streamUrl
+    /**
+     * Раньше отдавал только URL — #EXTVLCOPT-заголовки конкретного канала
+     * (http-user-agent/http-referrer) терялись уже на этом шаге, даже после
+     * того как парсер их научился читать. Теперь возвращает оба.
+     */
+    suspend fun getStreamInfo(movieId: String): PlaylistStreamInfo? = withContext(Dispatchers.IO) {
+        val entity = dao.getById(movieId) ?: return@withContext null
+        val headers = buildMap {
+            entity.userAgent?.let { put("User-Agent", it) }
+            entity.referrer?.let { put("Referer", it) }
+        }
+        PlaylistStreamInfo(entity.streamUrl, headers)
     }
 
     private suspend fun refresh() {
@@ -78,3 +88,5 @@ private fun PlaylistMovieEntity.toMovie() = Movie(
     id = id, year = year, title = title, poster = poster ?: "",
     genre = genre ?: "Мой плейлист", streamUrl = streamUrl
 )
+
+data class PlaylistStreamInfo(val url: String, val headers: Map<String, String>)

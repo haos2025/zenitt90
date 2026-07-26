@@ -69,8 +69,8 @@ class GetPlayableUrlUseCase(
         when {
             prefix in ZENITH_BACKEND_PREFIXES -> executeWithPluginRace(movieId)
             prefix in PLAYLIST_PREFIXES -> {
-                val url = playlistRepository.getStreamUrl(movieId)
-                if (url != null) listOf(StreamVariant("Оригинал", url, source = "Мой плейлист")) else emptyList()
+                val info = playlistRepository.getStreamInfo(movieId)
+                if (info != null) listOf(StreamVariant("Оригинал", info.url, source = "Мой плейлист", headers = info.headers)) else emptyList()
             }
             else -> {
                 try {

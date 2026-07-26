@@ -24,5 +24,11 @@ data class PlaylistMovieEntity(
     val poster: String?,
     val genre: String?,
     val streamUrl: String,
+    // Раньше #EXTVLCOPT:http-user-agent=.../http-referrer=... из M3U
+    // полностью игнорировался парсером (пропускался как обычный комментарий) —
+    // многие реальные плейлисты требуют ИМЕННО свой заголовок на канал,
+    // общий User-Agent на все каналы сразу этого не покрывает.
+    val userAgent: String? = null,
+    val referrer: String? = null,
     val cachedAt: Long = System.currentTimeMillis()
 )

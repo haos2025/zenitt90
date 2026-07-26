@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 
 sealed interface PlayerUiState { object Loading : PlayerUiState; data class Ready(val variants: List<StreamVariant>, val currentVariant: StreamVariant, val showQualityMenu: Boolean = false) : PlayerUiState; data class Error(val message: String) : PlayerUiState }
 
+@OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val getPlayableUrl = ServiceLocator.getPlayableUrlUseCase
     private val getMovie = ServiceLocator.getMovieByIdUseCase
@@ -33,10 +35,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // запросы без узнаваемого UA или блокируют кросс-протокольные редиректы
     // (http→https между балансировщиком и реальным CDN) — оба этих случая
     // теперь явно разрешены/обработаны.
+    //
+    // httpDataSourceFactory хранится ПОЛЕМ (не только внутри run{}) — раньше
+    // User-Agent был один статический на все каналы сразу. Многие M3U-каналы
+    // требуют СВОЙ заголовок (#EXTVLCOPT:http-user-agent=.../http-referrer=...
+    // из плейлиста, см. M3uPlaylistParser) — playVariant() теперь
+    // перевыставляет defaultRequestProperties под конкретный канал перед
+    // каждым воспроизведением.
+    private val defaultHeaders = mapOf("User-Agent" to "ZenithOTT/1.0 (Linux;Android) ExoPlayerLib/media3")
+    private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        .setDefaultRequestProperties(defaultHeaders)
+        .setAllowCrossProtocolRedirects(true)
     val exoPlayer: ExoPlayer = run {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("ZenithOTT/1.0 (Linux;Android) ExoPlayerLib/media3")
-            .setAllowCrossProtocolRedirects(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(application).setDataSourceFactory(httpDataSourceFactory)
         ExoPlayer.Builder(application).setMediaSourceFactory(mediaSourceFactory).build()
     }
@@ -178,7 +188,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun toggleQualityMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(showQualityMenu = !c.showQualityMenu) }
     fun dismissQualityMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; if (c.showQualityMenu) { _uiState.value = c.copy(showQualityMenu = false); exoPlayer.play() } }
-    private fun playVariant(v: StreamVariant, seekTo: Long = 0L) { exoPlayer.setMediaItem(MediaItem.fromUri(v.url)); exoPlayer.prepare(); if (seekTo > 0) exoPlayer.seekTo(seekTo); exoPlayer.play() }
+    private fun playVariant(v: StreamVariant, seekTo: Long = 0L) {
+        // Свои заголовки канала (#EXTVLCOPT) поверх общего дефолта — если
+        // канал ничего не требует явно, edge-case не ломается, просто
+        // используется тот же generic User-Agent, что и раньше.
+        val effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
+        httpDataSourceFactory.setDefaultRequestProperties(effectiveHeaders)
+        exoPlayer.setMediaItem(MediaItem.fromUri(v.url))
+        exoPlayer.prepare()
+        if (seekTo > 0) exoPlayer.seekTo(seekTo)
+        exoPlayer.play()
+    }
     override fun onCleared() {
         super.onCleared()
         historyAutosaveJob?.cancel()
