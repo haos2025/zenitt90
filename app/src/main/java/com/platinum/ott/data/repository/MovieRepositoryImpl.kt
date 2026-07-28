@@ -14,7 +14,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class MovieRepositoryImpl(private val api: ZenithApiService, private val dao: MovieDao) : MovieRepository {
+class MovieRepositoryImpl(
+    private val api: ZenithApiService,
+    private val dao: MovieDao,
+    private val playlistRepository: PlaylistRepository
+) : MovieRepository {
     private val cacheMutex = Mutex()
     private val CACHE_TTL = 10 * 60 * 1000L
 
@@ -40,7 +44,21 @@ class MovieRepositoryImpl(private val api: ZenithApiService, private val dao: Mo
         }
     }
 
+    /**
+     * Раньше ЛЮБОЙ id, включая контент из собственного M3U/Xtream-плейлиста
+     * пользователя, безусловно уходил в api.getMovieById() — backend вообще
+     * не знает про префиксы "m3u"/"xt" (registry.resolve_content_id
+     * распознаёт только "yt"/"ia"), поэтому экран деталей для ЛЮБОГО канала
+     * плейлиста ловил настоящий HTTP 404 от backend, даже не доходя до
+     * плеера — ни один фикс плеера не мог сработать, до него не добирались.
+     */
     override suspend fun getMovieById(id: String): Result<Movie> = withContext(Dispatchers.IO) {
+        val prefix = id.substringBefore('_', missingDelimiterValue = "")
+        if (prefix == "m3u" || prefix == "xt") {
+            val fromPlaylist = try { playlistRepository.getMovieById(id) } catch (_: Exception) { null }
+            return@withContext fromPlaylist?.let { Result.success(it) }
+                ?: Result.failure(Exception("Канал не найден в плейлисте"))
+        }
         try { Result.success(api.getMovieById(id).toDomain().also { dao.upsert(it.toEntity()) }) }
         catch (e: Exception) { dao.getById(id)?.let { Result.success(it.toDomain()) } ?: Result.failure(e) }
     }

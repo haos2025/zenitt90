@@ -50,6 +50,10 @@ class PlaylistRepository(
      * (http-user-agent/http-referrer) терялись уже на этом шаге, даже после
      * того как парсер их научился читать. Теперь возвращает оба.
      */
+    suspend fun getMovieById(id: String): Movie? = withContext(Dispatchers.IO) {
+        dao.getById(id)?.toMovie()
+    }
+
     suspend fun getStreamInfo(movieId: String): PlaylistStreamInfo? = withContext(Dispatchers.IO) {
         val entity = dao.getById(movieId) ?: return@withContext null
         val headers = buildMap {

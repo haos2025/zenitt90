@@ -75,10 +75,11 @@ object ServiceLocator {
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences)
         val api = RetrofitFactory.createApi(okHttpClient)
         authRepository = AuthRepositoryImpl(authPreferences, okHttpClient)
-        movieRepository = MovieRepositoryImpl(api, database.movieDao())
-        // Раньше M3U/Xtream-логин был калиткой без последствий — учётные
-        // данные сохранялись, но контент из плейлиста нигде не читался.
+        // playlistRepository теперь строится ДО movieRepository — тому
+        // нужна прямая ссылка (маршрутизация getMovieById по префиксу
+        // m3u_/xt_, раньше ЛЮБОЙ id безусловно уходил на backend).
         playlistRepository = com.platinum.ott.data.repository.PlaylistRepository(authPreferences, database.playlistMovieDao(), okHttpClient)
+        movieRepository = MovieRepositoryImpl(api, database.movieDao(), playlistRepository)
         val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor())
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)
         tmdbRepository = TmdbRepositoryImpl(tmdbApi, database.metadataDao())
