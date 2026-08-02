@@ -2,15 +2,14 @@ package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,30 +18,76 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.phone.components.PhoneCatalogRow
 import com.platinum.ott.presentation.screens.home.HomeUiState
 import com.platinum.ott.presentation.screens.home.HomeViewModel
 
+/**
+ * Раньше здесь был плоский LazyVerticalGrid(GridCells.Fixed(3)) — карточки
+ * от MovieCard.kt задают СВОЮ фиксированную ширину (ZenithDimens.cardWidth,
+ * Platform.kt) — для Compact-экрана это 140dp. 140×3 = 420dp только под
+ * карточки, без учёта отступов между ними — больше ширины почти любого
+ * телефона (обычно 360-412dp), поэтому карточки визуально вылезали за
+ * границы грида. LazyRow (как на TV) не делит ширину поровну — карточка
+ * держит свою декларативную ширину, ряд просто скроллится горизонтально,
+ * переполнение исчезает само по себе, без обрезки контента.
+ *
+ * Заодно этот экран никогда не получал ни группировку по жанрам, ни
+ * дозагрузку следующих страниц — HomeScreen.kt (TV) получил оба фикса
+ * раньше в этой же сессии, PhoneHomeScreen.kt тогда пропустили.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     Scaffold(
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(true, onClick = {}, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-                NavigationBarItem(false, onClick = { navController.navigate("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-                NavigationBarItem(false, onClick = { navController.navigate("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-                NavigationBarItem(false, onClick = { navController.navigate("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
+                NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Главная") })
+                NavigationBarItem(selected = false, onClick = { navController.navigate("favorites") }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Избранное") })
+                NavigationBarItem(selected = false, onClick = { navController.navigate("history") }, icon = { Icon(Icons.Default.History, null) }, label = { Text("История") })
+                NavigationBarItem(selected = false, onClick = { navController.navigate("settings") }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Настройки") })
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize().background(Color(0xFF101010))) {
+        Box(Modifier.fillMaxSize().padding(padding).background(Color(0xFF101010))) {
             when (val state = uiState) {
-                is HomeUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is HomeUiState.Error -> Text("⚠ ${state.message}", Modifier.align(Alignment.Center), color = Color(0xFFFF6B6B))
-                is HomeUiState.Success -> LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(state.movies, key = { it.id }) { MovieCard(movie = it, onClick = { navController.navigate("detail/${it.id}") }) }
+                is HomeUiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                is HomeUiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") }
+                    }
+                }
+                is HomeUiState.Success -> {
+                    val grouped = remember(state.movies) {
+                        state.movies.groupBy { it.genre.ifBlank { "Каталог" } }
+                    }
+                    val listState = rememberLazyListState()
+
+                    LaunchedEffect(listState, grouped.size) {
+                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                            .collect { lastVisibleIndex ->
+                                if (lastVisibleIndex != null && lastVisibleIndex >= grouped.size - 2) {
+                                    viewModel.loadMore()
+                                }
+                            }
+                    }
+
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)) {
+                        grouped.forEach { (genre, movies) ->
+                            item(key = genre) {
+                                PhoneCatalogRow(title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") })
+                            }
+                        }
+                        if (state.isLoadingMore) {
+                            item(key = "loading_more") {
+                                Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator() }
+                            }
+                        }
+                    }
                 }
             }
         }
