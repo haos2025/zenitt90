@@ -156,12 +156,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val resumePositionMs = if (existingHistory != null && !existingHistory.completed) existingHistory.positionMs else 0L
 
                 val saved = qualityPrefs.getSelectedQuality()
-                val initial = variants.firstOrNull { it.quality == saved } ?: variants.first()
+                val preferred = variants.firstOrNull { it.quality == saved } ?: variants.first()
+                // "Макс. качество на моб." (QualityPreferences.getMaxQualityOnMobile)
+                // существовал в коде с самого начала, но нигде не читался — экран
+                // настроек показывал захардкоженное "720p", которое ни на что не
+                // влияло. Теперь реально ограничивает СТАРТОВОЕ качество, если
+                // активное соединение метровое (мобильные данные/раздача Wi-Fi),
+                // не трогая ручной выбор пользователя в плеере после старта.
+                val initial = capForMeteredNetwork(variants, preferred)
                 playVariant(initial, resumePositionMs)
                 _uiState.value = PlayerUiState.Ready(variants, initial)
                 startHistoryAutosave()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
         }
+    }
+
+    private val qualityRankOrder = listOf("240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
+    private fun isOnMeteredConnection(): Boolean {
+        val cm = getApplication<Application>().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return !caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
+    private fun capForMeteredNetwork(variants: List<StreamVariant>, chosen: StreamVariant): StreamVariant {
+        val cap = qualityPrefs.getMaxQualityOnMobile()
+        if (cap == "Без ограничений" || !isOnMeteredConnection()) return chosen
+        val capRank = qualityRankOrder.indexOf(cap)
+        val chosenRank = qualityRankOrder.indexOf(chosen.quality)
+        // Неизвестная метка качества (не из стандартного списка, например
+        // произвольная метка из плагина) — не трогаем, лучше оставить выбор
+        // как есть, чем сломать воспроизведение неверным сравнением.
+        if (capRank == -1 || chosenRank == -1 || chosenRank <= capRank) return chosen
+        return variants.filter { qualityRankOrder.indexOf(it.quality) in 0..capRank }
+            .maxByOrNull { qualityRankOrder.indexOf(it.quality) } ?: chosen
     }
 
     private fun startHistoryAutosave() {

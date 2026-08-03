@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Раньше этого файла не было вообще — MovieSearchProvider был объявлен в
+  манифесте как provider, но ничто не говорило системе, что именно этот
+  authority отвечает за подсказки для ЭТОГО приложения. Без searchable.xml
+  и meta-data android.app.searchable провайдер существовал сам по себе, вне
+  системного поиска.
+-->
+<searchable xmlns:android="http://schemas.android.com/apk/res/android"
+    android:label="@string/app_name"
+    android:hint="@string/search_hint"
+    android:searchSuggestAuthority="com.platinum.ott.search"
+    android:searchSuggestSelection=" ?"
+    android:includeInGlobalSearch="true"
+    android:searchSuggestThreshold="2" />

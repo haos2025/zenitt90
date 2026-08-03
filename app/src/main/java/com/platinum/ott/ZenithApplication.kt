@@ -1,12 +1,16 @@
 package com.platinum.ott
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.worker.SeriesUpdateWorker
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -19,6 +23,19 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         ServiceLocator.init(this)
         setupCrashHandler()
+        // Раньше ни канал уведомлений не создавался, ни воркер не ставился
+        // в очередь — SeriesUpdateWorker.enqueue() существовал, но был
+        // мёртвым кодом, вызывавшимся из НИГДЕ.
+        createNotificationChannel()
+        SeriesUpdateWorker.enqueue(this)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(SeriesUpdateWorker.CHANNEL_ID, "Новые серии", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Уведомления о выходе новых серий избранных сериалов"
+        }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     // Единая точка настройки загрузки постеров на всё приложение (TV и телефон).

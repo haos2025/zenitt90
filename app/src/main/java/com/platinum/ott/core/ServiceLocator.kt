@@ -37,6 +37,8 @@ object ServiceLocator {
 
     // --- Auth ---
     val authPreferences: AuthPreferences by lazy { AuthPreferences(appContext) }
+    val networkPreferences: NetworkPreferences by lazy { NetworkPreferences(appContext) }
+    val notificationPreferences: NotificationPreferences by lazy { NotificationPreferences(appContext) }
     lateinit var authRepository: AuthRepository; private set
     lateinit var movieRepository: MovieRepository; private set
     lateinit var playlistRepository: com.platinum.ott.data.repository.PlaylistRepository; private set
@@ -72,7 +74,8 @@ object ServiceLocator {
     )
 
     fun initAuth() {
-        val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences)
+        val timeoutSeconds = networkPreferences.getTimeoutSeconds().toLong()
+        val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
         authRepository = AuthRepositoryImpl(authPreferences, okHttpClient)
         // playlistRepository теперь строится ДО movieRepository — тому
@@ -80,7 +83,7 @@ object ServiceLocator {
         // m3u_/xt_, раньше ЛЮБОЙ id безусловно уходил на backend).
         playlistRepository = com.platinum.ott.data.repository.PlaylistRepository(authPreferences, database.playlistMovieDao(), okHttpClient)
         movieRepository = MovieRepositoryImpl(api, database.movieDao(), playlistRepository)
-        val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor())
+        val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor(), timeoutSeconds = timeoutSeconds)
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)
         tmdbRepository = TmdbRepositoryImpl(tmdbApi, database.metadataDao())
         syncRepository = SyncRepositoryImpl(api, database.favoritesDao(), database.watchHistoryDao(), authPreferences)

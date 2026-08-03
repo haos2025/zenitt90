@@ -9,7 +9,17 @@ import androidx.compose.runtime.*
 import com.platinum.ott.domain.model.TmdbMetadata
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.shape.RoundedCornerShape
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.platinum.ott.core.platform.TmdbImage
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -26,6 +36,27 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
             is DetailUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
             is DetailUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
             is DetailUiState.Success -> {
+                // Раньше здесь тоже не было ни одной картинки — только текст.
+                val context = LocalContext.current
+                val density = LocalDensity.current
+                val widthPx = with(density) { (LocalConfiguration.current.screenWidthDp.dp - 32.dp).roundToPx() }
+                val heightPx = with(density) { 220.dp.roundToPx() }
+                val imageUrl = TmdbImage.backdropUrl(state.metadata?.backdropPath, widthPx)
+                    ?: state.movie.poster.ifBlank { null }
+                val request = remember(imageUrl, widthPx, heightPx) {
+                    imageUrl?.let { ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build() }
+                }
+                if (request != null) {
+                    AsyncImage(
+                        model = request,
+                        contentDescription = state.movie.title,
+                        contentScale = ContentScale.Crop,
+                        placeholder = ColorPainter(Color(0xFF1C1C1C)),
+                        error = ColorPainter(Color(0xFF2A2A2A)),
+                        modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(12.dp))
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
                 Text(state.movie.title, style = MaterialTheme.typography.headlineLarge, color = Color.White)
                 state.metadata?.let { m ->
                     m.genres?.let { Text(it, color = Color.Gray) }

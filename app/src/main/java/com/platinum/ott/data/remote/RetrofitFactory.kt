@@ -19,9 +19,9 @@ object RetrofitFactory {
     // ZenithApiService не мог получить ответ ни на один запрос.
     private const val ZENITH_BASE_URL = "https://zenith-backend-eviu.onrender.com/"
 
-    fun createOkHttpClient(authPrefs: AuthPreferences, vararg extraInterceptors: Interceptor = emptyArray()): OkHttpClient {
+    fun createOkHttpClient(authPrefs: AuthPreferences, vararg extraInterceptors: Interceptor = emptyArray(), timeoutSeconds: Long = 15): OkHttpClient {
         val builder = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(timeoutSeconds, TimeUnit.SECONDS).readTimeout(timeoutSeconds * 2, TimeUnit.SECONDS).writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             // RetryInterceptor до логирующего — так HttpLoggingInterceptor
             // логирует каждую отдельную попытку (включая повторы), а не
             // только финальный результат. Раньше сетевого retry не было

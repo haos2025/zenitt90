@@ -7,6 +7,8 @@ import retrofit2.http.Query
 interface TmdbApiService {
     @GET("search/movie")
     suspend fun searchMovie(@Query("query") query: String, @Query("year") year: Int? = null): TmdbSearchResponse
+    @GET("search/tv")
+    suspend fun searchTv(@Query("query") query: String): TmdbSearchResponse
     @GET("movie/{id}")
     suspend fun getMovieDetails(@Path("id") id: Int): TmdbMovieDetails
     @GET("tv/{id}")

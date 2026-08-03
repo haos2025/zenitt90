@@ -7,11 +7,18 @@ import kotlinx.coroutines.flow.Flow
 
 class SeriesTrackerUseCase(private val dao: SeriesScheduleDao, private val tmdb: TmdbRepository) {
     fun getUpcoming(): Flow<List<SeriesScheduleEntity>> = dao.getUpcoming()
-    suspend fun updateSchedule(seriesId: String, seriesName: String) {
-        try {
-            val id = seriesId.toIntOrNull() ?: return
-            val resp = com.platinum.ott.data.remote.tmdb.TmdbApiService::class // placeholder
-            // In real impl, call tmdb api for next_episode_to_air
-        } catch (_: Exception) {}
+
+    // Раньше это был placeholder ("val resp = TmdbApiService::class // placeholder"),
+    // ничего не делавший. Возвращает обновлённую запись ТОЛЬКО если дата
+    // следующей серии реально изменилась по сравнению с уже сохранённой —
+    // так SeriesUpdateWorker знает, стоит ли уведомлять, а не считает
+    // каждый периодический опрос "новостью".
+    suspend fun updateSchedule(seriesId: String, seriesName: String): SeriesScheduleEntity? {
+        val next = tmdb.getNextEpisode(seriesName) ?: return null
+        val existing = dao.getBySeriesId(seriesId)
+        if (existing?.nextEpisodeDate == next.airDateEpochMs) return null
+        val entity = SeriesScheduleEntity(seriesId, seriesName, next.airDateEpochMs, next.seasonNum, next.episodeNum, next.episodeName)
+        dao.upsert(entity)
+        return entity
     }
 }

@@ -1,1 +1,1 @@
-<full-backup-content><exclude domain="sharedpref" path="settings.xml" /></full-backup-content>
+<full-backup-content><exclude domain="sharedpref" path="zenith_auth_prefs.xml" /></full-backup-content>

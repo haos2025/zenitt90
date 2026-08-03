@@ -29,4 +29,21 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
     }
 
     private fun MetadataEntity.toDomain() = TmdbMetadata(tmdbId, posterPath, backdropPath, overview, voteAverage, genres, trailerUrl, cast)
+
+    // Раньше SeriesTrackerUseCase.updateSchedule() был заглушкой — весь этот
+    // путь (поиск сериала → следующая серия → дата выхода) нигде не был
+    // реализован. air_date у TMDB приходит как "yyyy-MM-dd" без времени —
+    // берём начало дня по UTC, для планирования уведомления точность до часа
+    // не нужна.
+    override suspend fun getNextEpisode(seriesTitle: String): com.platinum.ott.domain.model.NextEpisode? = withContext(Dispatchers.IO) {
+        try {
+            val found = api.searchTv(seriesTitle).results.firstOrNull() ?: return@withContext null
+            val next = api.getNextEpisode(found.id)
+            val airDate = next.air_date ?: return@withContext null
+            val epochMs = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .parse(airDate)?.time ?: return@withContext null
+            com.platinum.ott.domain.model.NextEpisode(epochMs, next.season_number, next.episode_number, next.name ?: "")
+        } catch (e: Exception) { null }
+    }
 }

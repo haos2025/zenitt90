@@ -1,9 +1,14 @@
 package com.platinum.ott
 
+import android.Manifest
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -16,10 +21,20 @@ import com.platinum.ott.ui.theme.ZenithBackground
 import com.platinum.ott.ui.theme.ZenithTheme
 
 class MainActivity : ComponentActivity() {
+    // На Android 13+ (TIRAMISU) POST_NOTIFICATIONS — runtime-разрешение,
+    // без явного запроса уведомления о новых сериях не показывались бы
+    // никогда, даже с настроенным NotificationChannel и рабочим воркером.
+    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val context = this
         val isTv = isTV(context)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         // Раньше ориентация была зашита в AndroidManifest.xml как
         // android:screenOrientation="landscape" — статически, для ВСЕХ
@@ -38,8 +53,15 @@ class MainActivity : ComponentActivity() {
         val intentUri = intent?.data
         val deepLinkMovieId = if (intentUri?.scheme == "zenith" && intentUri.host == "player")
             intentUri.getQueryParameter("id") else null
+        // zenith://detail?id=... — используется результатами системного
+        // поиска на TV (см. MovieSearchProvider.kt), раньше он ничего
+        // реального не находил, поэтому этот deep-link никогда не
+        // требовался. Ведёт на карточку фильма, а не сразу в проигрывание.
+        val deepLinkDetailId = if (intentUri?.scheme == "zenith" && intentUri.host == "detail")
+            intentUri.getQueryParameter("id") else null
         val startDestination = when {
             deepLinkMovieId != null -> "player/$deepLinkMovieId"
+            deepLinkDetailId != null -> "detail/$deepLinkDetailId"
             ServiceLocator.checkAuthUseCase.execute() -> "home"
             else -> "setup"
         }
