@@ -21,24 +21,41 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneSetupScreen(onSetupComplete: () -> Unit, viewModel: SetupViewModel = viewModel()) {
+fun PhoneSetupScreen(
+    onSetupComplete: () -> Unit,
+    viewModel: SetupViewModel = viewModel(),
+    // См. комментарий в SetupScreen.kt (TV-версия) — тот же тупик был и
+    // здесь: без сохранённого источника единственный доступный экран —
+    // этот, хотя настройки/история/избранное от логина не зависят.
+    onSettingsClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A)).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("ZENITH", style = MaterialTheme.typography.displayLarge, color = Color(0xFF6C63FF))
-        Text("Подключите источник", color = Color.White.copy(0.5f))
-        Spacer(Modifier.height(32.dp))
-        TabRow(selectedTabIndex = selectedTab) { Tab(selectedTab == 0, onClick = { selectedTab = 0 }) { Text("M3U") }; Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Xtream") } }
-        Spacer(Modifier.height(16.dp))
-        when (selectedTab) {
-            0 -> PhoneTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
-            1 -> { PhoneTextField(xtHost, { xtHost = it }, "Хост"); PhoneTextField(xtUser, { xtUser = it }, "Логин"); PhoneTextField(xtPass, { xtPass = it }, "Пароль", true) }
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A))) {
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("ZENITH", style = MaterialTheme.typography.displayLarge, color = Color(0xFF6C63FF))
+            Text("Подключите источник", color = Color.White.copy(0.5f))
+            Spacer(Modifier.height(32.dp))
+            TabRow(selectedTabIndex = selectedTab) { Tab(selectedTab == 0, onClick = { selectedTab = 0 }) { Text("M3U") }; Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Xtream") } }
+            Spacer(Modifier.height(16.dp))
+            when (selectedTab) {
+                0 -> PhoneTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
+                1 -> { PhoneTextField(xtHost, { xtHost = it }, "Хост"); PhoneTextField(xtUser, { xtUser = it }, "Логин"); PhoneTextField(xtPass, { xtPass = it }, "Пароль", true) }
+            }
+            if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = Color(0xFFFF6B6B))
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = { if (uiState !is SetupUiState.Loading) when (selectedTab) { 0 -> viewModel.loginWithM3U(m3uUrl, onSetupComplete); 1 -> viewModel.loginWithXtream(xtHost, xtUser, xtPass, onSetupComplete) } }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться") }
+            Spacer(Modifier.height(24.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onFavoritesClick) { Text("Избранное") }
+                TextButton(onClick = onHistoryClick) { Text("История") }
+                TextButton(onClick = onSettingsClick) { Text("Настройки") }
+            }
         }
-        if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = Color(0xFFFF6B6B))
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = { if (uiState !is SetupUiState.Loading) when (selectedTab) { 0 -> viewModel.loginWithM3U(m3uUrl, onSetupComplete); 1 -> viewModel.loginWithXtream(xtHost, xtUser, xtPass, onSetupComplete) } }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться") }
     }
 }
 

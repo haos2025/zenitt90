@@ -15,7 +15,7 @@ import com.platinum.ott.core.QualityPreferences
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, viewModel: SettingsViewModel = viewModel()) {
+fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxSize().padding(start = 56.dp, top = 56.dp)) {
         Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
@@ -70,8 +70,15 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPluginsClick) { Text("Плагины") }
         }
-        SettingsSection("Аккаунт") { SettingsItem("Источник", "Подключён") }
+        // Раньше здесь всегда было захардкожено "Подключён" — не имело
+        // значения, введён ли вообще источник, текст был одинаковым что
+        // до, что после логина. Теперь этот экран достижим и БЕЗ
+        // настроенного источника (см. SetupScreen.kt), поэтому статус
+        // должен отражать реальность, а не врать по умолчанию.
+        val isConnected = remember { com.platinum.ott.core.ServiceLocator.checkAuthUseCase.execute() }
+        SettingsSection("Аккаунт") { SettingsItem("Источник", if (isConnected) "Подключён" else "Не подключён") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!isConnected) Button(onClick = onConnectSourceClick) { Text("Подключить источник") }
             Button(onClick = onSyncClick) { Text("Синхронизация устройств") }
         }
         Spacer(Modifier.weight(1f))

@@ -20,13 +20,32 @@ import androidx.tv.material3.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SetupScreen(onSetupComplete: () -> Unit, modifier: Modifier = Modifier, viewModel: SetupViewModel = viewModel()) {
+fun SetupScreen(
+    onSetupComplete: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: SetupViewModel = viewModel(),
+    // Раньше этот экран был тупиком: пока пользователь не введёт рабочий
+    // M3U/Xtream адрес, попасть больше никуда было нельзя — ни в настройки
+    // (проверить плагины, синхронизацию, сменить тему), ни в историю/избранное,
+    // которые физически хранятся в Room и не зависят от того, залогинен ли
+    // пользователь (ServiceLocator.initAuth() строит их безусловно при
+    // старте приложения, см. ServiceLocator.kt). Блокировка была чисто
+    // навигационной, не технической. Теперь эти экраны достижимы и отсюда.
+    onSettingsClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(0) }
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
-    Box(modifier = modifier.fillMaxSize().background(Color(0xFF0D0D1A)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.width(520.dp)) {
+    Box(modifier = modifier.fillMaxSize().background(Color(0xFF0D0D1A))) {
+        Row(modifier = Modifier.align(Alignment.TopEnd).padding(24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onFavoritesClick) { Text("Избранное") }
+            OutlinedButton(onClick = onHistoryClick) { Text("История") }
+            OutlinedButton(onClick = onSettingsClick) { Text("Настройки") }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.align(Alignment.Center).width(520.dp)) {
             Text("ZENITH", style = MaterialTheme.typography.displayMedium, color = Color(0xFF6C63FF))
             Text("Подключите источник контента", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.5f))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

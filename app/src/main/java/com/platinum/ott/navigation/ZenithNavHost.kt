@@ -34,7 +34,14 @@ import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
-        composable("setup") { if (isTV) SetupScreen(onSetupComplete = { navController.navigate("home") { popUpTo(0) } }) else PhoneSetupRoute(navController) }
+        composable("setup") {
+            if (isTV) SetupScreen(
+                onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
+                onSettingsClick = { navController.navigate("settings") },
+                onHistoryClick = { navController.navigate("history") },
+                onFavoritesClick = { navController.navigate("favorites") }
+            ) else PhoneSetupRoute(navController)
+        }
         composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigate("settings") }, onFavoritesClick = { navController.navigate("favorites") }, onHistoryClick = { navController.navigate("history") }) else PhoneHomeScreen(navController) }
         composable("detail/{movieId}", arguments = listOf(navArgument("movieId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
@@ -44,7 +51,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) PlayerScreen(movieId = id, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController)
         }
-        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
         composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
         composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
@@ -60,5 +67,10 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
 
 @Composable
 private fun PhoneSetupRoute(navController: NavHostController) {
-    com.platinum.ott.presentation.phone.screens.PhoneSetupScreen(onSetupComplete = { navController.navigate("home") { popUpTo(0) } })
+    com.platinum.ott.presentation.phone.screens.PhoneSetupScreen(
+        onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
+        onSettingsClick = { navController.navigate("settings") },
+        onHistoryClick = { navController.navigate("history") },
+        onFavoritesClick = { navController.navigate("favorites") }
+    )
 }
