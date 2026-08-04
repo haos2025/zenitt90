@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-sealed interface PlayerUiState { object Loading : PlayerUiState; data class Ready(val variants: List<StreamVariant>, val currentVariant: StreamVariant, val showQualityMenu: Boolean = false) : PlayerUiState; data class Error(val message: String) : PlayerUiState }
+sealed interface PlayerUiState { object Loading : PlayerUiState; data class Ready(val variants: List<StreamVariant>, val currentVariant: StreamVariant, val title: String = "", val showQualityMenu: Boolean = false) : PlayerUiState; data class Error(val message: String) : PlayerUiState }
 
 @OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -130,6 +130,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         exoPlayer.seekTo(if (duration > 0) target.coerceAtMost(duration) else target)
     }
     fun seekBackward() { exoPlayer.seekTo((exoPlayer.currentPosition - 10_000).coerceAtLeast(0)) }
+    // Нужен для перетаскивания слайдера прогресса на телефоне — на TV его
+    // не было, там перемотка только шагами по 10с с пульта.
+    fun seekTo(positionMs: Long) {
+        val duration = exoPlayer.duration
+        exoPlayer.seekTo(if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0))
+    }
 
     fun loadMovie(movieId: String) {
         currentMovieId = movieId
@@ -165,7 +171,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // не трогая ручной выбор пользователя в плеере после старта.
                 val initial = capForMeteredNetwork(variants, preferred)
                 playVariant(initial, resumePositionMs)
-                _uiState.value = PlayerUiState.Ready(variants, initial)
+                _uiState.value = PlayerUiState.Ready(variants, initial, currentTitle)
                 startHistoryAutosave()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
         }

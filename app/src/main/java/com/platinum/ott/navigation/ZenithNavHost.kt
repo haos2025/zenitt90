@@ -30,6 +30,7 @@ import com.platinum.ott.presentation.phone.screens.PhonePlayerScreen
 import com.platinum.ott.presentation.phone.screens.PhoneQrScanScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginCatalogScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
+import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
 
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
@@ -42,7 +43,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 onFavoritesClick = { navController.navigate("favorites") }
             ) else PhoneSetupRoute(navController)
         }
-        composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigate("settings") }, onFavoritesClick = { navController.navigate("favorites") }, onHistoryClick = { navController.navigate("history") }) else PhoneHomeScreen(navController) }
+        composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigate("settings") }, onFavoritesClick = { navController.navigate("favorites") }, onHistoryClick = { navController.navigate("history") }, onSearchClick = { navController.navigate("search") }) else PhoneHomeScreen(navController) }
         composable("detail/{movieId}", arguments = listOf(navArgument("movieId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) DetailScreen(movieId = id, onPlayClick = { navController.navigate("player/$id") }, onBackPressed = { navController.popBackStack() }) else PhoneDetailScreen(id, navController)
@@ -58,6 +59,11 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens
         composable("plugins") { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) }
+        composable("search?q={q}", arguments = listOf(navArgument("q") { type = NavType.StringType; defaultValue = "" })) { entry ->
+            val q = entry.arguments?.getString("q") ?: ""
+            if (isTV) com.platinum.ott.presentation.screens.search.SearchScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }, initialQuery = q)
+            else PhoneSearchScreen(navController, initialQuery = q)
+        }
         composable("plugin/{pluginId}", arguments = listOf(navArgument("pluginId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("pluginId") ?: return@composable
             if (isTV) PluginDetailScreen(pluginId = id, onBackPressed = { navController.popBackStack() }) else PhonePluginDetailScreen(id, navController)

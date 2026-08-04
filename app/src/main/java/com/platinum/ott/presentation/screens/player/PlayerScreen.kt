@@ -119,6 +119,7 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                     onSeekForward = { viewModel.seekForward() },
                     onSeekBackward = { viewModel.seekBackward() },
                     onTogglePlay = { viewModel.togglePlayPause() },
+                    title = state.title,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (state.showQualityMenu) {

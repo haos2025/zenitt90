@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,15 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        // Раньше на телефоне вообще не было верхней панели — единственная
+        // ссылка на поиск существовала снаружи приложения (системный поиск
+        // TV). Значок лупы здесь ведёт на PhoneSearchScreen.kt.
+        topBar = {
+            TopAppBar(
+                title = { Text("ZENITH", color = Color(0xFF6C63FF)) },
+                actions = { IconButton(onClick = { navController.navigate("search") }) { Icon(Icons.Default.Search, "Поиск") } }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Главная") })

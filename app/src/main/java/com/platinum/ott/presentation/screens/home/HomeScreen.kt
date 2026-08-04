@@ -19,12 +19,13 @@ import com.platinum.ott.presentation.components.CatalogRow
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFavoritesClick: () -> Unit, onHistoryClick: () -> Unit, modifier: Modifier = Modifier, viewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFavoritesClick: () -> Unit, onHistoryClick: () -> Unit, onSearchClick: () -> Unit = {}, modifier: Modifier = Modifier, viewModel: HomeViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize().background(Color(0xFF101010)).padding(top = 24.dp, bottom = 24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
             Text("ZENITH", style = MaterialTheme.typography.displaySmall, color = Color(0xFF6C63FF), modifier = Modifier.weight(1f))
             val ttvColors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+            TextButton(onClick = onSearchClick, colors = ttvColors) { Text("Поиск") }
             TextButton(onClick = onFavoritesClick, colors = ttvColors) { Text("Избранное") }
             TextButton(onClick = onHistoryClick, colors = ttvColors) { Text("История") }
             TextButton(onClick = onSettingsClick, colors = ttvColors) { Text("Настройки") }

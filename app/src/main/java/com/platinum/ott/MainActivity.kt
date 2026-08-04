@@ -1,6 +1,8 @@
 package com.platinum.ott
 
 import android.Manifest
+import android.app.SearchManager
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -53,15 +55,17 @@ class MainActivity : ComponentActivity() {
         val intentUri = intent?.data
         val deepLinkMovieId = if (intentUri?.scheme == "zenith" && intentUri.host == "player")
             intentUri.getQueryParameter("id") else null
-        // zenith://detail?id=... — используется результатами системного
-        // поиска на TV (см. MovieSearchProvider.kt), раньше он ничего
-        // реального не находил, поэтому этот deep-link никогда не
-        // требовался. Ведёт на карточку фильма, а не сразу в проигрывание.
         val deepLinkDetailId = if (intentUri?.scheme == "zenith" && intentUri.host == "detail")
             intentUri.getQueryParameter("id") else null
+        // Раньше ACTION_SEARCH долетал сюда, но дальше никуда не вёл — в
+        // приложении не было ни одного экрана поиска, чтобы передать
+        // введённый текст. Теперь есть SearchScreen/PhoneSearchScreen.
+        val searchQuery = if (intent?.action == Intent.ACTION_SEARCH)
+            intent.getStringExtra(SearchManager.QUERY) else null
         val startDestination = when {
             deepLinkMovieId != null -> "player/$deepLinkMovieId"
             deepLinkDetailId != null -> "detail/$deepLinkDetailId"
+            !searchQuery.isNullOrBlank() -> "search?q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}"
             ServiceLocator.checkAuthUseCase.execute() -> "home"
             else -> "setup"
         }

@@ -37,6 +37,7 @@ fun PlayerController(
     onSeekForward: () -> Unit,
     onSeekBackward: () -> Unit,
     onTogglePlay: () -> Unit,
+    title: String = "",
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -46,6 +47,22 @@ fun PlayerController(
         modifier = modifier
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+
+            // Раньше во время просмотра нигде не было видно, что за фильм
+            // играет — ни на TV, ни на телефоне. Показывается только пока
+            // видны остальные элементы управления, не постоянно поверх видео.
+            if (title.isNotBlank()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(0.25f).align(Alignment.TopCenter)
+                        .background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)))
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 48.dp, vertical = 32.dp)
+                )
+            }
 
             // Градиент снизу для читаемости контроллера
             Box(
