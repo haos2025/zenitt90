@@ -30,5 +30,12 @@ data class PlaylistMovieEntity(
     // общий User-Agent на все каналы сразу этого не покрывает.
     val userAgent: String? = null,
     val referrer: String? = null,
+    // Заполняются реально только для эпизодов сериалов Xtream (из
+    // get_series_info) и эвристически для M3U (парсинг SxxEyy в названии,
+    // см. M3uPlaylistParser). Для обычных фильмов — null.
+    val seriesId: String? = null,
+    val seriesTitle: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
     val cachedAt: Long = System.currentTimeMillis()
 )

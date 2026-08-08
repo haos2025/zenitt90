@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.navigation.navigateToTab
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
@@ -49,15 +52,18 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
         topBar = {
             TopAppBar(
                 title = { Text("ZENITH", color = Color(0xFF6C63FF)) },
-                actions = { IconButton(onClick = { navController.navigate("search") }) { Icon(Icons.Default.Search, "Поиск") } }
+                actions = {
+                    IconButton(onClick = { navController.navigateToTab("series") }) { Icon(Icons.Default.Movie, "Сериалы") }
+                    IconButton(onClick = { navController.navigateToTab("search") }) { Icon(Icons.Default.Search, "Поиск") }
+                }
             )
         },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Главная") })
-                NavigationBarItem(selected = false, onClick = { navController.navigate("favorites") }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Избранное") })
-                NavigationBarItem(selected = false, onClick = { navController.navigate("history") }, icon = { Icon(Icons.Default.History, null) }, label = { Text("История") })
-                NavigationBarItem(selected = false, onClick = { navController.navigate("settings") }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Настройки") })
+                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Избранное") })
+                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, null) }, label = { Text("История") })
+                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Настройки") })
             }
         }
     ) { padding ->

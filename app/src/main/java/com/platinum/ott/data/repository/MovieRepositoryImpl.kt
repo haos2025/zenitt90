@@ -22,6 +22,17 @@ class MovieRepositoryImpl(
     private val cacheMutex = Mutex()
     private val CACHE_TTL = 10 * 60 * 1000L
 
+    // Раньше totalPages в CatalogPage считался из resp.totalItems — а это
+    // поле backend (CatalogResponseOut) физически НЕ отдаёт, оно всегда
+    // дефолтное 0. (0 + 19) / 20 = 0, а HomeViewModel.loadMore() пропускает
+    // подгрузку, если page >= totalPages — 1 >= 0 всегда true. Поэтому
+    // "лента" молча никогда не грузила вторую страницу, сколько ни держи
+    // скролл, хотя backend честно отдаёт total_pages (это ДРУГОЕ поле в том
+    // же ответе, оно приходит правильно, просто не читалось). Держим
+    // последнее известное значение в памяти на случай раздачи из кэша
+    // (Room не хранит totalPages как метаданные страницы).
+    private var lastKnownTotalPages: Int = 1
+
     override suspend fun getCatalog(page: Int, genre: String?): Result<CatalogPage> = cacheMutex.withLock {
         withContext(Dispatchers.IO) {
             try {
@@ -29,16 +40,17 @@ class MovieRepositoryImpl(
                 val total = dao.getTotalCount()
                 val cacheTime = dao.getLatestCacheTime() ?: 0
                 if (cached.isNotEmpty() && System.currentTimeMillis() - cacheTime < CACHE_TTL) {
-                    return@withContext Result.success(cached.map { it.toDomain() }.toPage(page, total))
+                    return@withContext Result.success(cached.map { it.toDomain() }.toPage(page, lastKnownTotalPages, total))
                 }
                 val resp = api.getCatalog(page, genre)
                 val entities = resp.items.map { it.toEntity() }
                 if (page == 1) dao.clearAll()
                 dao.upsertAll(entities)
-                Result.success(entities.map { it.toDomain() }.toPage(page, resp.totalItems))
+                lastKnownTotalPages = resp.totalPages
+                Result.success(entities.map { it.toDomain() }.toPage(page, resp.totalPages, resp.totalItems))
             } catch (e: Exception) {
                 val cached = dao.getPage(20, (page - 1) * 20)
-                if (cached.isNotEmpty()) Result.success(cached.map { it.toDomain() }.toPage(page, dao.getTotalCount()))
+                if (cached.isNotEmpty()) Result.success(cached.map { it.toDomain() }.toPage(page, lastKnownTotalPages, dao.getTotalCount()))
                 else Result.failure(e)
             }
         }
@@ -68,5 +80,5 @@ class MovieRepositoryImpl(
         catch (e: Exception) { val c = dao.search(query); if (c.isNotEmpty()) Result.success(c.map { it.toDomain() }) else Result.failure(e) }
     }
 
-    private fun List<Movie>.toPage(page: Int, total: Int) = CatalogPage(this, page, (total + 19) / 20, total)
+    private fun List<Movie>.toPage(page: Int, totalPages: Int, totalItems: Int) = CatalogPage(this, page, totalPages.coerceAtLeast(1), totalItems)
 }

@@ -45,11 +45,12 @@ class SeriesUpdateWorker(private val ctx: Context, params: WorkerParameters) : C
     private fun notifyNewEpisode(seriesTitle: String, season: Int, episode: Int, contentId: String) {
         if (ServiceLocator.notificationPreferences.isQuietNow()) return
         if (ActivityCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        // Открывает просто главный экран, а не сразу карточку сериала —
-        // диплинк на конкретный контент потребовал бы отдельной обработки
-        // intent-экстра в NavHost, которой сейчас в проекте нет; не стал
-        // симулировать переход, которого на самом деле не будет.
+        // Раньше диплинка на конкретный сериал не существовало — экрана
+        // "по сериалам" не было вообще, открывать было физически некуда.
+        // contentId избранного сериала — это ровно тот seriesId, который
+        // понимает SeriesEpisodesScreen (см. PlaylistRepository.getSeriesList()).
         val intent = Intent(ctx, MainActivity::class.java).apply {
+            data = android.net.Uri.parse("zenith://series?id=$contentId")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(ctx, contentId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

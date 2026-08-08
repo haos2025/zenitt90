@@ -35,9 +35,15 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // хотя TMDB-метаданные (state.metadata) уже приходили с backdropPath.
                 // Если TMDB backdrop недоступен — падаем на постер из бэкенда/плейлиста,
                 // чтобы фон не был совсем пустым.
+                // hasRealBackdrop: настоящий TMDB backdrop — широкий кадр, ему Crop
+                // на весь экран идёт естественно. А movie.poster (для M3U/Xtream —
+                // почти всегда просто логотип канала, TMDB такие каналы не находит)
+                // на весь экран через Crop растягивался и обрезался до нечитаемости —
+                // видно на присланных скриншотах.
                 val context = LocalContext.current
                 val density = LocalDensity.current
                 val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
+                val hasRealBackdrop = !state.metadata?.backdropPath.isNullOrBlank()
                 val backdropUrl = TmdbImage.backdropUrl(state.metadata?.backdropPath, screenWidthPx)
                     ?: state.movie.poster.ifBlank { null }
                 val backdropRequest = remember(backdropUrl, screenWidthPx) {
@@ -47,7 +53,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     AsyncImage(
                         model = backdropRequest,
                         contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                        contentScale = if (hasRealBackdrop) ContentScale.Crop else ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
                         placeholder = ColorPainter(Color(0xFF101010)),
                         error = ColorPainter(Color(0xFF101010))

@@ -23,6 +23,11 @@ object M3uPlaylistParser {
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
     private val ATTR_REGEX = Regex("(tvg-logo|group-title)=\"([^\"]*)\"")
     private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
+    // У M3U, в отличие от Xtream, нет структурированного API сериалов —
+    // единственный источник "это серия N сезона M" — сам текст названия.
+    // Это ЭВРИСТИКА, не гарантия: сработает на "Шоу S01E02", не сработает
+    // на "Шоу 1 сезон 2 серия" или нестандартных форматах провайдера.
+    private val EPISODE_REGEX = Regex("S(\\d{1,2})E(\\d{1,3})", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): List<PlaylistMovieEntity> {
         val lines = raw.lines()
@@ -35,6 +40,14 @@ object M3uPlaylistParser {
                 val attrs = ATTR_REGEX.findAll(line).associate { it.groupValues[1] to it.groupValues[2] }
                 val title = line.substringAfterLast(",", "").trim().ifBlank { "Без названия" }
                 val year = YEAR_REGEX.find(title)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                val episodeMatch = EPISODE_REGEX.find(title)
+                val seasonNumber = episodeMatch?.groupValues?.get(1)?.toIntOrNull()
+                val episodeNumber = episodeMatch?.groupValues?.get(2)?.toIntOrNull()
+                // seriesId — не ID из какого-то реестра (M3U его не даёт),
+                // а название БЕЗ SxxEyy-части, нормализованное — чтобы у
+                // "Шоу S01E01" и "Шоу S01E02" совпал ключ группировки.
+                val seriesId = if (seasonNumber != null) "m3u_series_" + title.replace(EPISODE_REGEX, "").trim().lowercase() else null
+                val seriesTitle = if (seasonNumber != null) title.replace(EPISODE_REGEX, "").trim().trimEnd('-', '—', ' ') else null
 
                 // Между #EXTINF и URL могут быть #EXTVLCOPT (заголовки для
                 // этого конкретного канала) и другие строки-комментарии —
@@ -64,7 +77,11 @@ object M3uPlaylistParser {
                             genre = attrs["group-title"]?.ifBlank { null } ?: "Мой плейлист",
                             streamUrl = url,
                             userAgent = userAgent,
-                            referrer = referrer
+                            referrer = referrer,
+                            seriesId = seriesId,
+                            seriesTitle = seriesTitle,
+                            seasonNumber = seasonNumber,
+                            episodeNumber = episodeNumber
                         )
                     )
                     index++

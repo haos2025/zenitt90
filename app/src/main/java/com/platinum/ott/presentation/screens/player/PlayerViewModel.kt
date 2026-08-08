@@ -3,9 +3,14 @@ package com.platinum.ott.presentation.screens.player
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -20,7 +25,29 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-sealed interface PlayerUiState { object Loading : PlayerUiState; data class Ready(val variants: List<StreamVariant>, val currentVariant: StreamVariant, val title: String = "", val showQualityMenu: Boolean = false) : PlayerUiState; data class Error(val message: String) : PlayerUiState }
+enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
+
+// Ссылку на TrackGroup держим напрямую (а не индекс) — это обычный
+// immutable value-класс Media3, живёт ровно один снимок Tracks; каждый раз
+// список опций строится заново из СВЕЖЕГО exoPlayer.currentTracks в
+// onTracksChanged, так что устаревшей ссылки быть не может.
+data class TrackOption(val trackGroup: TrackGroup, val trackIndexInGroup: Int, val label: String, val isSelected: Boolean)
+
+sealed interface PlayerUiState {
+    object Loading : PlayerUiState
+    data class Ready(
+        val variants: List<StreamVariant>,
+        val currentVariant: StreamVariant,
+        val title: String = "",
+        val showPlaybackMenu: Boolean = false,
+        val menuTab: PlaybackMenuTab = PlaybackMenuTab.QUALITY,
+        val audioTracks: List<TrackOption> = emptyList(),
+        val subtitleTracks: List<TrackOption> = emptyList(),
+        val subtitlesEnabled: Boolean = false,
+        val playbackSpeed: Float = 1f
+    ) : PlayerUiState
+    data class Error(val message: String) : PlayerUiState
+}
 
 @OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,7 +81,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<PlayerUiState> = _uiState
 
     // Раньше PlayerScreen передавал useController=false и не выводил вообще
-    // никакого UI управления — PlayerController.kt/QualityMenuOverlay.kt
+    // никакого UI управления — PlayerController.kt/PlaybackMenuOverlay.kt
     // лежали неиспользуемыми. isPlaying нужен PlayerController для иконки
     // play/pause; у ExoPlayer нет готового Flow под это, поэтому слушаем
     // через Player.Listener и прокидываем в StateFlow.
@@ -103,6 +130,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.value = PlayerUiState.Error(describePlaybackError(error))
                 }
             }
+
+            // Раньше аудиодорожки и субтитры вообще нигде не читались —
+            // ExoPlayer сам автоматически выбирал первую подходящую
+            // дорожку, переключить вручную было нельзя. onTracksChanged
+            // вызывается Media3 на каждую смену состава дорожек (новый
+            // MediaItem, ответ HLS-манифеста и т.п.) — пересобираем список
+            // опций из АКТУАЛЬНОГО снимка, не храним ничего между вызовами.
+            override fun onTracksChanged(tracks: Tracks) {
+                val current = _uiState.value as? PlayerUiState.Ready ?: return
+                val audio = mutableListOf<TrackOption>()
+                val subtitles = mutableListOf<TrackOption>()
+                for (group in tracks.groups) {
+                    for (i in 0 until group.length) {
+                        if (!group.isTrackSupported(i)) continue
+                        val format = group.getTrackFormat(i)
+                        val label = format.label ?: format.language?.uppercase() ?: "Дорожка ${i + 1}"
+                        val option = TrackOption(group.mediaTrackGroup, i, label, group.isTrackSelected(i))
+                        when (group.type) {
+                            C.TRACK_TYPE_AUDIO -> audio += option
+                            C.TRACK_TYPE_TEXT -> subtitles += option
+                            else -> {}
+                        }
+                    }
+                }
+                _uiState.value = current.copy(
+                    audioTracks = audio,
+                    subtitleTracks = subtitles,
+                    subtitlesEnabled = tracks.isTypeSelected(C.TRACK_TYPE_TEXT)
+                )
+            }
         })
     }
 
@@ -140,6 +197,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun loadMovie(movieId: String) {
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
+        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
         viewModelScope.launch {
             _uiState.value = PlayerUiState.Loading
             try {
@@ -217,17 +275,72 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val current = _uiState.value as? PlayerUiState.Ready ?: return
         playVariant(variant, exoPlayer.currentPosition)
         qualityPrefs.setSelectedQuality(variant.quality)
-        _uiState.value = current.copy(currentVariant = variant, showQualityMenu = false)
+        _uiState.value = current.copy(currentVariant = variant, showPlaybackMenu = false)
     }
-    fun toggleQualityMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(showQualityMenu = !c.showQualityMenu) }
-    fun dismissQualityMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; if (c.showQualityMenu) { _uiState.value = c.copy(showQualityMenu = false); exoPlayer.play() } }
+    fun togglePlaybackMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(showPlaybackMenu = !c.showPlaybackMenu) }
+    fun dismissPlaybackMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; if (c.showPlaybackMenu) { _uiState.value = c.copy(showPlaybackMenu = false); exoPlayer.play() } }
+    fun setMenuTab(tab: PlaybackMenuTab) { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(menuTab = tab) }
+
+    // pitch всегда 1f, независимо от speed — PlaybackParameters(speed, pitch)
+    // это два независимых параметра Media3, SonicAudioProcessor умеет
+    // растягивать/сжимать время БЕЗ изменения тона. Без этого голоса на
+    // 1.5x звучали бы писклявее ("эффект бурундука") — для видео это почти
+    // всегда нежелательно, в отличие от аудиокниг/подкастов.
+    fun setPlaybackSpeed(speed: Float) {
+        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(speed, 1f)
+        val current = _uiState.value as? PlayerUiState.Ready ?: return
+        _uiState.value = current.copy(playbackSpeed = speed)
+    }
+
+    fun selectAudioTrack(option: TrackOption) {
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(option.trackGroup, option.trackIndexInGroup))
+            .build()
+    }
+    fun selectSubtitleTrack(option: TrackOption) {
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(option.trackGroup, option.trackIndexInGroup))
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+    }
+    // "Выключить субтитры" — не то же самое, что просто не выбирать
+    // дорожку: ExoPlayer по умолчанию сам может включить подходящую по
+    // системному языку, если явно не запретить тип трека.
+    fun disableSubtitles() {
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+    }
+
+    private var externalSubtitleUrl: String? = null
+    // Внешние SRT по ссылке — раньше субтитры могли быть только те, что
+    // зашиты в сам поток/контейнер. SubtitleConfiguration можно приложить
+    // только при сборке MediaItem, а не добавить "на лету" в уже играющий
+    // поток — поэтому пересобираем текущий вариант через playVariant(),
+    // сохраняя позицию воспроизведения.
+    fun loadExternalSubtitle(url: String) {
+        externalSubtitleUrl = url
+        val current = _uiState.value as? PlayerUiState.Ready ?: return
+        playVariant(current.currentVariant, exoPlayer.currentPosition)
+    }
     private fun playVariant(v: StreamVariant, seekTo: Long = 0L) {
         // Свои заголовки канала (#EXTVLCOPT) поверх общего дефолта — если
         // канал ничего не требует явно, edge-case не ломается, просто
         // используется тот же generic User-Agent, что и раньше.
         val effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
         httpDataSourceFactory.setDefaultRequestProperties(effectiveHeaders)
-        exoPlayer.setMediaItem(MediaItem.fromUri(v.url))
+        val mediaItemBuilder = MediaItem.Builder().setUri(v.url)
+        externalSubtitleUrl?.let { subUrl ->
+            mediaItemBuilder.setSubtitleConfigurations(listOf(
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl))
+                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                    .setLanguage("ru")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            ))
+        }
+        exoPlayer.setMediaItem(mediaItemBuilder.build())
         exoPlayer.prepare()
         if (seekTo > 0) exoPlayer.seekTo(seekTo)
         exoPlayer.play()

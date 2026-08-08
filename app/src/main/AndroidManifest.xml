@@ -30,6 +30,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="zenith" android:host="player" />
                 <data android:scheme="zenith" android:host="detail" />
+                <data android:scheme="zenith" android:host="series" />
             </intent-filter>
             <!-- Раньше это ни на что не было завязано: MovieSearchProvider отдавал
                  выдуманную строку, поэтому системе просто нечего было запускать

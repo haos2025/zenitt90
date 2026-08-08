@@ -11,11 +11,10 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitFactory {
-    // TODO: заменить на реальный адрес после деплоя zenith-backend на Render
-    // (см. zenith-backend/README.md, раздел "Деплой на Render.com").
-    // 10.0.2.2 — это localhost хост-машины из Android-эмулятора, для
-    // локального теста с "uvicorn app.main:app --port 8080" на ПК.
-    // Прежний "https://zenith.placeholder.api/" был несуществующим доменом —
+    // zenith-backend уже задеплоен на Render (см. zenith-backend/README.md,
+    // раздел "Деплой на Render.com") — старый TODO про "заменить после
+    // деплоя" был оставлен по инерции уже после того, как это было сделано;
+    // прежний "https://zenith.placeholder.api/" был несуществующим доменом,
     // ZenithApiService не мог получить ответ ни на один запрос.
     private const val ZENITH_BASE_URL = "https://zenith-backend-eviu.onrender.com/"
 

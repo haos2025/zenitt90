@@ -17,8 +17,12 @@ jobs:
       - name: Decode Keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > /tmp/zenith_release.jks
       - name: Build Release AAB
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: gradle bundleRelease --stacktrace -Pandroid.injected.signing.store.file=/tmp/zenith_release.jks -Pandroid.injected.signing.store.password=${{ secrets.STORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
       - name: Build Release APK
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: gradle assembleRelease --stacktrace -Pandroid.injected.signing.store.file=/tmp/zenith_release.jks -Pandroid.injected.signing.store.password=${{ secrets.STORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 6, exportSchema = true
+    version = 8, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -56,10 +56,31 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Добавляем поддержку сериалов Xtream (get_series_info) — раньше
+        // XtreamVodClient вообще не знал о сериалах, только плоский VOD.
+        // Все три столбца nullable, без DEFAULT — как и в MIGRATION_5_6,
+        // это безопасно для SQLite, а playlist_movies всё равно
+        // перекачивается заново при следующем refresh() (TTL 1 час).
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `seriesId` TEXT")
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `seasonNumber` INTEGER")
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `episodeNumber` INTEGER")
+            }
+        }
+
+        // Экран "по сериалам" — нужно чистое отображаемое название сериала
+        // отдельно от названия конкретного эпизода ("Шоу S01E02 — ...").
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `seriesTitle` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

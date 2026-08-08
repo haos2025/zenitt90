@@ -31,6 +31,7 @@ fun CatalogRow(
         )
 
         LazyRow(
+            modifier = Modifier.fillMaxWidth(),
             contentPadding         = PaddingValues(horizontal = 56.dp),
             horizontalArrangement  = Arrangement.spacedBy(16.dp)
         ) {

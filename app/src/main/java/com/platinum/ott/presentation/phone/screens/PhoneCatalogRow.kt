@@ -31,6 +31,7 @@ fun PhoneCatalogRow(title: String, movies: List<Movie>, onMovieClick: (String) -
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
         LazyRow(
+            modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {

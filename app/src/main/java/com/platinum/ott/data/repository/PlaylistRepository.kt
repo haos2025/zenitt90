@@ -54,6 +54,36 @@ class PlaylistRepository(
         dao.getById(id)?.toMovie()
     }
 
+    // Раньше эпизоды сериалов лежали в общем плоском списке фильмов —
+    // никакого способа посмотреть "сериал → сезоны → эпизоды" не было.
+    // Группировка — в памяти, не отдельным SQL-запросом: каталог плейлиста
+    // обычно не настолько большой, чтобы это было проблемой, а честная
+    // группировка по seriesId с сортировкой сезон/эпизод в SQL была бы
+    // отдельной DAO-функцией на каждый новый способ сортировки.
+    suspend fun getSeriesList(): List<SeriesSummary> = withContext(Dispatchers.IO) {
+        dao.getAll()
+            .filter { it.seriesId != null }
+            .groupBy { it.seriesId!! }
+            .map { (seriesId, episodes) ->
+                val first = episodes.first()
+                SeriesSummary(
+                    seriesId = seriesId,
+                    title = first.seriesTitle ?: first.title,
+                    poster = first.poster ?: "",
+                    genre = first.genre ?: "Мой плейлист",
+                    episodeCount = episodes.size
+                )
+            }
+            .sortedBy { it.title }
+    }
+
+    suspend fun getEpisodesForSeries(seriesId: String): List<Movie> = withContext(Dispatchers.IO) {
+        dao.getAll()
+            .filter { it.seriesId == seriesId }
+            .sortedWith(compareBy({ it.seasonNumber ?: 0 }, { it.episodeNumber ?: 0 }))
+            .map { it.toMovie() }
+    }
+
     suspend fun getStreamInfo(movieId: String): PlaylistStreamInfo? = withContext(Dispatchers.IO) {
         val entity = dao.getById(movieId) ?: return@withContext null
         val headers = buildMap {
@@ -90,7 +120,9 @@ class PlaylistRepository(
 
 private fun PlaylistMovieEntity.toMovie() = Movie(
     id = id, year = year, title = title, poster = poster ?: "",
-    genre = genre ?: "Мой плейлист", streamUrl = streamUrl
+    genre = genre ?: "Мой плейлист", streamUrl = streamUrl,
+    seriesId = seriesId, seriesTitle = seriesTitle, seasonNumber = seasonNumber, episodeNumber = episodeNumber
 )
 
 data class PlaylistStreamInfo(val url: String, val headers: Map<String, String>)
+data class SeriesSummary(val seriesId: String, val title: String, val poster: String, val genre: String, val episodeCount: Int)

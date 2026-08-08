@@ -57,6 +57,11 @@ class MainActivity : ComponentActivity() {
             intentUri.getQueryParameter("id") else null
         val deepLinkDetailId = if (intentUri?.scheme == "zenith" && intentUri.host == "detail")
             intentUri.getQueryParameter("id") else null
+        // zenith://series?id=... — раньше уведомление о новой серии просто
+        // открывало главный экран без деталей (диплинка на сериал не
+        // существовало). Теперь есть SeriesEpisodesScreen — ведём сразу туда.
+        val deepLinkSeriesId = if (intentUri?.scheme == "zenith" && intentUri.host == "series")
+            intentUri.getQueryParameter("id") else null
         // Раньше ACTION_SEARCH долетал сюда, но дальше никуда не вёл — в
         // приложении не было ни одного экрана поиска, чтобы передать
         // введённый текст. Теперь есть SearchScreen/PhoneSearchScreen.
@@ -65,6 +70,7 @@ class MainActivity : ComponentActivity() {
         val startDestination = when {
             deepLinkMovieId != null -> "player/$deepLinkMovieId"
             deepLinkDetailId != null -> "detail/$deepLinkDetailId"
+            deepLinkSeriesId != null -> "series/$deepLinkSeriesId"
             !searchQuery.isNullOrBlank() -> "search?q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}"
             ServiceLocator.checkAuthUseCase.execute() -> "home"
             else -> "setup"

@@ -37,10 +37,19 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
             is DetailUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
             is DetailUiState.Success -> {
                 // Раньше здесь тоже не было ни одной картинки — только текст.
+                // hasRealBackdrop разделяет два принципиально разных случая:
+                // настоящий TMDB backdrop_path — это широкое кадрированное
+                // изображение, ему Crop идёт естественно. А когда TMDB-метаданных
+                // нет (для M3U/Xtream-каналов это почти всегда так — это не
+                // фильмы, TMDB их не находит) и мы просто берём movie.poster —
+                // это маленький квадратный логотип канала, и Crop на всю
+                // ширину экрана растягивал/обрезал его до неузнаваемости
+                // (видно на скриншотах — обрезанные по краям буквы логотипа).
                 val context = LocalContext.current
                 val density = LocalDensity.current
                 val widthPx = with(density) { (LocalConfiguration.current.screenWidthDp.dp - 32.dp).roundToPx() }
                 val heightPx = with(density) { 220.dp.roundToPx() }
+                val hasRealBackdrop = !state.metadata?.backdropPath.isNullOrBlank()
                 val imageUrl = TmdbImage.backdropUrl(state.metadata?.backdropPath, widthPx)
                     ?: state.movie.poster.ifBlank { null }
                 val request = remember(imageUrl, widthPx, heightPx) {
@@ -50,10 +59,11 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                     AsyncImage(
                         model = request,
                         contentDescription = state.movie.title,
-                        contentScale = ContentScale.Crop,
+                        contentScale = if (hasRealBackdrop) ContentScale.Crop else ContentScale.Fit,
                         placeholder = ColorPainter(Color(0xFF1C1C1C)),
                         error = ColorPainter(Color(0xFF2A2A2A)),
                         modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1C1C1C))
                     )
                     Spacer(Modifier.height(16.dp))
                 }

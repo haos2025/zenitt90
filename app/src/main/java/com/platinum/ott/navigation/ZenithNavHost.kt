@@ -31,6 +31,8 @@ import com.platinum.ott.presentation.phone.screens.PhoneQrScanScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginCatalogScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
+import com.platinum.ott.presentation.phone.screens.PhoneSeriesListScreen
+import com.platinum.ott.presentation.phone.screens.PhoneSeriesEpisodesScreen
 
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
@@ -38,12 +40,12 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("setup") {
             if (isTV) SetupScreen(
                 onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
-                onSettingsClick = { navController.navigate("settings") },
-                onHistoryClick = { navController.navigate("history") },
-                onFavoritesClick = { navController.navigate("favorites") }
+                onSettingsClick = { navController.navigateToTab("settings") },
+                onHistoryClick = { navController.navigateToTab("history") },
+                onFavoritesClick = { navController.navigateToTab("favorites") }
             ) else PhoneSetupRoute(navController)
         }
-        composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigate("settings") }, onFavoritesClick = { navController.navigate("favorites") }, onHistoryClick = { navController.navigate("history") }, onSearchClick = { navController.navigate("search") }) else PhoneHomeScreen(navController) }
+        composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigateToTab("settings") }, onFavoritesClick = { navController.navigateToTab("favorites") }, onHistoryClick = { navController.navigateToTab("history") }, onSearchClick = { navController.navigateToTab("search") }, onSeriesClick = { navController.navigateToTab("series") }) else PhoneHomeScreen(navController) }
         composable("detail/{movieId}", arguments = listOf(navArgument("movieId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) DetailScreen(movieId = id, onPlayClick = { navController.navigate("player/$id") }, onBackPressed = { navController.popBackStack() }) else PhoneDetailScreen(id, navController)
@@ -52,7 +54,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) PlayerScreen(movieId = id, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController)
         }
-        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigateToTab("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
         composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
         composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
@@ -63,6 +65,15 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val q = entry.arguments?.getString("q") ?: ""
             if (isTV) com.platinum.ott.presentation.screens.search.SearchScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }, initialQuery = q)
             else PhoneSearchScreen(navController, initialQuery = q)
+        }
+        composable("series") {
+            if (isTV) com.platinum.ott.presentation.screens.series.SeriesListScreen(onBackPressed = { navController.popBackStack() }, onSeriesClick = { navController.navigate("series/$it") })
+            else PhoneSeriesListScreen(navController)
+        }
+        composable("series/{seriesId}", arguments = listOf(navArgument("seriesId") { type = NavType.StringType })) { entry ->
+            val seriesId = entry.arguments?.getString("seriesId") ?: return@composable
+            if (isTV) com.platinum.ott.presentation.screens.series.SeriesEpisodesScreen(seriesId = seriesId, onBackPressed = { navController.popBackStack() }, onEpisodeClick = { navController.navigate("player/$it") })
+            else PhoneSeriesEpisodesScreen(seriesId = seriesId, navController = navController)
         }
         composable("plugin/{pluginId}", arguments = listOf(navArgument("pluginId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("pluginId") ?: return@composable
@@ -75,8 +86,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
 private fun PhoneSetupRoute(navController: NavHostController) {
     com.platinum.ott.presentation.phone.screens.PhoneSetupScreen(
         onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
-        onSettingsClick = { navController.navigate("settings") },
-        onHistoryClick = { navController.navigate("history") },
-        onFavoritesClick = { navController.navigate("favorites") }
+        onSettingsClick = { navController.navigateToTab("settings") },
+        onHistoryClick = { navController.navigateToTab("history") },
+        onFavoritesClick = { navController.navigateToTab("favorites") }
     )
 }
