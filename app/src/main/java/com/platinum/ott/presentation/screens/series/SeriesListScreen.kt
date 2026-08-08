@@ -65,7 +65,12 @@ private fun SeriesCard(series: SeriesSummary, onClick: () -> Unit) {
     val request = remember(series.poster, widthPx, heightPx) {
         ImageRequest.Builder(context).data(series.poster).size(widthPx, heightPx).crossfade(true).build()
     }
-    Card(onClick = onClick, modifier = Modifier.width(cardWidth).height(cardHeight), shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1C))) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.width(cardWidth).height(cardHeight),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFF1C1C1C), focusedContainerColor = Color(0xFF1C1C1C))
+    ) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(model = request, contentDescription = series.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), placeholder = ColorPainter(Color(0xFF1C1C1C)), error = ColorPainter(Color(0xFF2A2A2A)))
             Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(8.dp)) {
