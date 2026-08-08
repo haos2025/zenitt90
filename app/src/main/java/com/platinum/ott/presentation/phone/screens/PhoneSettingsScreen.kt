@@ -29,7 +29,7 @@ import com.platinum.ott.presentation.components.MovieCard
 @Composable
 fun PhoneSettingsScreen(navController: NavHostController) {
 
-Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
+Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     Column(Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp)) {
         Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
@@ -42,13 +42,17 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 Text("Каталог и управление плагинами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
+        // Раньше подзаголовок был статичным текстом всегда одинаковым,
+        // независимо от того, подключён ли реально источник — та же
+        // правка, что уже сделана на TV (SettingsScreen.kt), перенесена сюда.
+        val isConnected = remember { com.platinum.ott.core.ServiceLocator.checkAuthUseCase.execute() }
         Card(
-            onClick = { navController.navigate("sync_pairing") },
+            onClick = { navController.navigate(if (isConnected) "sync_pairing" else "setup") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text("Аккаунт", style = MaterialTheme.typography.titleMedium)
-                Text("Источник, синхронизация между устройствами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text(if (isConnected) "Источник подключён · синхронизация между устройствами" else "Источник не подключён · нажмите, чтобы подключить", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
         // Раньше это была карточка-заглушка из общего списка без единого
@@ -77,7 +81,75 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 }
             }
         }
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(16.dp)) { Text("Уведомления", style = MaterialTheme.typography.titleMedium); Text("Каналы, тихий режим", color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
+        // Раньше это была карточка без единого обработчика нажатия из
+        // общего списка-заглушки — та же, что чинил на TV несколько шагов
+        // назад, просто эта правка никогда не переносилась на телефон.
+        // "Новый контент" сюда намеренно не включён — см. комментарий в
+        // TV SettingsScreen.kt: в бэкенде нет поля "добавлено в каталог".
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Уведомления", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                val context = LocalContext.current
+                val notifPrefs = remember { com.platinum.ott.core.NotificationPreferences(context) }
+                var newEpisodesEnabled by remember { mutableStateOf(notifPrefs.isNewEpisodesEnabled()) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Новые серии (избранные сериалы)", color = Color.White, modifier = Modifier.weight(1f))
+                    Switch(checked = newEpisodesEnabled, onCheckedChange = { newEpisodesEnabled = it; notifPrefs.setNewEpisodesEnabled(it) })
+                }
+                Text("Новый контент", color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
+                var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
+                var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Тихий режим", color = Color.White, modifier = Modifier.weight(1f))
+                    Switch(checked = quietEnabled, onCheckedChange = { quietEnabled = it; notifPrefs.setQuietHoursEnabled(it) })
+                }
+                if (quietEnabled) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("$quietStart:00–$quietEnd:00", color = Color.Gray, modifier = Modifier.weight(1f))
+                        OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
+                    }
+                }
+            }
+        }
+        // Раньше раздела "Сеть" на телефоне не было вообще ни в каком
+        // виде — ни рабочего, ни даже карточки-заглушки. На TV уже есть.
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Сеть", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                val context = LocalContext.current
+                val networkPrefs = remember { com.platinum.ott.core.NetworkPreferences(context) }
+                val qualityPrefsNet = remember { QualityPreferences(context) }
+                val timeoutOptions = listOf(10, 15, 20, 30)
+                var timeoutSeconds by remember { mutableStateOf(networkPrefs.getTimeoutSeconds()) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Таймаут запроса", color = Color.White, modifier = Modifier.weight(1f))
+                    Button(onClick = {
+                        val idx = timeoutOptions.indexOf(timeoutSeconds).let { if (it == -1) 0 else it }
+                        timeoutSeconds = timeoutOptions[(idx + 1) % timeoutOptions.size]
+                        networkPrefs.setTimeoutSeconds(timeoutSeconds)
+                        com.platinum.ott.core.ServiceLocator.reinitWithAuth()
+                    }) { Text("$timeoutSeconds сек") }
+                }
+                Spacer(Modifier.height(8.dp))
+                val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
+                var maxMobileQuality by remember { mutableStateOf(qualityPrefsNet.getMaxQualityOnMobile()) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Макс. качество на моб. данных", color = Color.White, modifier = Modifier.weight(1f))
+                    Button(onClick = {
+                        val idx = mobileQualityOptions.indexOf(maxMobileQuality).let { if (it == -1) 0 else it }
+                        maxMobileQuality = mobileQualityOptions[(idx + 1) % mobileQualityOptions.size]
+                        qualityPrefsNet.setMaxQualityOnMobile(maxMobileQuality)
+                    }) { Text(maxMobileQuality) }
+                }
+            }
+        }
         // Раньше это была ещё одна карточка без единого обработчика нажатия
         // из общего списка-заглушки. Тема теперь реально переключает
         // ZenithTheme (см. MainActivity.kt/ServiceLocator.darkThemeFlow) —
@@ -106,12 +178,3 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
 
 }
 
-@Composable
-private fun BottomBar(navController: NavHostController) {
-    NavigationBar {
-        NavigationBarItem(false, onClick = { navController.navigateToTab("home") }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
-    }
-}

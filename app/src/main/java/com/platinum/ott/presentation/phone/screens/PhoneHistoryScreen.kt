@@ -36,7 +36,7 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = viewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
-Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
+Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LazyColumn(Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(history, key = { it.contentId }) { entry ->
             val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
@@ -58,7 +58,7 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
                 AsyncImage(
                     model = request,
                     contentDescription = entry.title,
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     placeholder = ColorPainter(Color(0xFF1C1C1C)),
                     error = ColorPainter(Color(0xFF2A2A2A)),
                     modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
@@ -81,11 +81,4 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
 }
 
 @Composable
-private fun BottomBar(navController: NavHostController) {
-    NavigationBar {
-        NavigationBarItem(false, onClick = { navController.navigateToTab("home") }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
-    }
-}
+

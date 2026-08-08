@@ -144,11 +144,10 @@ dependencies {
     // QR / Camera
     implementation(libs.zxing.core)
     implementation(libs.zxing.android.embedded)
-    implementation(libs.camerax.core)
-    implementation(libs.camerax.camera2)
-    implementation(libs.camerax.lifecycle)
-    implementation(libs.camerax.view)
-    implementation(libs.mlkit.barcode)
+    // CameraX + ML Kit Barcode убраны — 0 использований в коде, дублировали
+    // ZXing под тот же незаконченный QR-флоу (два разных сканера штрихкодов
+    // одновременно). ZXing оставлен — планируется переиспользовать под
+    // телефон-компаньон (после Hilt-рефакторинга).
     
     // WorkManager
     implementation(libs.work.runtime.ktx)

@@ -71,18 +71,6 @@ fun PhonePlayerController(
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
                 Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                IconButton(onClick = { menuTab = PlaybackMenuTab.SUBTITLES }) { Icon(Icons.Default.ClosedCaption, "Субтитры", tint = if (subtitlesEnabled) Color(0xFF6C63FF) else Color.White) }
-                IconButton(onClick = { menuTab = PlaybackMenuTab.SPEED }) { Icon(Icons.Default.Speed, "Скорость", tint = if (playbackSpeed != 1f) Color(0xFF6C63FF) else Color.White) }
-                if (variants.size > 1) {
-                    IconButton(onClick = { menuTab = PlaybackMenuTab.QUALITY }) { Icon(Icons.Default.HighQuality, "Качество", tint = Color.White) }
-                }
-                // Раньше плеер на телефоне мог играть только в портретной
-                // ориентации целиком приложения — MainActivity форсит
-                // SCREEN_ORIENTATION_PORTRAIT глобально для не-TV, и ничего
-                // не переопределяло это именно на экране плеера.
-                IconButton(onClick = onToggleFullscreen) {
-                    Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "На весь экран", tint = Color.White)
-                }
             }
 
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -106,6 +94,25 @@ fun PhonePlayerController(
                     }
                     Spacer(Modifier.width(24.dp))
                     IconButton(onClick = onSeekForward) { Icon(Icons.Default.Forward10, "+10с", tint = Color.White) }
+                }
+                // Раньше субтитры/скорость/качество/fullscreen были в правом
+                // верхнем углу — в альбомной ориентации, когда телефон держат
+                // двумя руками, большие пальцы естественно лежат внизу
+                // экрана, а не вверху. Правый нижний угол — туда, где палец
+                // уже и так находится, не нужно тянуться через весь экран.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { menuTab = PlaybackMenuTab.SUBTITLES }) { Icon(Icons.Default.ClosedCaption, "Субтитры", tint = if (subtitlesEnabled) Color(0xFF6C63FF) else Color.White) }
+                    IconButton(onClick = { menuTab = PlaybackMenuTab.SPEED }) { Icon(Icons.Default.Speed, "Скорость", tint = if (playbackSpeed != 1f) Color(0xFF6C63FF) else Color.White) }
+                    if (variants.size > 1) {
+                        IconButton(onClick = { menuTab = PlaybackMenuTab.QUALITY }) { Icon(Icons.Default.HighQuality, "Качество", tint = Color.White) }
+                    }
+                    // Раньше плеер на телефоне мог играть только в портретной
+                    // ориентации целиком приложения — MainActivity форсит
+                    // SCREEN_ORIENTATION_PORTRAIT глобально для не-TV, и ничего
+                    // не переопределяло это именно на экране плеера.
+                    IconButton(onClick = onToggleFullscreen) {
+                        Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "На весь экран", tint = Color.White)
+                    }
                 }
             }
         }

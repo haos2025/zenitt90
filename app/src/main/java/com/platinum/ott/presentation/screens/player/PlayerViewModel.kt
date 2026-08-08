@@ -75,7 +75,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         .setAllowCrossProtocolRedirects(true)
     val exoPlayer: ExoPlayer = run {
         val mediaSourceFactory = DefaultMediaSourceFactory(application).setDataSourceFactory(httpDataSourceFactory)
-        ExoPlayer.Builder(application).setMediaSourceFactory(mediaSourceFactory).build()
+        // Некоторые IPTV-каналы кодируют звук в AC-3/E-AC-3 (Dolby Digital) —
+        // это лицензированный кодек, штатный MediaCodec большинства Android-
+        // устройств его не поддерживает: видео идёт, звука нет, без ошибки
+        // в логах. EXTENSION_RENDERER_MODE_PREFER готовит плеер использовать
+        // decoder-расширение (например FFmpeg) вместо платформенного, КОГДА
+        // такое расширение подключено в проект — само по себе оно звук не
+        // чинит, FFmpeg-модуль для Media3 не публикуется в Maven Central
+        // (юридические причины), собирается локально через NDK отдельным
+        // шагом сборки, которого в проекте пока нет.
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(application)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        ExoPlayer.Builder(application, renderersFactory).setMediaSourceFactory(mediaSourceFactory).build()
     }
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState

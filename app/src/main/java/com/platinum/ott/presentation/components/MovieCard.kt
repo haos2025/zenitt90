@@ -55,7 +55,15 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
             AsyncImage(
                 model = request,
                 contentDescription = title,
-                contentScale = ContentScale.Crop,
+                // Раньше здесь был Crop — для настоящих постеров фильмов
+                // (портретное соотношение сторон, как и у самой карточки)
+                // разницы с Fit не видно вообще. А для широких/квадратных
+                // лого каналов из M3U/Xtream (Kiss Kiss TV HD, CHD-TV Rock
+                // HD и т.п.) Crop обрезал текст лого по обоим краям —
+                // видно на скриншоте. Fit показывает лого целиком, с
+                // отступами по бокам на фоне карточки, вместо нечитаемого
+                // обрезанного текста.
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
                 placeholder = ColorPainter(Color(0xFF1C1C1C)),
                 error = ColorPainter(Color(0xFF2A2A2A))

@@ -36,12 +36,3 @@ Column(Modifier.fillMaxSize().background(Color.Black), horizontalAlignment = Ali
 
 }
 
-@Composable
-private fun BottomBar(navController: NavHostController) {
-    NavigationBar {
-        NavigationBarItem(false, onClick = { navController.navigateToTab("home") }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
-    }
-}

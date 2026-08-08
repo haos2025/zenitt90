@@ -29,7 +29,7 @@ fun PhoneFavoritesScreen(navController: NavHostController) {
 
 val viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewModel = viewModel()
 val favorites by viewModel.favorites.collectAsState(initial = emptyList())
-Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
+Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LazyVerticalGrid(GridCells.Fixed(2), Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(favorites, key = { it.contentId }) { MovieCard(title = it.title, poster = it.poster ?: "", year = 0, onClick = { navController.navigate("detail/${it.contentId}") }) }
     }
@@ -37,12 +37,3 @@ Scaffold(bottomBar = { BottomBar(navController) }) { padding ->
 
 }
 
-@Composable
-private fun BottomBar(navController: NavHostController) {
-    NavigationBar {
-        NavigationBarItem(false, onClick = { navController.navigateToTab("home") }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-        NavigationBarItem(false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
-    }
-}

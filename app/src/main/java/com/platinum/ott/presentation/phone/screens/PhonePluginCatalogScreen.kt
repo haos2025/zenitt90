@@ -48,14 +48,7 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1C1C1C))
             )
         },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(false, onClick = { navController.navigateToTab("home") }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Главная") })
-                NavigationBarItem(false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, "Fav") }, label = { Text("Избранное") })
-                NavigationBarItem(false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, "Hist") }, label = { Text("История") })
-                NavigationBarItem(false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, "Set") }, label = { Text("Настройки") })
-            }
-        }
+        bottomBar = { PhoneBottomBar(navController) }
     ) { padding ->
         Column(Modifier.padding(padding).background(Color(0xFF101010))) {
             TabRow(selectedTabIndex = selectedTab, containerColor = Color(0xFF1C1C1C)) {

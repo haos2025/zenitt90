@@ -58,14 +58,7 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                 }
             )
         },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Главная") })
-                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("favorites") }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Избранное") })
-                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("history") }, icon = { Icon(Icons.Default.History, null) }, label = { Text("История") })
-                NavigationBarItem(selected = false, onClick = { navController.navigateToTab("settings") }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Настройки") })
-            }
-        }
+        bottomBar = { PhoneBottomBar(navController) }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(Color(0xFF101010))) {
             when (val state = uiState) {
