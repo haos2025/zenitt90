@@ -33,6 +33,3 @@ Column(Modifier.fillMaxSize().background(Color.Black), horizontalAlignment = Ali
     Text("Наведите камеру на QR-код на экране TV", color = Color.Gray)
     // CameraX preview would go here with ML Kit barcode scanning
 }
-
-}
-

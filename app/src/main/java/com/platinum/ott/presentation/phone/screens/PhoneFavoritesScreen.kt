@@ -34,6 +34,3 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         items(favorites, key = { it.contentId }) { MovieCard(title = it.title, poster = it.poster ?: "", year = 0, onClick = { navController.navigate("detail/${it.contentId}") }) }
     }
 }
-
-}
-
