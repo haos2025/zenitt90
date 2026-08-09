@@ -175,3 +175,4 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         }
     }
 }
+}
