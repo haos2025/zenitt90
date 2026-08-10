@@ -1,7 +1,9 @@
 package com.platinum.ott.presentation.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +22,21 @@ import com.platinum.ott.core.NotificationPreferences
 fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().padding(start = 56.dp, top = 56.dp)) {
+    // Раньше Column был fillMaxSize() без verticalScroll() — тот же баг,
+    // что чинили на телефоне (PhoneSettingsScreen.kt), просто не перенесённый
+    // на TV: контент, не помещающийся по высоте (а тут 6 секций + кнопки),
+    // просто обрезался снизу экрана, ничего не докрутить. Паддинг был
+    // только start/top — без end/bottom нет overscan-запаса, часть TV
+    // физически обрезает пару % по краям картинки. weight(1f) на нижнем
+    // Spacer убран: в скроллящемся Column он несовместим (бесконечная
+    // высота) и раньше просто держал кнопки прижатыми к низу — при скролле
+    // это не нужно, они и так доступны докруткой.
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 56.dp, top = 48.dp, end = 56.dp, bottom = 48.dp)
+    ) {
         Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
         Spacer(Modifier.height(32.dp))
         // Sections: Playback, Notifications, Network, Interface, Account, About
@@ -131,7 +147,7 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
             if (!isConnected) Button(onClick = onConnectSourceClick) { Text("Подключить источник") }
             Button(onClick = onSyncClick) { Text("Синхронизация устройств") }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(32.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }) { Text("Обновить парсеры") }
             OutlinedButton(onClick = { viewModel.clearCache(); onClearCacheClick() }) { Text("Очистить кэш") }
@@ -146,9 +162,29 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsItem(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
 }
+// Раньше это была Row с Text + маленькой Button, прижатой к правому краю —
+// с пульта фокус-цель получалась узкой (только сама кнопка), а строки шли
+// плотно (vertical = 4.dp), из-за чего было тяжело понять, какая строка
+// сейчас в фокусе, и легко было промахнуться курсором мимо кнопки на
+// соседнюю строку. Теперь фокусируемая область — вся строка целиком
+// (Surface с onClick), с явной подсветкой фона в фокусе и высотой,
+// достаточной для уверенного попадания D-pad'ом.
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun CycleSetting(label: String, value: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Color.White, modifier = Modifier.weight(1f))
-        Button(onClick = onClick) { Text(value) }
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = Color(0xFF6C63FF).copy(alpha = 0.25f)
+        ),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, color = Color.White, modifier = Modifier.weight(1f))
+            Text(value, color = Color(0xFFB8B4FF))
+        }
     }
 }

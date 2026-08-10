@@ -50,7 +50,14 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 val widthPx = with(density) { (LocalConfiguration.current.screenWidthDp.dp - 32.dp).roundToPx() }
                 val heightPx = with(density) { 220.dp.roundToPx() }
                 val hasRealBackdrop = !state.metadata?.backdropPath.isNullOrBlank()
+                // Та же ступень, что и в TV DetailScreen.kt: перед тем как
+                // падать на movie.poster (для Xtream/M3U — почти всегда
+                // streamIcon, скриншот кадра от провайдера, не постер),
+                // пробуем настоящий постер TMDB — он часто есть даже когда
+                // backdrop_path пуст.
+                val tmdbPosterUrl = TmdbImage.posterUrl(state.metadata?.posterPath, (widthPx * 0.6f).toInt())
                 val imageUrl = TmdbImage.backdropUrl(state.metadata?.backdropPath, widthPx)
+                    ?: tmdbPosterUrl
                     ?: state.movie.poster.ifBlank { null }
                 val request = remember(imageUrl, widthPx, heightPx) {
                     imageUrl?.let { ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build() }

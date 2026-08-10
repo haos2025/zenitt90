@@ -44,7 +44,19 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 val density = LocalDensity.current
                 val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
                 val hasRealBackdrop = !state.metadata?.backdropPath.isNullOrBlank()
+                // Раньше при отсутствии TMDB-backdrop'а сразу падали на
+                // movie.poster — а это для Xtream/M3U почти всегда streamIcon,
+                // который панель провайдера отдаёт как скриншот кадра потока,
+                // не постер. TMDB-метаданные (state.metadata) при этом уже
+                // содержат posterPath в большинстве случаев, даже когда
+                // backdropPath пуст (у части фильмов в TMDB нет backdrop'а),
+                // просто posterUrl() нигде не вызывался. Добавлена
+                // промежуточная ступень: настоящий постер TMDB (порт­ретный,
+                // Fit) — предпочтительнее сырого скриншота от провайдера, к
+                // нему падаем только если TMDB вообще не нашёл фильм.
+                val tmdbPosterUrl = TmdbImage.posterUrl(state.metadata?.posterPath, (screenWidthPx * 0.4f).toInt())
                 val backdropUrl = TmdbImage.backdropUrl(state.metadata?.backdropPath, screenWidthPx)
+                    ?: tmdbPosterUrl
                     ?: state.movie.poster.ifBlank { null }
                 val backdropRequest = remember(backdropUrl, screenWidthPx) {
                     backdropUrl?.let { ImageRequest.Builder(context).data(it).size(screenWidthPx, screenWidthPx / 2).crossfade(true).build() }
