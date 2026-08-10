@@ -103,7 +103,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
         Modifier.fillMaxSize().background(Color.Black).pointerInput(viewModel) {
             var mode: GestureMode? = null
             var accumulatedDeltaX = 0f
-            var startVolume = 0
+            var volumeFraction = 0f
             var seekStartMs = 0L
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
 
@@ -114,7 +114,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
                         onDragStart = { offset ->
                             mode = null
                             accumulatedDeltaX = 0f
-                            startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                            volumeFraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) / maxVolume.toFloat()
                             seekStartMs = viewModel.exoPlayer.currentPosition
                             mode = if (offset.x < size.width / 2f) GestureMode.PENDING_LEFT else GestureMode.PENDING_RIGHT
                         },
@@ -145,12 +145,18 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
                                     }
                                 }
                                 GestureMode.VOLUME -> {
-                                    val deltaSteps = (-dragAmount.y / size.height * maxVolume * 2.5f).roundToInt()
-                                    val updated = (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) + (if (abs(dragAmount.y) > 2f) deltaSteps.coerceIn(-1, 1) else 0)).coerceIn(0, maxVolume)
-                                    if (updated != audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) {
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, updated, 0)
+                                    // Раньше громкость двигалась максимум на ±1 шаг за
+                                    // событие драга, с порогом отсечения — на фоне
+                                    // непрерывной яркости это ощущалось "вязким",
+                                    // жест как будто не всегда срабатывал. Теперь
+                                    // считается так же непрерывно, как яркость —
+                                    // копим дробную долю (0..1), а не целые шаги.
+                                    volumeFraction = (volumeFraction - dragAmount.y / size.height).coerceIn(0f, 1f)
+                                    val target = (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
+                                    if (target != audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) {
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
                                     }
-                                    gestureIndicator = GestureIndicator.Volume(updated / maxVolume.toFloat())
+                                    gestureIndicator = GestureIndicator.Volume(volumeFraction)
                                 }
                                 GestureMode.SEEK -> {
                                     accumulatedDeltaX += dragAmount.x

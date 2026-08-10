@@ -54,9 +54,9 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) PlayerScreen(movieId = id, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController)
         }
-        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigateToTab("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
         composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
-        composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneFavoritesScreen(navController) }
+        composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens

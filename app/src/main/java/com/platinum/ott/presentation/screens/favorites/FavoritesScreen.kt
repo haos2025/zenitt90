@@ -15,7 +15,7 @@ import com.platinum.ott.presentation.components.MovieCard
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun FavoritesScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, viewModel: FavoritesViewModel = viewModel()) {
+fun FavoritesScreen(onBackPressed: () -> Unit, onItemClick: (com.platinum.ott.data.local.entity.FavoriteEntity) -> Unit, viewModel: FavoritesViewModel = viewModel()) {
     val favorites by viewModel.favorites.collectAsState(initial = emptyList())
     val folders by viewModel.folders.collectAsState(initial = emptyList())
     var selectedType by remember { mutableStateOf<String?>(null) }
@@ -31,7 +31,7 @@ fun FavoritesScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, v
         Spacer(Modifier.height(16.dp))
         val filtered = if (selectedType == null) favorites else favorites.filter { it.contentType == selectedType }
         LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(filtered, key = { it.contentId }) { fav -> MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onMovieClick(fav.contentId) }) }
+            items(filtered, key = { it.contentId }) { fav -> MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) }) }
         }
     }
 }

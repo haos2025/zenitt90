@@ -31,7 +31,7 @@ val viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewMode
 val favorites by viewModel.favorites.collectAsState(initial = emptyList())
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LazyVerticalGrid(GridCells.Fixed(2), Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(favorites, key = { it.contentId }) { MovieCard(title = it.title, poster = it.poster ?: "", year = 0, onClick = { navController.navigate("detail/${it.contentId}") }) }
+        items(favorites, key = { it.contentId }) { fav -> MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") }) }
     }
 }
 }

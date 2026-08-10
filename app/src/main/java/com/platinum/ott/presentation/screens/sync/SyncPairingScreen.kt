@@ -81,7 +81,11 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                     Text("Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}", color = Color.Gray)
                 }
                 is PairingUiState.Loading -> CircularProgressIndicator()
-                is PairingUiState.RedeemSuccess -> Text("Готово! Устройства синхронизированы.", color = Color(0xFF4CAF50))
+                is PairingUiState.RedeemSuccess -> {
+                    Text("Готово! Избранное и история перенесены.", color = Color(0xFF4CAF50))
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { viewModel.syncNowManually() }) { Text("Синхронизировать сейчас") }
+                }
                 is PairingUiState.Error -> {
                     Text(state.message, color = Color(0xFFFF6B6B))
                     Spacer(Modifier.height(8.dp))

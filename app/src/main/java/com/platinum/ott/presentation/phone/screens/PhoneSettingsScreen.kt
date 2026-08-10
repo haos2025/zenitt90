@@ -4,6 +4,8 @@ import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -30,11 +32,11 @@ import com.platinum.ott.presentation.components.MovieCard
 fun PhoneSettingsScreen(navController: NavHostController) {
 
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    Column(Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp)) {
+    Column(Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
         Card(
-            onClick = { navController.navigateToTab("plugins") },
+            onClick = { navController.navigate("plugins") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
         ) {
             Column(Modifier.padding(16.dp)) {

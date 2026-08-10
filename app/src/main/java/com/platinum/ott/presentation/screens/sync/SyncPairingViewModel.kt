@@ -51,8 +51,35 @@ class SyncPairingViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = PairingUiState.Loading
             syncRepository.redeemPairingCode(code)
-                .onSuccess { _uiState.value = PairingUiState.RedeemSuccess }
+                .onSuccess {
+                    // Раньше здесь сразу показывался "Готово!" — но
+                    // redeemPairingCode() только регистрирует пару устройств
+                    // на backend, реальные избранное/историю не переносит.
+                    // syncNow() нигде в приложении не вызывался ВООБЩЕ — ни
+                    // здесь, ни где-либо ещё — сопряжение технически
+                    // "срабатывало", а данные никогда не передавались.
+                    ServiceLocator.syncUseCase.syncNow()
+                        .onSuccess { _uiState.value = PairingUiState.RedeemSuccess }
+                        .onFailure {
+                            // Пара устройств всё равно зарегистрирована — это
+                            // не отменяем, только сообщаем, что сам перенос
+                            // данных не удался и стоит попробовать вручную.
+                            _uiState.value = PairingUiState.Error("Устройства сопряжены, но синхронизация данных не удалась: ${it.message ?: "ошибка сети"}. Нажмите «Синхронизировать сейчас».")
+                        }
+                }
                 .onFailure { _uiState.value = PairingUiState.Error(it.message ?: "Код истёк или неверен") }
+        }
+    }
+
+    // Раньше не было вообще никакого способа запустить sync() повторно
+    // после первого сопряжения — ни автоматического (нет фонового воркера),
+    // ни ручного (не было кнопки нигде в приложении).
+    fun syncNowManually() {
+        viewModelScope.launch {
+            _uiState.value = PairingUiState.Loading
+            ServiceLocator.syncUseCase.syncNow()
+                .onSuccess { _uiState.value = PairingUiState.RedeemSuccess }
+                .onFailure { _uiState.value = PairingUiState.Error(it.message ?: "Не удалось синхронизировать") }
         }
     }
 
