@@ -18,8 +18,21 @@ sealed interface PairingUiState {
 
 class SyncPairingViewModel : ViewModel() {
     private val syncRepository = ServiceLocator.syncRepository
+    private val prefs = ServiceLocator.authPreferences
     private val _uiState = MutableStateFlow<PairingUiState>(PairingUiState.Idle)
     val uiState: StateFlow<PairingUiState> = _uiState
+
+    // Раньше единственный признак того, что синхронизация вообще
+    // когда-либо срабатывала, — это мимолётное "Готово!" в момент самого
+    // redeemCode()/syncNowManually(). Уйдя с экрана и вернувшись, узнать
+    // "а была ли синхронизация вообще и когда" было неоткуда — сопряжение
+    // и перенос данных выглядели неотличимо, если не следить за экраном
+    // не отрываясь. lastSyncTimestamp уже пишется в SyncRepositoryImpl
+    // при каждом успешном sync() — здесь просто читаем его в состояние.
+    private val _lastSyncedAtMs = MutableStateFlow(prefs.lastSyncTimestamp)
+    val lastSyncedAtMs: StateFlow<Long> = _lastSyncedAtMs
+
+    private fun refreshLastSynced() { _lastSyncedAtMs.value = prefs.lastSyncTimestamp }
 
     fun createCode() {
         viewModelScope.launch {
@@ -59,7 +72,7 @@ class SyncPairingViewModel : ViewModel() {
                     // здесь, ни где-либо ещё — сопряжение технически
                     // "срабатывало", а данные никогда не передавались.
                     ServiceLocator.syncUseCase.syncNow()
-                        .onSuccess { _uiState.value = PairingUiState.RedeemSuccess }
+                        .onSuccess { refreshLastSynced(); _uiState.value = PairingUiState.RedeemSuccess }
                         .onFailure {
                             // Пара устройств всё равно зарегистрирована — это
                             // не отменяем, только сообщаем, что сам перенос
@@ -78,7 +91,7 @@ class SyncPairingViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = PairingUiState.Loading
             ServiceLocator.syncUseCase.syncNow()
-                .onSuccess { _uiState.value = PairingUiState.RedeemSuccess }
+                .onSuccess { refreshLastSynced(); _uiState.value = PairingUiState.RedeemSuccess }
                 .onFailure { _uiState.value = PairingUiState.Error(it.message ?: "Не удалось синхронизировать") }
         }
     }

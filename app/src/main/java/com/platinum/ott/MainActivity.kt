@@ -67,13 +67,23 @@ class MainActivity : ComponentActivity() {
         // введённый текст. Теперь есть SearchScreen/PhoneSearchScreen.
         val searchQuery = if (intent?.action == Intent.ACTION_SEARCH)
             intent.getStringExtra(SearchManager.QUERY) else null
+        // Раньше здесь была проверка ServiceLocator.checkAuthUseCase.execute()
+        // (= есть ли сохранённый M3U/Xtream) — при её отсутствии всегда вело
+        // на "setup", и попасть на home было нельзя, пока не введён плейлист.
+        // Это не учитывало, что бэкенд-каталог ("архив") — независимый
+        // источник контента, не требующий вообще никакой авторизации, и
+        // HomeViewModel уже готов работать без плейлиста (getPlaylistCatalog
+        // просто возвращает пустой список, если M3U/Xtream не настроены —
+        // см. HomeViewModel.kt). Раз есть что показать без входа, "setup" не
+        // должен быть обязательным шагом — экран настройки source'а по
+        // прежнему доступен из Настроек (SettingsScreen → "Подключить
+        // источник") для тех, кто хочет добавить свой M3U/Xtream поверх.
         val startDestination = when {
             deepLinkMovieId != null -> "player/$deepLinkMovieId"
             deepLinkDetailId != null -> "detail/$deepLinkDetailId"
             deepLinkSeriesId != null -> "series/$deepLinkSeriesId"
             !searchQuery.isNullOrBlank() -> "search?q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}"
-            ServiceLocator.checkAuthUseCase.execute() -> "home"
-            else -> "setup"
+            else -> "home"
         }
         setContent {
             // Раньше ZenithTheme брал только системную тему, пользовательский

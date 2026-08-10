@@ -13,6 +13,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Один экран на TV и на телефон, а не пара TV/Phone-вариантов как у
@@ -27,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
     var enteredCode by remember { mutableStateOf("") }
 
     Scaffold(topBar = {
@@ -42,7 +46,20 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                 "Подключите ещё одно своё устройство, чтобы видеть одно и то же избранное и историю просмотра на обоих.",
                 color = Color.White.copy(0.8f)
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(12.dp))
+            // Раньше единственным индикатором того, что синхронизация вообще
+            // произошла, была мимолётная надпись "Готово!" сразу после
+            // действия — уйдя с экрана, узнать статус было неоткуда, из-за
+            // чего было неясно, работает ли синхронизация вообще. Строка
+            // ниже видна всегда, независимо от текущего Idle/Loading/Error.
+            Text(
+                if (lastSyncedAtMs > 0)
+                    "Последняя синхронизация: ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(lastSyncedAtMs))}"
+                else "Синхронизация ещё ни разу не выполнялась на этом устройстве",
+                color = if (lastSyncedAtMs > 0) Color(0xFF4CAF50) else Color.Gray,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(20.dp))
 
             Text("На новом устройстве", color = Color.White, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
