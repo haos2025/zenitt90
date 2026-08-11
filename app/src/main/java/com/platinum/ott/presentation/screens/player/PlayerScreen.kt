@@ -93,7 +93,22 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                 }
             }
     ) {
-        AndroidView(factory = { PlayerView(it).apply { player = viewModel.exoPlayer; useController = false; keepScreenOn = true } }, modifier = Modifier.fillMaxSize())
+        // Раньше: PlayerView(it) — конструктор без AttributeSet, Media3 по
+        // умолчанию берёт SurfaceView для видео. На части TV-приставок
+        // SurfaceView (отдельный аппаратный слой) непредсказуемо перекрывает
+        // Compose-контент, нарисованный поверх (PlayerController) — не
+        // целиком, а частично, без видимой закономерности. Инфлейт из
+        // res/layout/player_view_texture.xml с surface_type="texture_view"
+        // — единственный способ переключить PlayerView на TextureView
+        // программно (публичного сеттера в API нет, только XML-атрибут).
+        AndroidView(
+            factory = { ctx ->
+                android.view.LayoutInflater.from(ctx)
+                    .inflate(com.platinum.ott.R.layout.player_view_texture, null) as PlayerView
+            },
+            update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true },
+            modifier = Modifier.fillMaxSize()
+        )
         when (val state = uiState) {
             is PlayerUiState.Loading -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)), Alignment.Center) { Text("Подготовка...", color = Color.White) }
             is PlayerUiState.Error -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.8f)), Alignment.Center) {

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Раньше PlayerView создавался программно (PlayerView(context)) без
+    AttributeSet — Media3 в этом случае по умолчанию рисует видео через
+    SurfaceView. SurfaceView композитится отдельным аппаратным слоем, и на
+    части TV-приставок этот слой непредсказуемо перекрывает Compose-контент,
+    нарисованный поверх него (частично — какие-то элементы видны, какие-то
+    нет, без системной закономерности). surface_type="texture_view" здесь
+    заставляет PlayerView использовать TextureView — обычный View, который
+    участвует в стандартной композиции окна наравне со всем остальным.
+    Единственный способ задать это программно созданному PlayerView —
+    через XML-атрибут при инфляции layout'а (публичного сеттера в API нет).
+-->
+<androidx.media3.ui.PlayerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    app:surface_type="texture_view"
+    app:use_controller="false" />
