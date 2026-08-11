@@ -11,6 +11,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.platinum.ott.core.ServiceLocator
 import com.platinum.ott.worker.SeriesUpdateWorker
+import dagger.hilt.android.HiltAndroidApp
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -18,6 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@HiltAndroidApp
 class ZenithApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
