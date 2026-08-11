@@ -87,7 +87,15 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { viewModel.togglePlayPause(); true }
                     Key.DirectionRight -> { viewModel.seekForward(); true }
                     Key.DirectionLeft -> { viewModel.seekBackward(); true }
-                    Key.Menu -> { viewModel.togglePlaybackMenu(); true }
+                    // Key.Menu оставлен для пультов/клавиатур, где он есть, но
+                    // у многих современных TV-пультов (например, штатный пульт
+                    // Xiaomi TV Stick 4K) физической кнопки Menu нет вообще —
+                    // без альтернативы панель качества/аудио/субтитров была
+                    // недостижима. DirectionUp во время обычного воспроизведения
+                    // ничем не занят (используется только когда меню уже
+                    // открыто) — свободная клавиша, ничего не отбирает у
+                    // перемотки/паузы.
+                    Key.Menu, Key.DirectionUp -> { viewModel.togglePlaybackMenu(); true }
                     Key.Back -> { onBackPressed(); true }
                     else -> false // любая другая кнопка — контроллер уже показан выше
                 }
