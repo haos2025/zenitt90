@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -161,6 +162,15 @@ private fun ControlButton(
     // indication-слоя tv-material3 с композицией поверх видео (SurfaceView/
     // аппаратный оверлей). Заменено на простой Box без indication-эффектов
     // tv-material3 — тот же визуал, без скрытого слоя, который рвался.
+    // ВРЕМЕННО, для диагностики: жёлтая рамка вокруг каждой кнопки. Оба
+    // предыдущих варианта (tv-material3 Surface и обычный Box) дали
+    // одинаковый результат на реальном TV — рисуется только первая кнопка
+    // ряда, хотя togglePlayPause()/seekForward() реально вызываются (логика
+    // работает, значит дело не в перехвате клавиш). Рамка покажет, домеряны
+    // ли вообще все три Box'а до экрана (граница видна, просто пусто внутри)
+    // или второй/третий Box не появляются на экране совсем (граница тоже
+    // отсутствует) — это укажет, где реально искать: в контенте (иконки/
+    // текст) или в измерении/лэйауте самого Row. Убрать после диагностики.
     Box(
         contentAlignment = Alignment.Center,
         modifier = (if (isPrimary) Modifier.size(64.dp) else Modifier.height(48.dp).widthIn(min = 96.dp))
@@ -169,6 +179,7 @@ private fun ControlButton(
                 if (isPrimary) Color(0xFF6C63FF).copy(alpha = 0.85f)
                 else Color.White.copy(alpha = 0.12f)
             )
+            .border(2.dp, Color.Yellow, RoundedCornerShape(if (isPrimary) 50 else 8))
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
     ) {
         Text(
