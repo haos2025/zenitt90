@@ -57,6 +57,24 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 Text(if (isConnected) "Источник подключён · синхронизация между устройствами" else "Источник не подключён · нажмите, чтобы подключить", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
+        // Раньше единственный путь к экрану синхронизации шёл через карточку
+        // "Аккаунт" и был завязан на isConnected (= есть M3U/Xtream). Но
+        // синхронизация — независимая система (пара по 6-значному коду,
+        // AuthPreferences.getOrCreateSyncToken()), M3U/Xtream ей не нужен —
+        // это та же путаница двух разных проверок, что была в MainActivity.
+        // Без источника карточка "Аккаунт" всегда вела на "setup" (ввод M3U),
+        // и попасть на sync_pairing было нельзя вообще. На TV
+        // (SettingsScreen.kt) это уже две отдельные кнопки — здесь та же
+        // развязка, просто перенесённая на телефон.
+        Card(
+            onClick = { navController.navigate("sync_pairing") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Синхронизация устройств", style = MaterialTheme.typography.titleMedium)
+                Text("Перенести избранное и историю на другое устройство", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         // Раньше это была карточка-заглушка из общего списка без единого
         // обработчика нажатия. "Качество по умолчанию" — единственная
         // реально существующая часть "Воспроизведения": QualityPreferences

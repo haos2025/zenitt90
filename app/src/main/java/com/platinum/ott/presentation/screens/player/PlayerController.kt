@@ -4,11 +4,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -142,38 +145,37 @@ fun PlayerController(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun ControlButton(
     label: String,
     onClick: () -> Unit,
     isPrimary: Boolean = false
 ) {
-    Surface(
-        onClick  = onClick,
-        shape    = ClickableSurfaceDefaults.shape(RoundedCornerShape(if (isPrimary) 50 else 8)),
-        colors   = ClickableSurfaceDefaults.colors(
-            containerColor        = if (isPrimary)
-                Color(0xFF6C63FF).copy(alpha = 0.85f)
-            else
-                Color.White.copy(alpha = 0.12f),
-            focusedContainerColor = if (isPrimary)
-                Color(0xFF6C63FF)
-            else
-                Color.White.copy(alpha = 0.25f)
-        ),
-        modifier = if (isPrimary)
-            Modifier.size(64.dp)
-        else
-            Modifier.height(48.dp).widthIn(min = 96.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(
-                text  = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White
+    // Раньше это была androidx.tv.material3.Surface(onClick=...) со
+    // встроенной механикой ClickableSurfaceDefaults (fokus/indication/
+    // elevation). Функционально кнопки не ломались — D-pad вправо/влево/OK
+    // на TV обрабатывается глобально в PlayerScreen.onKeyEvent, а не через
+    // fokus конкретного Surface — но визуально из трёх кнопок в ряд
+    // отрисовывалась только первая (перемотка назад), вторая и третья не
+    // прорисовывались на части TV-прошивок. Это похоже на конфликт
+    // indication-слоя tv-material3 с композицией поверх видео (SurfaceView/
+    // аппаратный оверлей). Заменено на простой Box без indication-эффектов
+    // tv-material3 — тот же визуал, без скрытого слоя, который рвался.
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = (if (isPrimary) Modifier.size(64.dp) else Modifier.height(48.dp).widthIn(min = 96.dp))
+            .clip(RoundedCornerShape(if (isPrimary) 50 else 8))
+            .background(
+                if (isPrimary) Color(0xFF6C63FF).copy(alpha = 0.85f)
+                else Color.White.copy(alpha = 0.12f)
             )
-        }
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
+    ) {
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White
+        )
     }
 }
 
