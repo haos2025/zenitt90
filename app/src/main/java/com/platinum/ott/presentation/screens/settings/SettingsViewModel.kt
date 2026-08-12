@@ -44,19 +44,12 @@ class SettingsViewModel @Inject constructor(
         sessionGraph.reinitWithAuth()
     }
 
-    // Тема: MainActivity.kt пока продолжает читать ServiceLocator.darkThemeFlow
-    // напрямую (не мигрирован в этом заходе) — он остаётся источником
-    // истины для реального рендера темы. themeManager.setDarkTheme()
-    // вызывается ДОПОЛНИТЕЛЬНО, чтобы уже готовый Hilt-синглтон
-    // (SessionGraph di/ThemeManager) не разъезжался с реальным состоянием,
-    // когда до него дойдёт очередь. darkThemeFlow здесь — тот же поток,
-    // что видит MainActivity, экран настроек им не подменяет, только
-    // ретранслирует наружу, чтобы композаблы не трогали ServiceLocator
-    // напрямую.
-    val darkThemeFlow: StateFlow<Boolean> = ServiceLocator.darkThemeFlow
+    // Тема: MainActivity.kt теперь тоже читает themeManager.darkThemeFlow
+    // (см. MainActivity.kt) — мост через ServiceLocator.darkThemeFlow/
+    // setDarkTheme() закрыт, дублирующий вызов убран.
+    val darkThemeFlow: StateFlow<Boolean> = themeManager.darkThemeFlow
 
     fun setDarkTheme(enabled: Boolean) {
-        ServiceLocator.setDarkTheme(enabled)
         themeManager.setDarkTheme(enabled)
     }
 }

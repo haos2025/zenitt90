@@ -16,15 +16,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.di.ThemeManager
 import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.navigation.ZenithNavHost
 import com.platinum.ott.ui.theme.ZenithBackground
 import com.platinum.ott.ui.theme.ZenithTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    // Activity — field injection, не конструктор: Hilt заполняет это
+    // поле в super.onCreate() ДО того, как выполнится остальной код
+    // onCreate() ниже (стандартная гарантия @AndroidEntryPoint).
+    @Inject lateinit var themeManager: ThemeManager
+
     // На Android 13+ (TIRAMISU) POST_NOTIFICATIONS — runtime-разрешение,
     // без явного запроса уведомления о новых сериях не показывались бы
     // никогда, даже с настроенным NotificationChannel и рабочим воркером.
@@ -89,9 +95,11 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             // Раньше ZenithTheme брал только системную тему, пользовательский
-            // переключатель в настройках ни на что не влиял. darkThemeFlow
-            // готов уже в ServiceLocator.init() — до логина тоже.
-            val darkTheme by ServiceLocator.darkThemeFlow.collectAsState()
+            // переключатель в настройках ни на что не влиял. Раньше поток брался
+            // из ServiceLocator.darkThemeFlow — теперь темой владеет Hilt-синглтон
+            // ThemeManager (core/di/ThemeManager.kt), SettingsViewModel пишет и
+            // читает тот же инстанс, мост-дублирование через ServiceLocator убран.
+            val darkTheme by themeManager.darkThemeFlow.collectAsState()
             ZenithTheme(darkTheme = darkTheme) {
                 ZenithNavHost(
                     startDestination = startDestination,
