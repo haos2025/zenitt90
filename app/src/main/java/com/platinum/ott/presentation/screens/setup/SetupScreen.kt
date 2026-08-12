@@ -15,7 +15,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -23,7 +23,7 @@ import androidx.tv.material3.*
 fun SetupScreen(
     onSetupComplete: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SetupViewModel = viewModel(),
+    viewModel: SetupViewModel = hiltViewModel(),
     // Раньше этот экран был тупиком: пока пользователь не введёт рабочий
     // M3U/Xtream адрес, попасть больше никуда было нельзя — ни в настройки
     // (проверить плагины, синхронизацию, сменить тему), ни в историю/избранное,

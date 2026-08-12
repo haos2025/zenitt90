@@ -17,13 +17,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.platinum.ott.presentation.screens.setup.SetupViewModel
 import com.platinum.ott.presentation.screens.setup.SetupUiState
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneSetupScreen(
     onSetupComplete: () -> Unit,
-    viewModel: SetupViewModel = viewModel(),
+    viewModel: SetupViewModel = hiltViewModel(),
     // См. комментарий в SetupScreen.kt (TV-версия) — тот же тупик был и
     // здесь: без сохранённого источника единственный доступный экран —
     // этот, хотя настройки/история/избранное от логина не зависят.
