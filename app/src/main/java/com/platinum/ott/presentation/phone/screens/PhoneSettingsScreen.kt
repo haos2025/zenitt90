@@ -22,14 +22,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.platinum.ott.presentation.screens.settings.SettingsViewModel
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.presentation.components.MovieCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneSettingsScreen(navController: NavHostController) {
+fun PhoneSettingsScreen(navController: NavHostController, viewModel: SettingsViewModel = hiltViewModel()) {
 
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     Column(Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp).verticalScroll(rememberScrollState())) {
@@ -47,7 +48,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // Раньше подзаголовок был статичным текстом всегда одинаковым,
         // независимо от того, подключён ли реально источник — та же
         // правка, что уже сделана на TV (SettingsScreen.kt), перенесена сюда.
-        val isConnected = remember { com.platinum.ott.core.ServiceLocator.checkAuthUseCase.execute() }
+        val isConnected = remember { viewModel.isConnected() }
         Card(
             onClick = { navController.navigate(if (isConnected) "sync_pairing" else "setup") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -154,7 +155,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                         val idx = timeoutOptions.indexOf(timeoutSeconds).let { if (it == -1) 0 else it }
                         timeoutSeconds = timeoutOptions[(idx + 1) % timeoutOptions.size]
                         networkPrefs.setTimeoutSeconds(timeoutSeconds)
-                        com.platinum.ott.core.ServiceLocator.reinitWithAuth()
+                        viewModel.applyNetworkTimeoutChange()
                     }) { Text("$timeoutSeconds сек") }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -181,10 +182,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             Column(Modifier.padding(16.dp)) {
                 Text("Интерфейс", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(12.dp))
-                val darkTheme by com.platinum.ott.core.ServiceLocator.darkThemeFlow.collectAsState()
+                val darkTheme by viewModel.darkThemeFlow.collectAsState()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Тёмная тема", color = Color.White, modifier = Modifier.weight(1f))
-                    Switch(checked = darkTheme, onCheckedChange = { com.platinum.ott.core.ServiceLocator.setDarkTheme(it) })
+                    Switch(checked = darkTheme, onCheckedChange = { viewModel.setDarkTheme(it) })
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

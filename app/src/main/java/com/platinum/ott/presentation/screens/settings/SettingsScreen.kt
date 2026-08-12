@@ -106,7 +106,7 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
             CycleSetting("Таймаут запроса", "$timeoutSeconds сек") {
                 timeoutSeconds = timeoutOptions[(timeoutOptions.indexOf(timeoutSeconds).let { if (it == -1) 0 else it } + 1) % timeoutOptions.size]
                 networkPrefs.setTimeoutSeconds(timeoutSeconds)
-                com.platinum.ott.core.ServiceLocator.reinitWithAuth()
+                viewModel.applyNetworkTimeoutChange()
             }
             val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
             var maxMobileQuality by remember { mutableStateOf(qualityPrefs.getMaxQualityOnMobile()) }
@@ -128,8 +128,8 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
             // вынести весь текст интерфейса в string-ресурсы (сейчас 0
             // использований stringResource во всём проекте) — отдельная
             // большая задача, не в этом заходе.
-            val darkTheme by com.platinum.ott.core.ServiceLocator.darkThemeFlow.collectAsState()
-            CycleSetting("Тема", if (darkTheme) "Тёмная" else "Светлая") { com.platinum.ott.core.ServiceLocator.setDarkTheme(!darkTheme) }
+            val darkTheme by viewModel.darkThemeFlow.collectAsState()
+            CycleSetting("Тема", if (darkTheme) "Тёмная" else "Светлая") { viewModel.setDarkTheme(!darkTheme) }
             SettingsItem("Язык", "Скоро")
         }
         SettingsSection("Плагины") { SettingsItem("Управление плагинами", "Каталог и настройки") }
@@ -141,7 +141,7 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         // до, что после логина. Теперь этот экран достижим и БЕЗ
         // настроенного источника (см. SetupScreen.kt), поэтому статус
         // должен отражать реальность, а не врать по умолчанию.
-        val isConnected = remember { com.platinum.ott.core.ServiceLocator.checkAuthUseCase.execute() }
+        val isConnected = remember { viewModel.isConnected() }
         SettingsSection("Аккаунт") { SettingsItem("Источник", if (isConnected) "Подключён" else "Не подключён") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!isConnected) Button(onClick = onConnectSourceClick) { Text("Подключить источник") }
