@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.NetworkPreferences
@@ -19,7 +19,7 @@ import com.platinum.ott.core.NotificationPreferences
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = viewModel()) {
+fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Раньше Column был fillMaxSize() без verticalScroll() — тот же баг,
