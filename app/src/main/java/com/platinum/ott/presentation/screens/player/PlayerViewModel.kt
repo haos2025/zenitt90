@@ -17,13 +17,15 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.domain.model.StreamVariant
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
 
@@ -49,11 +51,20 @@ sealed interface PlayerUiState {
     data class Error(val message: String) : PlayerUiState
 }
 
+// AndroidViewModel, а не обычный ViewModel — Application нужен напрямую
+// (ConnectivityManager для isOnMeteredConnection(), ExoPlayer.Builder).
+// Hilt поддерживает это "из коробки": Application доступен для инъекции в
+// @HiltViewModel без дополнительных квалификаторов, специальный ViewModel-
+// компонент Hilt даёт его сам.
 @OptIn(UnstableApi::class)
-class PlayerViewModel(application: Application) : AndroidViewModel(application) {
-    private val getPlayableUrl = ServiceLocator.getPlayableUrlUseCase
-    private val getMovie = ServiceLocator.getMovieByIdUseCase
-    private val watchHistory = ServiceLocator.watchHistoryUseCase
+@HiltViewModel
+class PlayerViewModel @Inject constructor(
+    application: Application,
+    sessionGraph: SessionGraph
+) : AndroidViewModel(application) {
+    private val getPlayableUrl = sessionGraph.getPlayableUrlUseCase
+    private val getMovie = sessionGraph.getMovieByIdUseCase
+    private val watchHistory = sessionGraph.watchHistoryUseCase
     private val qualityPrefs = QualityPreferences(application)
     // Раньше ExoPlayer собирался с дефолтным ExoPlayer.Builder(application).build()
     // без кастомного HTTP data source — MediaItem.fromUri() уходил на сервер

@@ -2,11 +2,14 @@ package com.platinum.ott.presentation.screens.sync
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.AuthPreferences
+import com.platinum.ott.core.SessionGraph
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 sealed interface PairingUiState {
     object Idle : PairingUiState
@@ -16,9 +19,16 @@ sealed interface PairingUiState {
     data class Error(val message: String) : PairingUiState
 }
 
-class SyncPairingViewModel : ViewModel() {
-    private val syncRepository = ServiceLocator.syncRepository
-    private val prefs = ServiceLocator.authPreferences
+@HiltViewModel
+class SyncPairingViewModel @Inject constructor(
+    private val sessionGraph: SessionGraph,
+    // authPreferences не завязан на логин/реавторизацию (см.
+    // core/di/PreferencesModule.kt) — берём его напрямую Hilt-синглтоном,
+    // а не через sessionGraph, как и раньше в ServiceLocator это был
+    // отдельный `by lazy`, не часть initAuth().
+    private val prefs: AuthPreferences
+) : ViewModel() {
+    private val syncRepository = sessionGraph.syncRepository
     private val _uiState = MutableStateFlow<PairingUiState>(PairingUiState.Idle)
     val uiState: StateFlow<PairingUiState> = _uiState
 
@@ -71,7 +81,7 @@ class SyncPairingViewModel : ViewModel() {
                     // syncNow() нигде в приложении не вызывался ВООБЩЕ — ни
                     // здесь, ни где-либо ещё — сопряжение технически
                     // "срабатывало", а данные никогда не передавались.
-                    ServiceLocator.syncUseCase.syncNow()
+                    sessionGraph.syncUseCase.syncNow()
                         .onSuccess { refreshLastSynced(); _uiState.value = PairingUiState.RedeemSuccess }
                         .onFailure {
                             // Пара устройств всё равно зарегистрирована — это
@@ -90,7 +100,7 @@ class SyncPairingViewModel : ViewModel() {
     fun syncNowManually() {
         viewModelScope.launch {
             _uiState.value = PairingUiState.Loading
-            ServiceLocator.syncUseCase.syncNow()
+            sessionGraph.syncUseCase.syncNow()
                 .onSuccess { refreshLastSynced(); _uiState.value = PairingUiState.RedeemSuccess }
                 .onFailure { _uiState.value = PairingUiState.Error(it.message ?: "Не удалось синхронизировать") }
         }

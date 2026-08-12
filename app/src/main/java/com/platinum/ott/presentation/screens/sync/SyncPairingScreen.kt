@@ -12,7 +12,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -28,7 +28,7 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel = viewModel()) {
+fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
     var enteredCode by remember { mutableStateOf("") }

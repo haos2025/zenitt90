@@ -1,36 +1,30 @@
 package com.platinum.ott.presentation.screens.plugins
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.core.plugin.PluginManifest
 import com.platinum.ott.core.plugin.PluginRepository
 import com.platinum.ott.data.local.entity.PluginEntity
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class PluginViewModel(
-    private val pluginManager: PluginManager,
-    private val pluginRepository: PluginRepository
+@HiltViewModel
+class PluginViewModel @Inject constructor(
+    sessionGraph: SessionGraph
 ) : ViewModel() {
-
-    companion object {
-        /**
-         * Раньше PluginViewModel хранился как lateinit var в ServiceLocator —
-         * жил как singleton на всё приложение, а не по жизненному циклу
-         * экрана, где реально используется (как остальные ViewModel в
-         * проекте, через viewModel()). viewModelScope внутри такого
-         * "вечного" ViewModel никогда не отменяется — корутины продолжают
-         * жить даже когда ни один экран плагинов не открыт.
-         */
-        fun factory(pluginManager: PluginManager, pluginRepository: PluginRepository): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    PluginViewModel(pluginManager, pluginRepository) as T
-            }
-    }
+    // Раньше PluginViewModel хранился как lateinit var в ServiceLocator —
+    // жил как singleton на всё приложение, а не по жизненному циклу
+    // экрана, где реально используется (как остальные ViewModel в
+    // проекте, через viewModel()). Ручной ViewModelProvider.Factory
+    // (companion object factory()) был нужен только чтобы прокинуть
+    // ServiceLocator.pluginManager/pluginRepository вручную — с
+    // hiltViewModel() он больше не нужен, Hilt сам собирает граф.
+    private val pluginManager: PluginManager = sessionGraph.pluginManager
+    private val pluginRepository: PluginRepository = sessionGraph.pluginRepository
 
     sealed interface UiState {
         object Loading : UiState

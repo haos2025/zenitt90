@@ -25,7 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.player.PlayerUiState
@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
 // время просмотра. Теперь свой оверлей, как на TV, только под тач вместо
 // D-pad — см. PhonePlayerController.kt.
 @Composable
-fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewModel: PlayerViewModel = viewModel()) {
+fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewModel: PlayerViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()

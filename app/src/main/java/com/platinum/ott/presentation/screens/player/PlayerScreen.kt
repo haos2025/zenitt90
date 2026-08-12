@@ -14,7 +14,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
 import kotlinx.coroutines.delay
@@ -34,7 +34,7 @@ import kotlinx.coroutines.delay
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
-fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerViewModel = viewModel()) {
+fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
