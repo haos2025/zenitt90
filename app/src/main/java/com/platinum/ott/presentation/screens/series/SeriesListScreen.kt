@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
@@ -25,7 +25,7 @@ import com.platinum.ott.data.repository.SeriesSummary
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit, viewModel: SeriesListViewModel = viewModel()) {
+fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

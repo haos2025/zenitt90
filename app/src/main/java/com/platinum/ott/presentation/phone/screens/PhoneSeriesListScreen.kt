@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.screens.series.SeriesListUiState
@@ -23,7 +23,7 @@ import com.platinum.ott.domain.model.Movie
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneSeriesListScreen(navController: NavHostController, viewModel: SeriesListViewModel = viewModel()) {
+fun PhoneSeriesListScreen(navController: NavHostController, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Scaffold(topBar = {
         TopAppBar(title = { Text("Сериалы") }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } })

@@ -2,12 +2,14 @@ package com.platinum.ott.presentation.screens.series
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.repository.SeriesSummary
 import com.platinum.ott.domain.model.Movie
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 // Раньше "по сериалам" смотреть было негде — все эпизоды лежали в общем
 // плоском списке фильмов вперемешку. PlaylistRepository.getSeriesList()/
@@ -19,7 +21,10 @@ sealed interface SeriesListUiState {
     data class Error(val message: String) : SeriesListUiState
 }
 
-class SeriesListViewModel : ViewModel() {
+@HiltViewModel
+class SeriesListViewModel @Inject constructor(
+    private val sessionGraph: SessionGraph
+) : ViewModel() {
     private val _uiState = MutableStateFlow<SeriesListUiState>(SeriesListUiState.Loading)
     val uiState: StateFlow<SeriesListUiState> = _uiState
 
@@ -29,7 +34,7 @@ class SeriesListViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = SeriesListUiState.Loading
             try {
-                _uiState.value = SeriesListUiState.Success(ServiceLocator.playlistRepository.getSeriesList())
+                _uiState.value = SeriesListUiState.Success(sessionGraph.playlistRepository.getSeriesList())
             } catch (e: Exception) {
                 _uiState.value = SeriesListUiState.Error(e.message ?: "Не удалось загрузить список сериалов")
             }
@@ -43,7 +48,10 @@ sealed interface SeriesEpisodesUiState {
     data class Error(val message: String) : SeriesEpisodesUiState
 }
 
-class SeriesEpisodesViewModel : ViewModel() {
+@HiltViewModel
+class SeriesEpisodesViewModel @Inject constructor(
+    private val sessionGraph: SessionGraph
+) : ViewModel() {
     private val _uiState = MutableStateFlow<SeriesEpisodesUiState>(SeriesEpisodesUiState.Loading)
     val uiState: StateFlow<SeriesEpisodesUiState> = _uiState
 
@@ -63,11 +71,11 @@ class SeriesEpisodesViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = SeriesEpisodesUiState.Loading
             try {
-                val episodes = ServiceLocator.playlistRepository.getEpisodesForSeries(seriesId)
+                val episodes = sessionGraph.playlistRepository.getEpisodesForSeries(seriesId)
                 currentSeriesTitle = episodes.firstOrNull()?.seriesTitle ?: episodes.firstOrNull()?.title ?: ""
                 currentSeriesPoster = episodes.firstOrNull()?.poster
                 _uiState.value = SeriesEpisodesUiState.Success(episodes)
-                _isFavorite.value = ServiceLocator.favoritesUseCase.isFavorite(seriesId)
+                _isFavorite.value = sessionGraph.favoritesUseCase.isFavorite(seriesId)
             } catch (e: Exception) {
                 _uiState.value = SeriesEpisodesUiState.Error(e.message ?: "Не удалось загрузить эпизоды")
             }
@@ -77,7 +85,7 @@ class SeriesEpisodesViewModel : ViewModel() {
     fun toggleFavorite() {
         val seriesId = currentSeriesId ?: return
         viewModelScope.launch {
-            ServiceLocator.favoritesUseCase.toggle(
+            sessionGraph.favoritesUseCase.toggle(
                 com.platinum.ott.data.local.entity.FavoriteEntity(
                     contentId = seriesId,
                     contentType = "SERIES",
@@ -85,7 +93,7 @@ class SeriesEpisodesViewModel : ViewModel() {
                     poster = currentSeriesPoster
                 )
             )
-            _isFavorite.value = ServiceLocator.favoritesUseCase.isFavorite(seriesId)
+            _isFavorite.value = sessionGraph.favoritesUseCase.isFavorite(seriesId)
         }
     }
 }

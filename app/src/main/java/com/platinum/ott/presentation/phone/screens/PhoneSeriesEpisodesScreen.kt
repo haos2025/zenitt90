@@ -16,14 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesUiState
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController, viewModel: SeriesEpisodesViewModel = viewModel()) {
+fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController, viewModel: SeriesEpisodesViewModel = hiltViewModel()) {
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

@@ -11,13 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeClick: (String) -> Unit, viewModel: SeriesEpisodesViewModel = viewModel()) {
+fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeClick: (String) -> Unit, viewModel: SeriesEpisodesViewModel = hiltViewModel()) {
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
