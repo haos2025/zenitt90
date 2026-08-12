@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -34,7 +34,7 @@ import coil.request.ImageRequest
 @Composable
 fun PhoneHistoryScreen(navController: NavHostController) {
 
-val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = viewModel()
+val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LazyColumn(Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

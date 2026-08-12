@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.screens.search.SearchUiState
@@ -23,7 +23,7 @@ import com.platinum.ott.presentation.screens.search.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "", viewModel: SearchViewModel = viewModel()) {
+fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "", viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

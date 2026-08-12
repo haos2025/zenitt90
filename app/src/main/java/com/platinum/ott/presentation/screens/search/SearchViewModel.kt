@@ -2,14 +2,16 @@ package com.platinum.ott.presentation.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.domain.model.Movie
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 sealed interface SearchUiState {
     object Idle : SearchUiState
@@ -28,9 +30,12 @@ sealed interface SearchUiState {
 // поиска совсем, дополнительно фильтруем уже загруженный на телефон/TV
 // список плейлиста по подстроке в названии — тот же getPlaylistCatalogUseCase,
 // что и HomeViewModel использует для главного экрана.
-class SearchViewModel : ViewModel() {
-    private val searchMovies = ServiceLocator.searchMoviesUseCase
-    private val getPlaylistCatalog = ServiceLocator.getPlaylistCatalogUseCase
+@HiltViewModel
+class SearchViewModel @Inject constructor(
+    sessionGraph: SessionGraph
+) : ViewModel() {
+    private val searchMovies = sessionGraph.searchMoviesUseCase
+    private val getPlaylistCatalog = sessionGraph.getPlaylistCatalogUseCase
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
