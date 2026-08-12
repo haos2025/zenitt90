@@ -9,13 +9,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.platinum.ott.presentation.components.MovieCard
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun FavoritesScreen(onBackPressed: () -> Unit, onItemClick: (com.platinum.ott.data.local.entity.FavoriteEntity) -> Unit, viewModel: FavoritesViewModel = viewModel()) {
+fun FavoritesScreen(onBackPressed: () -> Unit, onItemClick: (com.platinum.ott.data.local.entity.FavoriteEntity) -> Unit, viewModel: FavoritesViewModel = hiltViewModel()) {
     val favorites by viewModel.favorites.collectAsState(initial = emptyList())
     val folders by viewModel.folders.collectAsState(initial = emptyList())
     var selectedType by remember { mutableStateOf<String?>(null) }

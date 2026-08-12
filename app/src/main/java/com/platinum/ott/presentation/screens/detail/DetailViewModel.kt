@@ -2,17 +2,22 @@ package com.platinum.ott.presentation.screens.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FavoriteEntity
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class DetailViewModel : ViewModel() {
-    private val getMovie = ServiceLocator.getMovieByIdUseCase
-    private val favorites = ServiceLocator.favoritesUseCase
-    private val history = ServiceLocator.watchHistoryUseCase
-    private val tmdb = ServiceLocator.tmdbRepository
+@HiltViewModel
+class DetailViewModel @Inject constructor(
+    sessionGraph: SessionGraph
+) : ViewModel() {
+    private val getMovie = sessionGraph.getMovieByIdUseCase
+    private val favorites = sessionGraph.favoritesUseCase
+    private val history = sessionGraph.watchHistoryUseCase
+    private val tmdb = sessionGraph.tmdbRepository
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val uiState: StateFlow<DetailUiState> = _uiState
 

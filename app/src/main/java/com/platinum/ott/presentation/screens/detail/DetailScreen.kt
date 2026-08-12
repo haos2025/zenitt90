@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
@@ -23,7 +23,7 @@ import com.platinum.ott.core.platform.TmdbImage
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, viewModel: DetailViewModel = viewModel()) {
+fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF101010))) {

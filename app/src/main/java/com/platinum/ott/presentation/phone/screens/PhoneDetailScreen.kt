@@ -22,13 +22,13 @@ import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.detail.DetailUiState
 import com.platinum.ott.presentation.screens.detail.DetailViewModel
 
 @Composable
-fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = viewModel()) {
+fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().background(Color(0xFF101010)).verticalScroll(rememberScrollState()).padding(16.dp)) {

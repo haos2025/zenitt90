@@ -19,7 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.MovieCard
 
@@ -27,7 +27,7 @@ import com.platinum.ott.presentation.components.MovieCard
 @Composable
 fun PhoneFavoritesScreen(navController: NavHostController) {
 
-val viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewModel = viewModel()
+val viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewModel = hiltViewModel()
 val favorites by viewModel.favorites.collectAsState(initial = emptyList())
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LazyVerticalGrid(GridCells.Fixed(2), Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
