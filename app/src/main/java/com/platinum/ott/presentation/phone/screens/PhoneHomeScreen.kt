@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.phone.components.PhoneCatalogRow
 import com.platinum.ott.presentation.screens.home.HomeUiState
@@ -42,7 +42,7 @@ import com.platinum.ott.presentation.screens.home.HomeViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel = viewModel()) {
+fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(

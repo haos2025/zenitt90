@@ -2,15 +2,20 @@ package com.platinum.ott.presentation.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.domain.model.Movie
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class HomeViewModel : ViewModel() {
-    private val getCatalog = ServiceLocator.getCatalogUseCase
-    private val getPlaylistCatalog = ServiceLocator.getPlaylistCatalogUseCase
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    sessionGraph: SessionGraph
+) : ViewModel() {
+    private val getCatalog = sessionGraph.getCatalogUseCase
+    private val getPlaylistCatalog = sessionGraph.getPlaylistCatalogUseCase
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
 
