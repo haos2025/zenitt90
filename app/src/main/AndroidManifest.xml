@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -48,5 +49,22 @@
              реальные названия из вашего каталога) напрямую, в обход системного
              поиска. GLOBAL_SEARCH — permission именно фреймворка поиска. -->
         <provider android:name=".provider.MovieSearchProvider" android:authorities="com.platinum.ott.search" android:exported="true" android:readPermission="android.permission.GLOBAL_SEARCH" />
+        <!-- ZenithApplication теперь сам реализует Configuration.Provider
+             (см. ZenithApplication.kt) и передаёт WorkManager'у HiltWorkerFactory,
+             чтобы SeriesUpdateWorker мог получать зависимости через Hilt, а не
+             через пустой конструктор по умолчанию. Дефолтный автоинициализатор
+             WorkManager (через androidx.startup) должен быть отключён — иначе он
+             успеет проинициализировать WorkManager со штатной WorkerFactory ДО
+             того, как ZenithApplication.onCreate() выставит свою. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 </manifest>

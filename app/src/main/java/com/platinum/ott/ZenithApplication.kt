@@ -10,8 +10,11 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.platinum.ott.core.ServiceLocator
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import com.platinum.ott.worker.SeriesUpdateWorker
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -20,7 +23,22 @@ import java.util.Date
 import java.util.Locale
 
 @HiltAndroidApp
-class ZenithApplication : Application(), ImageLoaderFactory {
+class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provider {
+    // Field injection, не конструктор — как и все @Inject lateinit var в
+    // Application/Activity, заполняется Hilt-ом ДО выполнения тела onCreate()
+    // ниже, за счёт сгенерированного базового класса (см. официальную
+    // документацию Hilt "Use Hilt with other Jetpack libraries").
+    @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+
+    // Дефолтный автоинициализатор WorkManager отключён в AndroidManifest.xml
+    // (androidx.startup.InitializationProvider, tools:node="remove" на
+    // androidx.work.WorkManagerInitializer) — без этого WorkManager успел бы
+    // проинициализироваться со штатной WorkerFactory (без DI) раньше, чем
+    // сработает on-demand-инициализация через Configuration.Provider ниже, и
+    // SeriesUpdateWorker остался бы без внедрённых зависимостей.
+    override fun getWorkManagerConfiguration(): Configuration =
+        Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
+
     override fun onCreate() {
         super.onCreate()
         ServiceLocator.init(this)

@@ -8,9 +8,13 @@ import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.platinum.ott.MainActivity
-import com.platinum.ott.core.ServiceLocator
+import com.platinum.ott.core.NotificationPreferences
+import com.platinum.ott.core.SessionGraph
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
@@ -18,16 +22,34 @@ import java.util.concurrent.TimeUnit
 // и ничего с ними не делал (Result.success() сразу же) — по факту это
 // была пустая функция. И enqueue() нигде не вызывался, так что даже
 // пустая версия никогда не запускалась.
-class SeriesUpdateWorker(private val ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+//
+// WorkManager создаёт Worker'ы сам (не через обычный Hilt @AndroidEntryPoint,
+// которого для Worker'ов не существует) — @HiltWorker + @AssistedInject
+// это отдельный, специфичный для WorkManager способ получить DI: контекст и
+// WorkerParameters передаются "на месте" (@Assisted, их знает только сам
+// WorkManager в момент создания), остальные зависимости — уже обычным Hilt-
+// графом. Чтобы это заработало, HiltWorkerFactory должен быть подключён в
+// ZenithApplication (см. ZenithApplication.kt/Configuration.Provider) и
+// дефолтный автоинициализатор WorkManager отключён в AndroidManifest.xml —
+// без этого WorkManager создавал бы Worker пустым конструктором и падал бы
+// с NoSuchMethodException.
+@HiltWorker
+class SeriesUpdateWorker @AssistedInject constructor(
+    @Assisted private val ctx: Context,
+    @Assisted params: WorkerParameters,
+    private val notificationPreferences: NotificationPreferences,
+    sessionGraph: SessionGraph
+) : CoroutineWorker(ctx, params) {
+    private val tracker = sessionGraph.seriesTrackerUseCase
+    private val favoritesUseCase = sessionGraph.favoritesUseCase
+
     override suspend fun doWork(): Result {
-        val notifPrefs = ServiceLocator.notificationPreferences
-        if (!notifPrefs.isNewEpisodesEnabled()) return Result.success()
+        if (!notificationPreferences.isNewEpisodesEnabled()) return Result.success()
         return try {
-            val tracker = ServiceLocator.seriesTrackerUseCase
             // "Новые серии" отслеживает избранные сериалы (contentType == "SERIES"),
             // не весь каталог целиком — как и подписки на сериалы в других
             // подобных приложениях.
-            val seriesFavorites = ServiceLocator.favoritesUseCase.getByType("SERIES").first()
+            val seriesFavorites = favoritesUseCase.getByType("SERIES").first()
             for (fav in seriesFavorites) {
                 val updated = tracker.updateSchedule(fav.contentId, fav.title) ?: continue
                 val now = System.currentTimeMillis()
@@ -43,7 +65,7 @@ class SeriesUpdateWorker(private val ctx: Context, params: WorkerParameters) : C
     }
 
     private fun notifyNewEpisode(seriesTitle: String, season: Int, episode: Int, contentId: String) {
-        if (ServiceLocator.notificationPreferences.isQuietNow()) return
+        if (notificationPreferences.isQuietNow()) return
         if (ActivityCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         // Раньше диплинка на конкретный сериал не существовало — экрана
         // "по сериалам" не было вообще, открывать было физически некуда.
