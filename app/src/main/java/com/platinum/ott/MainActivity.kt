@@ -21,7 +21,9 @@ import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.navigation.ZenithNavHost
 import com.platinum.ott.ui.theme.ZenithBackground
 import com.platinum.ott.ui.theme.ZenithTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     // На Android 13+ (TIRAMISU) POST_NOTIFICATIONS — runtime-разрешение,
     // без явного запроса уведомления о новых сериях не показывались бы
