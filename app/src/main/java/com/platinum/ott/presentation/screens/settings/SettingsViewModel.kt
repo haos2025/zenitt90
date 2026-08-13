@@ -2,7 +2,6 @@ package com.platinum.ott.presentation.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.platinum.ott.core.ServiceLocator
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.di.ThemeManager
 import com.platinum.ott.domain.usecase.OtaUpdateUseCase
@@ -26,30 +25,14 @@ class SettingsViewModel @Inject constructor(
     fun clearCache() { viewModelScope.launch { sessionGraph.clearCacheUseCase.execute(); sessionGraph.scriptProvider.clearAll() } }
     fun logout() { sessionGraph.logoutUseCase.execute() }
 
-    // Раньше SettingsScreen.kt/PhoneSettingsScreen.kt дергали
-    // ServiceLocator.checkAuthUseCase.execute() прямо из композабла.
-    // Чтение не меняет граф — не важно, через ServiceLocator или через
-    // sessionGraph.checkAuthUseCase.execute() это читать: оба смотрят на
-    // один и тот же файл AuthPreferences на диске.
     fun isConnected(): Boolean = sessionGraph.checkAuthUseCase.execute()
 
-    // ВРЕМЕННЫЙ МОСТ переходного периода (тот же принцип, что и в
-    // SetupViewModel.reinitBothGraphs()): смена таймаута сети должна
-    // применяться и для экранов на ServiceLocator (большинство
-    // приложения), и для уже мигрированного SessionGraph. Убрать вызов
-    // ServiceLocator.reinitWithAuth() здесь, когда ServiceLocator.kt будет
-    // удалён целиком.
-    fun applyNetworkTimeoutChange() {
-        ServiceLocator.reinitWithAuth()
-        sessionGraph.reinitWithAuth()
-    }
+    // Раньше здесь был временный двойной вызов ServiceLocator.reinitWithAuth()
+    // + sessionGraph.reinitWithAuth() — тот же мост, что и в SetupViewModel.
+    // ServiceLocator.kt удалён, оставлен только sessionGraph.reinitWithAuth().
+    fun applyNetworkTimeoutChange() { sessionGraph.reinitWithAuth() }
 
-    // Тема: MainActivity.kt теперь тоже читает themeManager.darkThemeFlow
-    // (см. MainActivity.kt) — мост через ServiceLocator.darkThemeFlow/
-    // setDarkTheme() закрыт, дублирующий вызов убран.
     val darkThemeFlow: StateFlow<Boolean> = themeManager.darkThemeFlow
 
-    fun setDarkTheme(enabled: Boolean) {
-        themeManager.setDarkTheme(enabled)
-    }
+    fun setDarkTheme(enabled: Boolean) { themeManager.setDarkTheme(enabled) }
 }
