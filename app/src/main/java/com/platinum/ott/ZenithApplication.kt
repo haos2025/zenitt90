@@ -9,7 +9,6 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
-import com.platinum.ott.core.ServiceLocator
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.platinum.ott.worker.SeriesUpdateWorker
@@ -36,12 +35,15 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
     // проинициализироваться со штатной WorkerFactory (без DI) раньше, чем
     // сработает on-demand-инициализация через Configuration.Provider ниже, и
     // SeriesUpdateWorker остался бы без внедрённых зависимостей.
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
+    override fun getWorkManagerConfiguration(): Configuration =
+        Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
 
     override fun onCreate() {
         super.onCreate()
-        ServiceLocator.init(this)
+        // SessionGraph (замена ServiceLocator) — Hilt-синглтон, создаётся
+        // лениво сам при первом инжекте (первый экран, который его
+        // запросит — обычно HomeViewModel, т.к. Home стартовый экран), явный
+        // init()-вызов здесь больше не нужен.
         setupCrashHandler()
         // Раньше ни канал уведомлений не создавался, ни воркер не ставился
         // в очередь — SeriesUpdateWorker.enqueue() существовал, но был
