@@ -35,8 +35,8 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
     // проинициализироваться со штатной WorkerFactory (без DI) раньше, чем
     // сработает on-demand-инициализация через Configuration.Provider ниже, и
     // SeriesUpdateWorker остался бы без внедрённых зависимостей.
-    override fun getWorkManagerConfiguration(): Configuration =
-        Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
 
     override fun onCreate() {
         super.onCreate()
