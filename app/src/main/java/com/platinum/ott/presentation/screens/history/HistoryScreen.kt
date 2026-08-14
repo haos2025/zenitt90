@@ -24,7 +24,7 @@ import coil.request.ImageRequest
 @Composable
 fun HistoryScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, viewModel: HistoryViewModel = hiltViewModel()) {
     val history by viewModel.history.collectAsState(initial = emptyList())
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
         Text("История просмотров", style = MaterialTheme.typography.displaySmall, color = Color.White)
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -52,9 +52,9 @@ fun HistoryScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, vie
                             model = request,
                             contentDescription = entry.title,
                             contentScale = ContentScale.Fit,
-                            placeholder = ColorPainter(Color(0xFF1C1C1C)),
-                            error = ColorPainter(Color(0xFF2A2A2A)),
-                            modifier = Modifier.width(96.dp).height(144.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C1C))
+                            placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
+                            error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                            modifier = Modifier.width(96.dp).height(144.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surface)
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {

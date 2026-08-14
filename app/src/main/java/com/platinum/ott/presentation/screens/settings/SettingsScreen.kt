@@ -13,9 +13,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
+import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.NetworkPreferences
 import com.platinum.ott.core.NotificationPreferences
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -35,10 +37,10 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 56.dp, top = 48.dp, end = 56.dp, bottom = 48.dp)
+            .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingXL))
         // Sections: Playback, Notifications, Network, Interface, Account, About
         SettingsSection("Воспроизведение") {
             // Раньше "Качество по умолчанию"/"Автовоспроизведение"/"Субтитры"
@@ -82,10 +84,10 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
                 notifPrefs.setQuietHoursEnabled(quietEnabled)
             }
             if (quietEnabled) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                     Text("Диапазон", color = Color.Gray, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(ZenithDimens.paddingS))
                     OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
                 }
             }
@@ -133,7 +135,7 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
             SettingsItem("Язык", "Скоро")
         }
         SettingsSection("Плагины") { SettingsItem("Управление плагинами", "Каталог и настройки") }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             Button(onClick = onPluginsClick) { Text("Плагины") }
         }
         // Раньше здесь всегда было захардкожено "Подключён" — не имело
@@ -143,12 +145,12 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         // должен отражать реальность, а не врать по умолчанию.
         val isConnected = remember { viewModel.isConnected() }
         SettingsSection("Аккаунт") { SettingsItem("Источник", if (isConnected) "Подключён" else "Не подключён") }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             if (!isConnected) Button(onClick = onConnectSourceClick) { Text("Подключить источник") }
             Button(onClick = onSyncClick) { Text("Синхронизация устройств") }
         }
-        Spacer(Modifier.height(32.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(ZenithDimens.paddingXL))
+        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
             Button(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }) { Text("Обновить парсеры") }
             OutlinedButton(onClick = { viewModel.clearCache(); onClearCacheClick() }) { Text("Очистить кэш") }
             OutlinedButton(onClick = { viewModel.logout(); onLogoutClick() }) { Text("Сменить аккаунт") }
@@ -157,10 +159,10 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.padding(bottom = 16.dp)) { Text(title, style = MaterialTheme.typography.titleLarge, color = Color(0xFF6C63FF)); Spacer(Modifier.height(8.dp)); content() }
+    Column(modifier = Modifier.padding(bottom = ZenithDimens.paddingM)) { Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(ZenithDimens.paddingS)); content() }
 }
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsItem(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
 }
 // Раньше это была Row с Text + маленькой Button, прижатой к правому краю —
 // с пульта фокус-цель получалась узкой (только сама кнопка), а строки шли
@@ -175,16 +177,16 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
-            focusedContainerColor = Color(0xFF6C63FF).copy(alpha = 0.25f)
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
         ),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(label, color = Color.White, modifier = Modifier.weight(1f))
-            Text(value, color = Color(0xFFB8B4FF))
+            Text(value, color = ZenithPrimaryMuted)
         }
     }
 }

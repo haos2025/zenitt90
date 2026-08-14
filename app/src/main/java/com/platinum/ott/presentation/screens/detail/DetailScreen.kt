@@ -20,16 +20,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
+import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF101010))) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(32.dp)) { Text("⚠ ${state.message}", color = Color(0xFFFF6B6B)); Button(onClick = onBackPressed) { Text("Назад") } }
+            is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = onBackPressed) { Text("Назад") } }
             is DetailUiState.Success -> {
                 // Раньше тут не было ни одной картинки — ни постера, ни backdrop'а,
                 // хотя TMDB-метаданные (state.metadata) уже приходили с backdropPath.
@@ -67,23 +69,23 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                         contentDescription = null,
                         contentScale = if (hasRealBackdrop) ContentScale.Crop else ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
-                        placeholder = ColorPainter(Color(0xFF101010)),
-                        error = ColorPainter(Color(0xFF101010))
+                        placeholder = ColorPainter(MaterialTheme.colorScheme.background),
+                        error = ColorPainter(MaterialTheme.colorScheme.background)
                     )
                     // Скрим слева направо: TV-контролы фокусируются слева, там нужен
                     // максимальный контраст текста с фоном.
-                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(colors = listOf(Color(0xFF101010), Color(0xFF101010).copy(alpha = 0.75f), Color.Transparent))))
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color(0xFF101010)), startY = 300f)))
+                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background.copy(alpha = 0.75f), Color.Transparent))))
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background), startY = 300f)))
                 }
-                Column(modifier = Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)
                     state.metadata?.let { meta ->
                         meta.genres?.let { Text(it, color = Color.Gray) }
                         meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
-                        meta.voteAverage?.let { Text("★ $it", color = Color(0xFFFFC107)) }
+                        meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                         meta.cast?.let { Text("Актёры: $it", color = Color.Gray, style = MaterialTheme.typography.bodyMedium) }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                         Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
                         OutlinedButton(onClick = { viewModel.toggleFavorite(movieId, state.movie.title, state.movie.poster) }) {
                             Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")

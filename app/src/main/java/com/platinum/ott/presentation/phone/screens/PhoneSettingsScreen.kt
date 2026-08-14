@@ -33,7 +33,7 @@ import com.platinum.ott.presentation.components.MovieCard
 fun PhoneSettingsScreen(navController: NavHostController, viewModel: SettingsViewModel = hiltViewModel()) {
 
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    Column(Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp).verticalScroll(rememberScrollState())) {
+    Column(Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(16.dp))
         Card(

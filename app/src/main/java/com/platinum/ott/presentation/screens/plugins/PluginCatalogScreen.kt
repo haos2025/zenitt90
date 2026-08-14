@@ -16,6 +16,7 @@ import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import com.platinum.ott.core.plugin.PluginRepository
 import com.platinum.ott.data.local.entity.PluginEntity
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -30,7 +31,7 @@ fun PluginCatalogScreen(
 
     LaunchedEffect(Unit) { viewModel.loadCatalog() }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(32.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Плагины", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
@@ -75,7 +76,7 @@ private fun InstalledTab(plugins: List<PluginEntity>, onPluginClick: (String) ->
 private fun CatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginViewModel) {
     when (uiState) {
         is PluginViewModel.UiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = Color(0xFFFF6B6B)) }
+        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = MaterialTheme.colorScheme.error) }
         is PluginViewModel.UiState.Success -> {
             if (uiState.catalog.isEmpty()) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = Color.Gray) }
@@ -99,10 +100,10 @@ private fun CatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
 private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewModel) {
     when (uiState) {
         is PluginViewModel.UiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = Color(0xFFFF6B6B)) }
+        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = MaterialTheme.colorScheme.error) }
         is PluginViewModel.UiState.Success -> {
             if (uiState.updates.isEmpty()) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Все плагины актуальны ✓", color = Color(0xFF4CAF50)) }
+                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Все плагины актуальны ✓", color = ZenithSuccess) }
                 return
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -130,7 +131,7 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
             Column {
                 Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                Text(plugin.pluginType, color = Color(0xFF6C63FF), style = MaterialTheme.typography.labelSmall)
+                Text(plugin.pluginType, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
             }
             Switch(checked = plugin.isEnabled, onCheckedChange = onToggle)
         }

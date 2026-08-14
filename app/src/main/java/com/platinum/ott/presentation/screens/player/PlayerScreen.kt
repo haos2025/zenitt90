@@ -11,11 +11,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.tv.material3.*
 import kotlinx.coroutines.delay
 
@@ -121,9 +121,9 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
             is PlayerUiState.Loading -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)), Alignment.Center) { Text("Подготовка...", color = Color.White) }
             is PlayerUiState.Error -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.8f)), Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(ZenithDimens.paddingM))
+                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                         // Раньше здесь была только кнопка "Повторить" — при
                         // ошибке вроде HTTP 404 (сломанная ссылка, не временный
                         // сбой) повтор просто получает ту же ошибку снова,

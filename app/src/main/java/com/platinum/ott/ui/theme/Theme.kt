@@ -31,7 +31,9 @@ private val LightColorScheme = lightColorScheme(
 private val TvColorScheme = tvDarkColorScheme(
     primary = ZenithPrimary, onPrimary = ZenithOnPrimary,
     surface = ZenithSurface, onSurface = ZenithOnSurface,
+    surfaceVariant = ZenithSurfaceVariant, onSurfaceVariant = ZenithOnSurfaceVariant,
     background = ZenithBackground,
+    error = ZenithError,
 )
 
 @Composable

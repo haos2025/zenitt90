@@ -11,7 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
+import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.StreamVariant
+import com.platinum.ott.ui.theme.*
 
 // Раньше это был QualityMenuOverlay.kt — только качество. Аудиодорожки и
 // субтитры нигде не переключались вообще: ExoPlayer молча выбирал первую
@@ -43,30 +45,30 @@ fun PlaybackMenuOverlay(
 
         Column(
             modifier = Modifier.width(280.dp)
-                .background(Color(0xFF1A1A2E), RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                .padding(vertical = 24.dp)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                .padding(vertical = ZenithDimens.paddingL)
         ) {
-            Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.padding(horizontal = ZenithDimens.paddingSM, vertical = ZenithDimens.paddingXS), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)) {
                 MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY) { onTabChange(PlaybackMenuTab.QUALITY) }
                 MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO) { onTabChange(PlaybackMenuTab.AUDIO) }
                 MenuTabButton("Субтитры", tab == PlaybackMenuTab.SUBTITLES) { onTabChange(PlaybackMenuTab.SUBTITLES) }
                 MenuTabButton("Скорость", tab == PlaybackMenuTab.SPEED) { onTabChange(PlaybackMenuTab.SPEED) }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingSM))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), contentPadding = PaddingValues(horizontal = ZenithDimens.paddingSM)) {
                 when (tab) {
                     PlaybackMenuTab.QUALITY -> items(variants, key = { it.url }) { v ->
                         MenuRow(v.quality, v.source, v.url == currentVariant.url) { onSelectVariant(v) }
                     }
                     PlaybackMenuTab.AUDIO -> {
-                        if (audioTracks.isEmpty()) item { Text("Только одна дорожка", color = Color.White.copy(0.5f), modifier = Modifier.padding(16.dp)) }
+                        if (audioTracks.isEmpty()) item { Text("Только одна дорожка", color = Color.White.copy(0.5f), modifier = Modifier.padding(ZenithDimens.paddingM)) }
                         items(audioTracks) { t -> MenuRow(t.label, null, t.isSelected) { onSelectAudio(t) } }
                     }
                     PlaybackMenuTab.SUBTITLES -> {
                         item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
-                        if (subtitleTracks.isEmpty()) item { Text("В потоке нет встроенных субтитров", color = Color.White.copy(0.5f), modifier = Modifier.padding(16.dp)) }
+                        if (subtitleTracks.isEmpty()) item { Text("В потоке нет встроенных субтитров", color = Color.White.copy(0.5f), modifier = Modifier.padding(ZenithDimens.paddingM)) }
                     }
                     PlaybackMenuTab.SPEED -> items(speedOptions) { s ->
                         MenuRow((if (s == 1f) "Обычная" else "${s}x"), null, s == playbackSpeed) { onSelectSpeed(s) }
@@ -74,13 +76,13 @@ fun PlaybackMenuOverlay(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             Surface(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM),
                 shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-                colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.05f), focusedContainerColor = Color.White.copy(alpha = 0.15f))
-            ) { Text("Закрыть", color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(16.dp)) }
+                colors = ClickableSurfaceDefaults.colors(containerColor = ZenithFocusContainer, focusedContainerColor = ZenithFocusContainerActive)
+            ) { Text("Закрыть", color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(ZenithDimens.paddingM)) }
         }
     }
 }
@@ -91,8 +93,8 @@ private fun MenuTabButton(label: String, selected: Boolean, onClick: () -> Unit)
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color(0xFF6C63FF) else Color.Transparent,
-            focusedContainerColor = if (selected) Color(0xFF6C63FF) else Color.White.copy(0.15f)
+            containerColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+            focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive
         )
     ) { Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) }
 }
@@ -104,16 +106,16 @@ private fun MenuRow(label: String, subLabel: String?, isSelected: Boolean, onCli
         modifier = Modifier.fillMaxWidth(),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (isSelected) Color(0xFF6C63FF).copy(alpha = 0.3f) else Color.Transparent,
-            focusedContainerColor = Color(0xFF6C63FF).copy(alpha = 0.6f)
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
         )
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
-                Text(label, color = if (isSelected) Color(0xFF6C63FF) else Color.White)
+                Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White)
                 subLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f)) }
             }
-            if (isSelected) Text("✓", color = Color(0xFF6C63FF))
+            if (isSelected) Text("✓", color = MaterialTheme.colorScheme.primary)
         }
     }
 }

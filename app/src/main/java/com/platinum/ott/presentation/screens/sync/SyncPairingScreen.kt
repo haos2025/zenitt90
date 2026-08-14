@@ -16,6 +16,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.platinum.ott.ui.theme.*
 
 /**
  * Один экран на TV и на телефон, а не пара TV/Phone-вариантов как у
@@ -39,7 +40,7 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
         })
     }) { padding ->
         Column(
-            Modifier.fillMaxSize().background(Color(0xFF101010)).padding(padding).padding(24.dp),
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -56,7 +57,7 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                 if (lastSyncedAtMs > 0)
                     "Последняя синхронизация: ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(lastSyncedAtMs))}"
                 else "Синхронизация ещё ни разу не выполнялась на этом устройстве",
-                color = if (lastSyncedAtMs > 0) Color(0xFF4CAF50) else Color.Gray,
+                color = if (lastSyncedAtMs > 0) ZenithSuccess else Color.Gray,
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(20.dp))
@@ -90,7 +91,7 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                 is PairingUiState.CodeShown -> {
                     Text(
                         state.code,
-                        color = Color(0xFF6C63FF),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 40.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -99,12 +100,12 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                 }
                 is PairingUiState.Loading -> CircularProgressIndicator()
                 is PairingUiState.RedeemSuccess -> {
-                    Text("Готово! Избранное и история перенесены.", color = Color(0xFF4CAF50))
+                    Text("Готово! Избранное и история перенесены.", color = ZenithSuccess)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = { viewModel.syncNowManually() }) { Text("Синхронизировать сейчас") }
                 }
                 is PairingUiState.Error -> {
-                    Text(state.message, color = Color(0xFFFF6B6B))
+                    Text(state.message, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
                 }

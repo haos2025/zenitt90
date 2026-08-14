@@ -33,7 +33,7 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
             Spacer(Modifier.width(16.dp))
@@ -42,7 +42,7 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
                 textStyle = TextStyle(Color.White, 20.sp),
-                cursorBrush = SolidColor(Color(0xFF6C63FF)),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(16.dp, 12.dp),
                 decorationBox = { inner ->
                     if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(Color.White.copy(0.3f), 20.sp))
@@ -54,7 +54,7 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
         when (val state = uiState) {
             is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray)
             is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
-            is SearchUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+            is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SearchUiState.Success -> {
                 if (state.results.isEmpty()) {
                     Text("Ничего не нашлось по запросу «$query»", color = Color.Gray)

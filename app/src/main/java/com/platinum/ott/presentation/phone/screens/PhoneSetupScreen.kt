@@ -35,9 +35,9 @@ fun PhoneSetupScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A))) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("ZENITH", style = MaterialTheme.typography.displayLarge, color = Color(0xFF6C63FF))
+            Text("ZENITH", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
             Text("Подключите источник", color = Color.White.copy(0.5f))
             Spacer(Modifier.height(32.dp))
             TabRow(selectedTabIndex = selectedTab) { Tab(selectedTab == 0, onClick = { selectedTab = 0 }) { Text("M3U") }; Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Xtream") } }
@@ -46,7 +46,7 @@ fun PhoneSetupScreen(
                 0 -> PhoneTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
                 1 -> { PhoneTextField(xtHost, { xtHost = it }, "Хост"); PhoneTextField(xtUser, { xtUser = it }, "Логин"); PhoneTextField(xtPass, { xtPass = it }, "Пароль", true) }
             }
-            if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = Color(0xFFFF6B6B))
+            if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(16.dp))
             Button(onClick = { if (uiState !is SetupUiState.Loading) when (selectedTab) { 0 -> viewModel.loginWithM3U(m3uUrl, onSetupComplete); 1 -> viewModel.loginWithXtream(xtHost, xtUser, xtPass, onSetupComplete) } }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться") }
             Spacer(Modifier.height(24.dp))

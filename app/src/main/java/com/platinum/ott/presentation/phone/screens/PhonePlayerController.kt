@@ -80,7 +80,7 @@ fun PhonePlayerController(
                     onValueChange = { sliderPosition = it },
                     onValueChangeFinished = { onSeekTo(sliderPosition.toLong()) },
                     valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                    colors = SliderDefaults.colors(thumbColor = Color(0xFF6C63FF), activeTrackColor = Color(0xFF6C63FF))
+                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatMs(currentPositionMs), color = Color.White)
@@ -101,8 +101,8 @@ fun PhonePlayerController(
                 // экрана, а не вверху. Правый нижний угол — туда, где палец
                 // уже и так находится, не нужно тянуться через весь экран.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { menuTab = PlaybackMenuTab.SUBTITLES }) { Icon(Icons.Default.ClosedCaption, "Субтитры", tint = if (subtitlesEnabled) Color(0xFF6C63FF) else Color.White) }
-                    IconButton(onClick = { menuTab = PlaybackMenuTab.SPEED }) { Icon(Icons.Default.Speed, "Скорость", tint = if (playbackSpeed != 1f) Color(0xFF6C63FF) else Color.White) }
+                    IconButton(onClick = { menuTab = PlaybackMenuTab.SUBTITLES }) { Icon(Icons.Default.ClosedCaption, "Субтитры", tint = if (subtitlesEnabled) MaterialTheme.colorScheme.primary else Color.White) }
+                    IconButton(onClick = { menuTab = PlaybackMenuTab.SPEED }) { Icon(Icons.Default.Speed, "Скорость", tint = if (playbackSpeed != 1f) MaterialTheme.colorScheme.primary else Color.White) }
                     if (variants.size > 1) {
                         IconButton(onClick = { menuTab = PlaybackMenuTab.QUALITY }) { Icon(Icons.Default.HighQuality, "Качество", tint = Color.White) }
                     }

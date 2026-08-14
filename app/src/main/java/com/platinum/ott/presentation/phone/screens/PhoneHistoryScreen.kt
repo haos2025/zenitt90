@@ -37,7 +37,7 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    LazyColumn(Modifier.padding(padding).background(Color(0xFF101010)), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(history, key = { it.contentId }) { entry ->
             val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
             Card(
@@ -59,8 +59,8 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     model = request,
                     contentDescription = entry.title,
                     contentScale = ContentScale.Fit,
-                    placeholder = ColorPainter(Color(0xFF1C1C1C)),
-                    error = ColorPainter(Color(0xFF2A2A2A)),
+                    placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
+                    error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
                 )
                 Spacer(Modifier.width(12.dp))

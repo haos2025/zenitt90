@@ -44,13 +44,13 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                         Icon(Icons.Default.ArrowBack, "Назад")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1C1C1C))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = { PhoneBottomBar(navController) }
     ) { padding ->
-        Column(Modifier.padding(padding).background(Color(0xFF101010))) {
-            TabRow(selectedTabIndex = selectedTab, containerColor = Color(0xFF1C1C1C)) {
+        Column(Modifier.padding(padding).background(MaterialTheme.colorScheme.background)) {
+            TabRow(selectedTabIndex = selectedTab, containerColor = MaterialTheme.colorScheme.surface) {
                 Tab(selectedTab == 0, onClick = { selectedTab = 0 }) { Text("Установленные") }
                 Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Каталог") }
             }
@@ -62,7 +62,7 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                     LaunchedEffect(state) { viewModel.resetInstallState() }
                 }
                 is PluginViewModel.InstallState.Failed -> {
-                    Text("⚠ ${state.error}", color = Color(0xFFFF6B6B), modifier = Modifier.padding(12.dp))
+                    Text("⚠ ${state.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
                     LaunchedEffect(state) { viewModel.resetInstallState() }
                 }
                 else -> {}
@@ -112,7 +112,7 @@ private fun PhoneInstalledTab(plugins: List<PluginEntity>, navController: NavHos
 private fun PhoneCatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginViewModel) {
     when (uiState) {
         is PluginViewModel.UiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = Color(0xFFFF6B6B)) }
+        is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = MaterialTheme.colorScheme.error) }
         is PluginViewModel.UiState.Success -> {
             if (uiState.catalog.isEmpty()) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = Color.Gray) }

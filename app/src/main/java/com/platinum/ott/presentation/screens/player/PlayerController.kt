@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
+import com.platinum.ott.core.platform.ZenithDimens
 import kotlinx.coroutines.delay
 
 /**
@@ -63,7 +64,7 @@ fun PlayerController(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
-                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 48.dp, vertical = 32.dp)
+                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = ZenithDimens.paddingXXL, vertical = ZenithDimens.paddingXL)
                 )
             }
 
@@ -85,8 +86,8 @@ fun PlayerController(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = ZenithDimens.paddingXXL, vertical = ZenithDimens.paddingXL),
+                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)
             ) {
                 // Прогресс-бар
                 ProgressBar(
@@ -123,7 +124,7 @@ fun PlayerController(
                         onClick = onSeekBackward
                     )
 
-                    Spacer(modifier = Modifier.width(32.dp))
+                    Spacer(modifier = Modifier.width(ZenithDimens.paddingXL))
 
                     // Пауза / воспроизведение
                     ControlButton(
@@ -132,7 +133,7 @@ fun PlayerController(
                         isPrimary = true
                     )
 
-                    Spacer(modifier = Modifier.width(32.dp))
+                    Spacer(modifier = Modifier.width(ZenithDimens.paddingXL))
 
                     // +10 секунд
                     ControlButton(
@@ -166,7 +167,7 @@ private fun ControlButton(
         modifier = (if (isPrimary) Modifier.size(64.dp) else Modifier.height(48.dp).widthIn(min = 96.dp))
             .clip(RoundedCornerShape(if (isPrimary) 50 else 8))
             .background(
-                if (isPrimary) Color(0xFF6C63FF).copy(alpha = 0.85f)
+                if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                 else Color.White.copy(alpha = 0.12f)
             )
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
@@ -197,7 +198,7 @@ private fun ProgressBar(
             modifier = Modifier
                 .fillMaxWidth(progress)
                 .fillMaxHeight()
-                .background(Color(0xFF6C63FF), RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
         )
     }
 }

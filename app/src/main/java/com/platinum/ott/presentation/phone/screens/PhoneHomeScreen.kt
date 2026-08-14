@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,7 +50,7 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
         // TV). Значок лупы здесь ведёт на PhoneSearchScreen.kt.
         topBar = {
             TopAppBar(
-                title = { Text("ZENITH", color = Color(0xFF6C63FF)) },
+                title = { Text("ZENITH", color = MaterialTheme.colorScheme.primary) },
                 actions = {
                     IconButton(onClick = { navController.navigateToTab("series") }) { Icon(Icons.Default.Movie, "Сериалы") }
                     IconButton(onClick = { navController.navigateToTab("search") }) { Icon(Icons.Default.Search, "Поиск") }
@@ -60,12 +59,12 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
         },
         bottomBar = { PhoneBottomBar(navController) }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).background(Color(0xFF101010))) {
+        Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
                 is HomeUiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                 is HomeUiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+                        Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(8.dp))
                         Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") }
                     }

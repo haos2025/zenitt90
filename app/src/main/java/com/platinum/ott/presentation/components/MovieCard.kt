@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -50,7 +51,7 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
             .build()
     }
 
-    Card(onClick = onClick, modifier = modifier.width(cardWidth).height(cardHeight), shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1C))) {
+    Card(onClick = onClick, modifier = modifier.width(cardWidth).height(cardHeight), shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(
                 model = request,
@@ -65,8 +66,8 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
                 // обрезанного текста.
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
-                placeholder = ColorPainter(Color(0xFF1C1C1C)),
-                error = ColorPainter(Color(0xFF2A2A2A))
+                placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
+                error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
             )
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(8.dp)) {
                 Column {

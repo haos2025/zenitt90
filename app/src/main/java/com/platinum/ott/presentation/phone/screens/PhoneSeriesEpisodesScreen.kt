@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesUiState
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesViewModel
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,15 +35,15 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
             actions = {
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
                 IconButton(onClick = { viewModel.toggleFavorite() }) {
-                    Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "В избранное", tint = if (isFavorite) Color(0xFF6C63FF) else Color.Unspecified)
+                    Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "В избранное", tint = if (isFavorite) ZenithFavorite else Color.Unspecified)
                 }
             }
         )
     }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).background(Color(0xFF101010))) {
+        Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
                 is SeriesEpisodesUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.TopCenter).padding(top = 32.dp))
-                is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B), modifier = Modifier.padding(16.dp))
+                is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
                 is SeriesEpisodesUiState.Success -> {
                     val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
                     var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
@@ -59,7 +60,7 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                             items(episodesInSeason, key = { it.id }) { ep ->
                                 Card(onClick = { navController.navigate("player/${ep.id}") }, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.PlayArrow, null, tint = Color(0xFF6C63FF))
+                                        Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(12.dp))
                                         Column(Modifier.weight(1f)) {
                                             ep.episodeNumber?.let { Text("Эпизод $it", style = MaterialTheme.typography.bodySmall, color = Color.Gray) }

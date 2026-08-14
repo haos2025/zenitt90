@@ -43,11 +43,11 @@ fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "
             navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } }
         )
     }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).background(Color(0xFF101010))) {
+        Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
                 is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(16.dp))
                 is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
-                is SearchUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B), modifier = Modifier.padding(16.dp))
+                is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
                 is SearchUiState.Success -> {
                     if (state.results.isEmpty()) {
                         Text("Ничего не нашлось по запросу «$query»", color = Color.Gray, modifier = Modifier.padding(16.dp))

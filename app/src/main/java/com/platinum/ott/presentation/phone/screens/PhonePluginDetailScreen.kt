@@ -32,22 +32,22 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
                         Icon(Icons.Default.ArrowBack, "Назад")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1C1C1C))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
         if (current == null) {
             Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Плагин не найден", color = Color(0xFFFF6B6B))
+                Text("Плагин не найден", color = MaterialTheme.colorScheme.error)
             }
             return@Scaffold
         }
         Column(
-            Modifier.padding(padding).background(Color(0xFF101010)).padding(16.dp),
+            Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(current.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Text("v${current.installedVersion}", color = Color(0xFF6C63FF))
+            Text("v${current.installedVersion}", color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
 
             DetailItem("ID", current.id)
@@ -66,7 +66,7 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
                 OutlinedButton(
                     onClick = { viewModel.uninstallPlugin(pluginId); navController.popBackStack() },
                     modifier = Modifier.weight(1f)
-                ) { Text("Удалить", color = Color(0xFFFF6B6B)) }
+                ) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             }
         }
     }
@@ -75,7 +75,7 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
 @Composable
 private fun DetailItem(label: String, value: String) {
     Column {
-        Text(label, color = Color(0xFF6C63FF), style = MaterialTheme.typography.labelMedium)
+        Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
         Text(value, color = Color.White, style = MaterialTheme.typography.bodyLarge)
     }
 }

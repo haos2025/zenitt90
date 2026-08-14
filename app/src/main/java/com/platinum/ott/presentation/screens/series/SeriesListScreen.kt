@@ -27,7 +27,7 @@ import com.platinum.ott.data.repository.SeriesSummary
 @Composable
 fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
             Spacer(Modifier.width(16.dp))
@@ -36,7 +36,7 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
         Spacer(Modifier.height(24.dp))
         when (val state = uiState) {
             is SeriesListUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), androidx.compose.ui.Alignment.TopCenter) { CircularProgressIndicator() }
-            is SeriesListUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+            is SeriesListUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SeriesListUiState.Success -> {
                 if (state.series.isEmpty()) {
                     // Честно: если источник — только backend-каталог без
@@ -69,10 +69,10 @@ private fun SeriesCard(series: SeriesSummary, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.width(cardWidth).height(cardHeight),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFF1C1C1C), focusedContainerColor = Color(0xFF1C1C1C))
+        colors = ClickableSurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(Modifier.fillMaxSize()) {
-            AsyncImage(model = request, contentDescription = series.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), placeholder = ColorPainter(Color(0xFF1C1C1C)), error = ColorPainter(Color(0xFF2A2A2A)))
+            AsyncImage(model = request, contentDescription = series.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), placeholder = ColorPainter(MaterialTheme.colorScheme.surface), error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant))
             Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(8.dp)) {
                 Column {
                     Text(series.title, color = Color.White, maxLines = 1)

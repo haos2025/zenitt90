@@ -7,34 +7,33 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
+import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.presentation.components.CatalogRow
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFavoritesClick: () -> Unit, onHistoryClick: () -> Unit, onSearchClick: () -> Unit = {}, onSeriesClick: () -> Unit = {}, modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(modifier = modifier.fillMaxSize().background(Color(0xFF101010)).padding(top = 24.dp, bottom = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-            Text("ZENITH", style = MaterialTheme.typography.displaySmall, color = Color(0xFF6C63FF), modifier = Modifier.weight(1f))
-            val ttvColors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = ZenithDimens.paddingL, bottom = ZenithDimens.paddingL)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingL)) {
+            Text("ZENITH", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+            val ttvColors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
             TextButton(onClick = onSearchClick, colors = ttvColors) { Text("Поиск") }
             TextButton(onClick = onSeriesClick, colors = ttvColors) { Text("Сериалы") }
             TextButton(onClick = onFavoritesClick, colors = ttvColors) { Text("Избранное") }
             TextButton(onClick = onHistoryClick, colors = ttvColors) { Text("История") }
             TextButton(onClick = onSettingsClick, colors = ttvColors) { Text("Настройки") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         when (val state = uiState) {
             is HomeUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            is HomeUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("⚠ ${state.message}", color = Color(0xFFFF6B6B)); Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") } }
+            is HomeUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") } }
             is HomeUiState.Success -> {
                 // Раньше здесь был единый LazyVerticalGrid по всем фильмам сразу —
                 // CatalogRow.kt (ряды по жанрам, LazyRow с D-pad навигацией) был
@@ -60,7 +59,7 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
                         }
                 }
 
-                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
                     grouped.forEach { (genre, movies) ->
                         item(key = genre) {
                             CatalogRow(title = genre, movies = movies, onMovieClick = onMovieClick)
@@ -68,7 +67,7 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
                     }
                     if (state.isLoadingMore) {
                         item(key = "loading_more") {
-                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.fillMaxWidth().padding(ZenithDimens.paddingL), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
                         }

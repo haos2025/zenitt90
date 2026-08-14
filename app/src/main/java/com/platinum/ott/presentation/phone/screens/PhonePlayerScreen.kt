@@ -176,7 +176,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
         when (val state = uiState) {
             is PlayerUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
             is PlayerUiState.Error -> Column(Modifier.align(Alignment.Center)) {
-                Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+                Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                 Row {
                     Button(onClick = { navController.popBackStack() }) { Text("Назад") }
                     Spacer(Modifier.width(8.dp))

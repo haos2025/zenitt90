@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -39,14 +40,14 @@ fun SetupScreen(
     var selectedTab by remember { mutableStateOf(0) }
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
-    Box(modifier = modifier.fillMaxSize().background(Color(0xFF0D0D1A))) {
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(modifier = Modifier.align(Alignment.TopEnd).padding(24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onFavoritesClick) { Text("Избранное") }
             OutlinedButton(onClick = onHistoryClick) { Text("История") }
             OutlinedButton(onClick = onSettingsClick) { Text("Настройки") }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.align(Alignment.Center).width(520.dp)) {
-            Text("ZENITH", style = MaterialTheme.typography.displayMedium, color = Color(0xFF6C63FF))
+            Text("ZENITH", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary)
             Text("Подключите источник контента", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.5f))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TabButton("M3U Плейлист", selectedTab == 0) { selectedTab = 0 }; TabButton("Xtream Codes", selectedTab == 1) { selectedTab = 1 }
@@ -55,7 +56,7 @@ fun SetupScreen(
                 0 -> SetupTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
                 1 -> { SetupTextField(xtHost, { xtHost = it }, "http://example.com:8080"); SetupTextField(xtUser, { xtUser = it }, "Логин"); SetupTextField(xtPass, { xtPass = it }, "Пароль", true) }
             }
-            if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = Color(0xFFFF6B6B))
+            if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = MaterialTheme.colorScheme.error)
             Button(onClick = { if (uiState !is SetupUiState.Loading) when (selectedTab) { 0 -> viewModel.loginWithM3U(m3uUrl, onSetupComplete); 1 -> viewModel.loginWithXtream(xtHost, xtUser, xtPass, onSetupComplete) } }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = uiState !is SetupUiState.Loading) {
                 Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться")
             }
@@ -64,9 +65,9 @@ fun SetupScreen(
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)), colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) Color(0xFF6C63FF) else Color.White.copy(alpha = 0.08f), focusedContainerColor = if (selected) Color(0xFF6C63FF) else Color.White.copy(alpha = 0.18f))) { Text(label, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = if (selected) Color.White else Color.White.copy(alpha = 0.6f)) }
+    Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)), colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)) { Text(label, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = if (selected) Color.White else Color.White.copy(alpha = 0.6f)) }
 }
 
 @Composable private fun SetupTextField(value: String, onChange: (String) -> Unit, placeholder: String, isPassword: Boolean = false) {
-    BasicTextField(value = value, onValueChange = onChange, singleLine = true, textStyle = TextStyle(Color.White, 16.sp), cursorBrush = SolidColor(Color(0xFF6C63FF)), visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None, modifier = Modifier.fillMaxWidth().background(Color.White.copy(0.06f), RoundedCornerShape(8.dp)).padding(16.dp, 14.dp), decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(0.3f), 16.sp)); it() })
+    BasicTextField(value = value, onValueChange = onChange, singleLine = true, textStyle = TextStyle(Color.White, 16.sp), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None, modifier = Modifier.fillMaxWidth().background(Color.White.copy(0.06f), RoundedCornerShape(8.dp)).padding(16.dp, 14.dp), decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(0.3f), 16.sp)); it() })
 }

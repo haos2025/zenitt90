@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
+import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -21,14 +22,14 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
         }
         Spacer(Modifier.height(16.dp))
         when (val state = uiState) {
             is SeriesEpisodesUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
-            is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+            is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SeriesEpisodesUiState.Success -> {
                 val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
                 var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
@@ -60,14 +61,14 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) Color(0xFF6C63FF) else Color.White.copy(0.08f), focusedContainerColor = if (selected) Color(0xFF6C63FF) else Color.White.copy(0.18f))
+        colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)
     ) { Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun EpisodeRow(episodeNumber: Int?, title: String, onClick: () -> Unit) {
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(0.05f), focusedContainerColor = Color(0xFF6C63FF).copy(0.5f))
+        colors = ClickableSurfaceDefaults.colors(containerColor = ZenithFocusContainer, focusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.5f))
     ) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             episodeNumber?.let { Text("$it.", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }

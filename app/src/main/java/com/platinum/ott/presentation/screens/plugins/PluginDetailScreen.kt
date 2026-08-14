@@ -23,9 +23,9 @@ fun PluginDetailScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     val current = plugin
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF101010)).padding(32.dp)) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp)) {
         if (current == null) {
-            Text("Плагин не найден", color = Color(0xFFFF6B6B), modifier = Modifier.align(Alignment.Center))
+            Text("Плагин не найден", color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Center))
             return
         }
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -48,7 +48,7 @@ fun PluginDetailScreen(
                     Text(if (current.isEnabled) "Отключить" else "Включить")
                 }
                 OutlinedButton(onClick = { viewModel.uninstallPlugin(pluginId); onBackPressed() }) {
-                    Text("Удалить", color = Color(0xFFFF6B6B))
+                    Text("Удалить", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -59,7 +59,7 @@ fun PluginDetailScreen(
 @Composable
 private fun DetailRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
-        Text("$label: ", color = Color(0xFF6C63FF), style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(120.dp))
+        Text("$label: ", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(120.dp))
         Text(value, color = Color.White, style = MaterialTheme.typography.bodyLarge)
     }
 }

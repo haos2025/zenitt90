@@ -26,15 +26,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.detail.DetailUiState
 import com.platinum.ott.presentation.screens.detail.DetailViewModel
+import com.platinum.ott.ui.theme.*
 
 @Composable
 fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxSize().background(Color(0xFF101010)).verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(16.dp)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
-            is DetailUiState.Error -> Text("⚠ ${state.message}", color = Color(0xFFFF6B6B))
+            is DetailUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is DetailUiState.Success -> {
                 // Раньше здесь тоже не было ни одной картинки — только текст.
                 // hasRealBackdrop разделяет два принципиально разных случая:
@@ -67,17 +68,17 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                         model = request,
                         contentDescription = state.movie.title,
                         contentScale = if (hasRealBackdrop) ContentScale.Crop else ContentScale.Fit,
-                        placeholder = ColorPainter(Color(0xFF1C1C1C)),
-                        error = ColorPainter(Color(0xFF2A2A2A)),
+                        placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
+                        error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                         modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1C1C1C))
+                            .background(MaterialTheme.colorScheme.surface)
                     )
                     Spacer(Modifier.height(16.dp))
                 }
                 Text(state.movie.title, style = MaterialTheme.typography.headlineLarge, color = Color.White)
                 state.metadata?.let { m ->
                     m.genres?.let { Text(it, color = Color.Gray) }
-                    m.voteAverage?.let { Text("★ $it", color = Color(0xFFFFC107)) }
+                    m.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                     m.overview?.let { Text(it, color = Color.White.copy(0.8f), modifier = Modifier.padding(top = 8.dp)) }
                 }
                 Spacer(Modifier.height(16.dp))
