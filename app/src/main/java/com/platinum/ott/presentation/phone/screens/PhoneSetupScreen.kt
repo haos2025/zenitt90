@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.unit.sp
 import com.platinum.ott.presentation.screens.setup.SetupViewModel
 import com.platinum.ott.presentation.screens.setup.SetupUiState
@@ -36,21 +37,21 @@ fun PhoneSetupScreen(
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingL), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("ZENITH", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
             Text("Подключите источник", color = Color.White.copy(0.5f))
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingXL))
             TabRow(selectedTabIndex = selectedTab) { Tab(selectedTab == 0, onClick = { selectedTab = 0 }) { Text("M3U") }; Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Xtream") } }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingM))
             when (selectedTab) {
                 0 -> PhoneTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
                 1 -> { PhoneTextField(xtHost, { xtHost = it }, "Хост"); PhoneTextField(xtUser, { xtUser = it }, "Логин"); PhoneTextField(xtPass, { xtPass = it }, "Пароль", true) }
             }
             if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingM))
             Button(onClick = { if (uiState !is SetupUiState.Loading) when (selectedTab) { 0 -> viewModel.loginWithM3U(m3uUrl, onSetupComplete); 1 -> viewModel.loginWithXtream(xtHost, xtUser, xtPass, onSetupComplete) } }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться") }
-            Spacer(Modifier.height(24.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 TextButton(onClick = onFavoritesClick) { Text("Избранное") }
                 TextButton(onClick = onHistoryClick) { Text("История") }
                 TextButton(onClick = onSettingsClick) { Text("Настройки") }
@@ -60,5 +61,5 @@ fun PhoneSetupScreen(
 }
 
 @Composable private fun PhoneTextField(value: String, onChange: (String) -> Unit, placeholder: String, isPassword: Boolean = false) {
-    OutlinedTextField(value = value, onValueChange = onChange, placeholder = { Text(placeholder) }, singleLine = true, visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = RoundedCornerShape(12.dp))
+    OutlinedTextField(value = value, onValueChange = onChange, placeholder = { Text(placeholder) }, singleLine = true, visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = RoundedCornerShape(12.dp))
 }

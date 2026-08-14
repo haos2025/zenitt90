@@ -7,6 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
@@ -23,17 +24,17 @@ fun PluginDetailScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     val current = plugin
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp)) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingXL)) {
         if (current == null) {
             Text("Плагин не найден", color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Center))
             return
         }
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(current.name, style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onBackPressed) { Text("Назад") }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             DetailRow("ID", current.id)
             DetailRow("Версия", current.installedVersion)
             DetailRow("Тип", current.pluginType)
@@ -42,8 +43,8 @@ fun PluginDetailScreen(
             DetailRow("Источник", current.repoUrl.ifEmpty { "Локальный" })
             DetailRow("Статус", if (current.isEnabled) "Включён" else "Отключён")
 
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 Button(onClick = { viewModel.togglePlugin(pluginId, !current.isEnabled) }) {
                     Text(if (current.isEnabled) "Отключить" else "Включить")
                 }

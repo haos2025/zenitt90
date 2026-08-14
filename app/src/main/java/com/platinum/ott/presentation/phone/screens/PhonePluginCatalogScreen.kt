@@ -17,7 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -62,7 +62,7 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                     LaunchedEffect(state) { viewModel.resetInstallState() }
                 }
                 is PluginViewModel.InstallState.Failed -> {
-                    Text("⚠ ${state.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
+                    Text("⚠ ${state.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingSM))
                     LaunchedEffect(state) { viewModel.resetInstallState() }
                 }
                 else -> {}
@@ -84,13 +84,13 @@ private fun PhoneInstalledTab(plugins: List<PluginEntity>, navController: NavHos
         }
         return
     }
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
         items(plugins, key = { it.id }) { plugin ->
             Card(
                 onClick = { navController.navigate("plugin/${plugin.id}") },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                         Text("v${plugin.installedVersion} • ${plugin.pluginType}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
@@ -118,10 +118,10 @@ private fun PhoneCatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginV
                 Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = Color.Gray) }
                 return
             }
-            LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 items(uiState.catalog, key = { it.id }) { entry ->
                     Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)

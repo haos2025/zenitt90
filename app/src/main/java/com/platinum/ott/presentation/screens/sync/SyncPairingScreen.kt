@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,14 +41,14 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
         })
     }) { padding ->
         Column(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding).padding(24.dp),
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding).padding(ZenithDimens.paddingL),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 "Подключите ещё одно своё устройство, чтобы видеть одно и то же избранное и историю просмотра на обоих.",
                 color = Color.White.copy(0.8f)
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingSM))
             // Раньше единственным индикатором того, что синхронизация вообще
             // произошла, была мимолётная надпись "Готово!" сразу после
             // действия — уйдя с экрана, узнать статус было неоткуда, из-за
@@ -63,9 +64,9 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
             Spacer(Modifier.height(20.dp))
 
             Text("На новом устройстве", color = Color.White, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             Text("Введите код, показанный на уже настроенном устройстве:", color = Color.Gray)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             OutlinedTextField(
                 value = enteredCode,
                 onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) enteredCode = it },
@@ -73,7 +74,7 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             Button(onClick = { viewModel.redeemCode(enteredCode) }, enabled = enteredCode.length == 6) {
                 Text("Подключить")
             }
@@ -83,9 +84,9 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
             Spacer(Modifier.height(40.dp))
 
             Text("На уже настроенном устройстве", color = Color.White, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             Text("Покажите код здесь и введите его на новом устройстве:", color = Color.Gray)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingM))
 
             when (val state = uiState) {
                 is PairingUiState.CodeShown -> {
@@ -95,18 +96,18 @@ fun SyncPairingScreen(onBackPressed: () -> Unit, viewModel: SyncPairingViewModel
                         fontSize = 40.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
                     Text("Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}", color = Color.Gray)
                 }
                 is PairingUiState.Loading -> CircularProgressIndicator()
                 is PairingUiState.RedeemSuccess -> {
                     Text("Готово! Избранное и история перенесены.", color = ZenithSuccess)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
                     Button(onClick = { viewModel.syncNowManually() }) { Text("Синхронизировать сейчас") }
                 }
                 is PairingUiState.Error -> {
                     Text(state.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
                     Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
                 }
                 is PairingUiState.Idle -> Button(onClick = { viewModel.createCode() }) { Text("Показать код") }

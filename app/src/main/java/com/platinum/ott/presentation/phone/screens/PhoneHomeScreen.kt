@@ -17,7 +17,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -65,7 +65,7 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                 is HomeUiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ZenithDimens.paddingS))
                         Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") }
                     }
                 }
@@ -84,7 +84,7 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                             }
                     }
 
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)) {
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM), contentPadding = PaddingValues(top = ZenithDimens.paddingM, bottom = ZenithDimens.paddingM)) {
                         grouped.forEach { (genre, movies) ->
                             item(key = genre) {
                                 PhoneCatalogRow(title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") })
@@ -92,7 +92,7 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                         }
                         if (state.isLoadingMore) {
                             item(key = "loading_more") {
-                                Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator() }
+                                Box(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), Alignment.Center) { CircularProgressIndicator() }
                             }
                         }
                     }

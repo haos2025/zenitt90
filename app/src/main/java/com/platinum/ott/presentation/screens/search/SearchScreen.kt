@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,33 +34,33 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(ZenithDimens.paddingM))
             BasicTextField(
                 value = query,
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
                 textStyle = TextStyle(Color.White, 20.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(16.dp, 12.dp),
+                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                 decorationBox = { inner ->
                     if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(Color.White.copy(0.3f), 20.sp))
                     inner()
                 }
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingL))
         when (val state = uiState) {
             is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray)
-            is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
+            is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), Alignment.TopCenter) { CircularProgressIndicator() }
             is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SearchUiState.Success -> {
                 if (state.results.isEmpty()) {
                     Text("Ничего не нашлось по запросу «$query»", color = Color.Gray)
                 } else {
-                    LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                         items(state.results, key = { it.id }) { movie -> MovieCard(movie = movie, onClick = { onMovieClick(movie.id) }) }
                     }
                 }

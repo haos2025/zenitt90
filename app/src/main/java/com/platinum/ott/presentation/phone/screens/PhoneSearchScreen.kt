@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -45,14 +46,14 @@ fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
-                is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(16.dp))
-                is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
-                is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
+                is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), Alignment.TopCenter) { CircularProgressIndicator() }
+                is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingM))
                 is SearchUiState.Success -> {
                     if (state.results.isEmpty()) {
-                        Text("Ничего не нашлось по запросу «$query»", color = Color.Gray, modifier = Modifier.padding(16.dp))
+                        Text("Ничего не нашлось по запросу «$query»", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
                     } else {
-                        LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                             items(state.results, key = { it.id }) { movie -> MovieCard(movie = movie, onClick = { navController.navigate("detail/${movie.id}") }) }
                         }
                     }

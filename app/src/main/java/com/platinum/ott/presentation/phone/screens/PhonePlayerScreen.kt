@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -179,7 +180,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
                 Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                 Row {
                     Button(onClick = { navController.popBackStack() }) { Text("Назад") }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(ZenithDimens.paddingS))
                     Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") }
                 }
             }
@@ -244,12 +245,12 @@ private fun GestureIndicatorOverlay(indicator: GestureIndicator, modifier: Modif
         when (indicator) {
             is GestureIndicator.Brightness -> {
                 Icon(Icons.Default.BrightnessHigh, null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(ZenithDimens.paddingS))
                 Text("${(indicator.value * 100).roundToInt()}%", color = Color.White)
             }
             is GestureIndicator.Volume -> {
                 Icon(Icons.Default.VolumeUp, null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(ZenithDimens.paddingS))
                 Text("${(indicator.value * 100).roundToInt()}%", color = Color.White)
             }
             is GestureIndicator.Seek -> {

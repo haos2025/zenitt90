@@ -21,7 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.settings.SettingsViewModel
@@ -33,14 +33,14 @@ import com.platinum.ott.presentation.components.MovieCard
 fun PhoneSettingsScreen(navController: NavHostController, viewModel: SettingsViewModel = hiltViewModel()) {
 
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    Column(Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(16.dp).verticalScroll(rememberScrollState())) {
+    Column(Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM).verticalScroll(rememberScrollState())) {
         Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         Card(
             onClick = { navController.navigate("plugins") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
         ) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Плагины", style = MaterialTheme.typography.titleMedium)
                 Text("Каталог и управление плагинами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
@@ -51,9 +51,9 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         val isConnected = remember { viewModel.isConnected() }
         Card(
             onClick = { navController.navigate(if (isConnected) "sync_pairing" else "setup") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
         ) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Аккаунт", style = MaterialTheme.typography.titleMedium)
                 Text(if (isConnected) "Источник подключён · синхронизация между устройствами" else "Источник не подключён · нажмите, чтобы подключить", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
@@ -69,9 +69,9 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // развязка, просто перенесённая на телефон.
         Card(
             onClick = { navController.navigate("sync_pairing") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
         ) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Синхронизация устройств", style = MaterialTheme.typography.titleMedium)
                 Text("Перенести избранное и историю на другое устройство", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
@@ -84,10 +84,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // в коде нет ни понятия "следующая серия", ни обработки субтитровых
         // дорожек вообще, это была бы иллюзия настройки без реальной фичи
         // за ней — сознательно оставлено на будущее, не выдумывается здесь.
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Column(Modifier.padding(16.dp)) {
+        Card(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Воспроизведение", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingSM))
                 val context = LocalContext.current
                 val qualityPrefs = remember { QualityPreferences(context) }
                 val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
@@ -107,10 +107,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // назад, просто эта правка никогда не переносилась на телефон.
         // "Новый контент" сюда намеренно не включён — см. комментарий в
         // TV SettingsScreen.kt: в бэкенде нет поля "добавлено в каталог".
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Column(Modifier.padding(16.dp)) {
+        Card(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Уведомления", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingSM))
                 val context = LocalContext.current
                 val notifPrefs = remember { com.platinum.ott.core.NotificationPreferences(context) }
                 var newEpisodesEnabled by remember { mutableStateOf(notifPrefs.isNewEpisodesEnabled()) }
@@ -118,9 +118,9 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     Text("Новые серии (избранные сериалы)", color = Color.White, modifier = Modifier.weight(1f))
                     Switch(checked = newEpisodesEnabled, onCheckedChange = { newEpisodesEnabled = it; notifPrefs.setNewEpisodesEnabled(it) })
                 }
-                Text("Новый контент", color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                Text("Новый контент", color = Color.Gray, modifier = Modifier.padding(top = ZenithDimens.paddingS))
                 Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingS))
                 var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
                 var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
                 var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
@@ -132,7 +132,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("$quietStart:00–$quietEnd:00", color = Color.Gray, modifier = Modifier.weight(1f))
                         OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
                         OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
                     }
                 }
@@ -140,10 +140,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         }
         // Раньше раздела "Сеть" на телефоне не было вообще ни в каком
         // виде — ни рабочего, ни даже карточки-заглушки. На TV уже есть.
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Column(Modifier.padding(16.dp)) {
+        Card(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Сеть", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingSM))
                 val context = LocalContext.current
                 val networkPrefs = remember { com.platinum.ott.core.NetworkPreferences(context) }
                 val qualityPrefsNet = remember { QualityPreferences(context) }
@@ -158,7 +158,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                         viewModel.applyNetworkTimeoutChange()
                     }) { Text("$timeoutSeconds сек") }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingS))
                 val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
                 var maxMobileQuality by remember { mutableStateOf(qualityPrefsNet.getMaxQualityOnMobile()) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -178,16 +178,16 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // языковой переключатель потребовал бы вынести весь текст
         // интерфейса в string-ресурсы (сейчас 0 использований stringResource
         // во всём проекте) — отдельная большая задача, не в этом заходе.
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Column(Modifier.padding(16.dp)) {
+        Card(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Интерфейс", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingSM))
                 val darkTheme by viewModel.darkThemeFlow.collectAsState()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Тёмная тема", color = Color.White, modifier = Modifier.weight(1f))
                     Switch(checked = darkTheme, onCheckedChange = { viewModel.setDarkTheme(it) })
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingS))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Язык", color = Color.Gray, modifier = Modifier.weight(1f))
                     Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)

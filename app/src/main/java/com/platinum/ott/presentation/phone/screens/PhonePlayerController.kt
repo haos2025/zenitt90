@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.screens.player.PlaybackMenuTab
 import com.platinum.ott.presentation.screens.player.TrackOption
@@ -68,12 +69,12 @@ fun PhonePlayerController(
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.35f).align(Alignment.BottomCenter)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.85f)))))
 
-            Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
                 Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             }
 
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM)) {
                 var sliderPosition by remember(currentPositionMs) { mutableStateOf(currentPositionMs.toFloat()) }
                 Slider(
                     value = sliderPosition,
@@ -88,11 +89,11 @@ fun PhonePlayerController(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onSeekBackward) { Icon(Icons.Default.Replay10, "-10с", tint = Color.White) }
-                    Spacer(Modifier.width(24.dp))
+                    Spacer(Modifier.width(ZenithDimens.paddingL))
                     IconButton(onClick = onTogglePlay, modifier = Modifier.size(56.dp)) {
                         Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, if (isPlaying) "Пауза" else "Play", tint = Color.White, modifier = Modifier.size(40.dp))
                     }
-                    Spacer(Modifier.width(24.dp))
+                    Spacer(Modifier.width(ZenithDimens.paddingL))
                     IconButton(onClick = onSeekForward) { Icon(Icons.Default.Forward10, "+10с", tint = Color.White) }
                 }
                 // Раньше субтитры/скорость/качество/fullscreen были в правом
@@ -125,7 +126,7 @@ fun PhonePlayerController(
             }
         }
         PlaybackMenuTab.AUDIO -> PlaybackOptionDialog("Аудиодорожка", onDismiss = { menuTab = null }) {
-            if (audioTracks.isEmpty()) Text("Только одна дорожка", color = Color.Gray, modifier = Modifier.padding(12.dp))
+            if (audioTracks.isEmpty()) Text("Только одна дорожка", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingSM))
             audioTracks.forEach { t -> DialogRow((if (t.isSelected) "✓ " else "") + t.label) { onSelectAudio(t); menuTab = null } }
         }
         PlaybackMenuTab.SUBTITLES -> {
@@ -133,8 +134,8 @@ fun PhonePlayerController(
             PlaybackOptionDialog("Субтитры", onDismiss = { menuTab = null }) {
                 DialogRow((if (!subtitlesEnabled) "✓ " else "") + "Выключены") { onDisableSubtitles(); menuTab = null }
                 subtitleTracks.forEach { t -> DialogRow((if (subtitlesEnabled && t.isSelected) "✓ " else "") + t.label) { onSelectSubtitle(t); menuTab = null } }
-                if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
-                Spacer(Modifier.height(8.dp))
+                if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = Color.Gray, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
+                Spacer(Modifier.height(ZenithDimens.paddingS))
                 // Внешние SRT по ссылке — раньше субтитры могли быть только
                 // встроенные в сам поток.
                 OutlinedTextField(value = externalUrl, onValueChange = { externalUrl = it }, label = { Text("Ссылка на .srt") }, singleLine = true, modifier = Modifier.fillMaxWidth())

@@ -18,6 +18,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.platinum.ott.ui.theme.*
+import com.platinum.ott.core.platform.ZenithDimens
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -41,15 +42,15 @@ fun SetupScreen(
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(modifier = Modifier.align(Alignment.TopEnd).padding(24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingL), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             OutlinedButton(onClick = onFavoritesClick) { Text("Избранное") }
             OutlinedButton(onClick = onHistoryClick) { Text("История") }
             OutlinedButton(onClick = onSettingsClick) { Text("Настройки") }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.align(Alignment.Center).width(520.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL), modifier = Modifier.align(Alignment.Center).width(520.dp)) {
             Text("ZENITH", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary)
             Text("Подключите источник контента", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.5f))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 TabButton("M3U Плейлист", selectedTab == 0) { selectedTab = 0 }; TabButton("Xtream Codes", selectedTab == 1) { selectedTab = 1 }
             }
             when (selectedTab) {

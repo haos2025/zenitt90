@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
@@ -31,18 +32,18 @@ fun PluginCatalogScreen(
 
     LaunchedEffect(Unit) { viewModel.loadCatalog() }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingXL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Плагины", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, onFocus = {}) { Text("Установленные") }
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, onFocus = {}) { Text("Каталог") }
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, onFocus = {}) { Text("Обновления") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         when (selectedTab) {
             0 -> InstalledTab(installed, onPluginClick, viewModel)
             1 -> CatalogTab(uiState, viewModel)
@@ -62,8 +63,8 @@ private fun InstalledTab(plugins: List<PluginEntity>, onPluginClick: (String) ->
     }
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)
     ) {
         items(plugins, key = { it.id }) { plugin ->
             PluginCard(plugin, onClick = { onPluginClick(plugin.id) }, onToggle = { viewModel.togglePlugin(plugin.id, it) })
@@ -84,8 +85,8 @@ private fun CatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
             }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)
             ) {
                 items(uiState.catalog, key = { it.id }) { entry ->
                     CatalogPluginCard(entry, onInstall = { viewModel.installFromCatalog(entry) })
@@ -106,10 +107,10 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
                 Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Все плагины актуальны ✓", color = ZenithSuccess) }
                 return
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 uiState.updates.forEach { (installed, catalog) ->
                     Card(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(installed.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("${installed.installedVersion} → ${catalog.version}", color = Color.Gray)
@@ -127,7 +128,7 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
 @Composable
 private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boolean) -> Unit) {
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().height(120.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.padding(ZenithDimens.paddingSM), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
@@ -142,7 +143,7 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
 @Composable
 private fun CatalogPluginCard(entry: PluginRepository.CatalogEntry, onInstall: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth().height(140.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.padding(ZenithDimens.paddingSM), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)

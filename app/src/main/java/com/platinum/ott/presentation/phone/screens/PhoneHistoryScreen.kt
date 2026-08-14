@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
@@ -37,13 +38,13 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
         items(history, key = { it.contentId }) { entry ->
             val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
             Card(
                 onClick = { navController.navigate("detail/${entry.contentId}") },
                 modifier = Modifier.fillMaxWidth()
-            ) { Row(Modifier.padding(12.dp)) {
+            ) { Row(Modifier.padding(ZenithDimens.paddingSM)) {
                 // Раньше здесь не было картинки вообще — только текст, хотя
                 // entry.poster уже приходит из WatchHistoryEntity. На TV этот
                 // же список рендерится через MovieCard и постер есть, здесь
@@ -63,7 +64,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(ZenithDimens.paddingSM))
                 Column(Modifier.weight(1f)) {
                 Text(entry.title, color = Color.White)
                 // Раньше здесь был только прогресс-бар без текста — на ТВ

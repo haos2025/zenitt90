@@ -15,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import com.platinum.ott.ui.theme.*
+import com.platinum.ott.core.platform.ZenithDimens
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -22,13 +23,13 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         when (val state = uiState) {
-            is SeriesEpisodesUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), Alignment.TopCenter) { CircularProgressIndicator() }
+            is SeriesEpisodesUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), Alignment.TopCenter) { CircularProgressIndicator() }
             is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SeriesEpisodesUiState.Success -> {
                 val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
@@ -38,17 +39,17 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                     Text(state.episodes.firstOrNull()?.seriesTitle ?: "Сериал", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { viewModel.toggleFavorite() }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(ZenithDimens.paddingM))
                 if (seasons.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                         seasons.forEach { season ->
                             SeasonTab("Сезон $season", season == selectedSeason) { selectedSeason = season }
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(ZenithDimens.paddingM))
                 }
                 val episodesInSeason = state.episodes.filter { selectedSeason == null || it.seasonNumber == selectedSeason }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     items(episodesInSeason, key = { it.id }) { ep ->
                         EpisodeRow(ep.episodeNumber, ep.title, onClick = { onEpisodeClick(ep.id) })
                     }
@@ -62,7 +63,7 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
 private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)
-    ) { Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White) }
+    ) { Text(label, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), color = Color.White) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
@@ -70,8 +71,8 @@ private fun EpisodeRow(episodeNumber: Int?, title: String, onClick: () -> Unit) 
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = ZenithFocusContainer, focusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.5f))
     ) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            episodeNumber?.let { Text("$it.", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+        Row(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
+            episodeNumber?.let { Text("$it.", color = Color.Gray, modifier = Modifier.padding(end = ZenithDimens.paddingSM)) }
             Text(title, color = Color.White)
         }
     }

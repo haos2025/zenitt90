@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import com.platinum.ott.presentation.components.MovieCard
@@ -19,18 +19,18 @@ fun FavoritesScreen(onBackPressed: () -> Unit, onItemClick: (com.platinum.ott.da
     val favorites by viewModel.favorites.collectAsState(initial = emptyList())
     val folders by viewModel.folders.collectAsState(initial = emptyList())
     var selectedType by remember { mutableStateOf<String?>(null) }
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
         Text("Избранное", style = MaterialTheme.typography.displaySmall, color = Color.White)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(ZenithDimens.paddingS))
+        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             FilterChip(selectedType == null, onClick = { selectedType = null }) { Text("Все") }
             listOf("MOVIE", "SERIES", "ANIME").forEach { type ->
                 FilterChip(selectedType == type, onClick = { selectedType = if (selectedType == type) null else type }) { Text(type) }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         val filtered = if (selectedType == null) favorites else favorites.filter { it.contentType == selectedType }
-        LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
             items(filtered, key = { it.contentId }) { fav -> MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) }) }
         }
     }

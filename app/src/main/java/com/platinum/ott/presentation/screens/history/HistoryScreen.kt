@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
@@ -24,14 +25,14 @@ import coil.request.ImageRequest
 @Composable
 fun HistoryScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, viewModel: HistoryViewModel = hiltViewModel()) {
     val history by viewModel.history.collectAsState(initial = emptyList())
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp, bottom = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
         Text("История просмотров", style = MaterialTheme.typography.displaySmall, color = Color.White)
-        Spacer(Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(ZenithDimens.paddingM))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             items(history, key = { it.contentId }) { entry ->
                 val progress = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
                 Surface(onClick = { onMovieClick(entry.contentId) }, modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp)) {
+                    Row(Modifier.padding(ZenithDimens.paddingSM)) {
                         // Раньше здесь стоял MovieCard — тот же полноразмерный
                         // компонент, что и в сетке каталога (180×270dp по
                         // ZenithDimens на Expanded/TV). В сетке карточки такого
@@ -56,11 +57,11 @@ fun HistoryScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, vie
                             error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                             modifier = Modifier.width(96.dp).height(144.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surface)
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(ZenithDimens.paddingSM))
                         Column(Modifier.weight(1f)) {
                             Text(entry.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
                             Text(if (entry.completed) "Просмотрено" else "Прогресс: ${(progress * 100).toInt()}%", color = Color.Gray)
-                            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS))
                         }
                     }
                 }

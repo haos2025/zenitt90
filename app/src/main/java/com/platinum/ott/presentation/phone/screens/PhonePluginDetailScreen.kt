@@ -9,7 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -43,12 +43,12 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
             return@Scaffold
         }
         Column(
-            Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM),
+            verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)
         ) {
             Text(current.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
             Text("v${current.installedVersion}", color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ZenithDimens.paddingS))
 
             DetailItem("ID", current.id)
             DetailItem("Тип", current.pluginType)
@@ -57,8 +57,8 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
             DetailItem("Источник", current.repoUrl.ifEmpty { "Локальный" })
             DetailItem("Статус", if (current.isEnabled) "Включён ✓" else "Отключён")
 
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 Button(
                     onClick = { viewModel.togglePlugin(pluginId, !current.isEnabled) },
                     modifier = Modifier.weight(1f)

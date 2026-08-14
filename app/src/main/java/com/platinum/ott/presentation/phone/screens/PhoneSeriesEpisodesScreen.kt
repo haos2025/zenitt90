@@ -14,13 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesUiState
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesViewModel
 import com.platinum.ott.ui.theme.*
+import com.platinum.ott.core.platform.ZenithDimens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,8 +42,8 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
-                is SeriesEpisodesUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.TopCenter).padding(top = 32.dp))
-                is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
+                is SeriesEpisodesUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.TopCenter).padding(top = ZenithDimens.paddingXL))
+                is SeriesEpisodesUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingM))
                 is SeriesEpisodesUiState.Success -> {
                     val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
                     var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
@@ -56,12 +56,12 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                             }
                         }
                         val episodesInSeason = state.episodes.filter { selectedSeason == null || it.seasonNumber == selectedSeason }
-                        LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                             items(episodesInSeason, key = { it.id }) { ep ->
                                 Card(onClick = { navController.navigate("player/${ep.id}") }, modifier = Modifier.fillMaxWidth()) {
-                                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(Modifier.width(12.dp))
+                                        Spacer(Modifier.width(ZenithDimens.paddingSM))
                                         Column(Modifier.weight(1f)) {
                                             ep.episodeNumber?.let { Text("Эпизод $it", style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
                                             Text(ep.title)

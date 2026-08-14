@@ -27,15 +27,15 @@ import com.platinum.ott.data.repository.SeriesSummary
 @Composable
 fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = 56.dp, top = 56.dp, end = 56.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(ZenithDimens.paddingM))
             Text("Сериалы", style = MaterialTheme.typography.displaySmall, color = Color.White)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(ZenithDimens.paddingL))
         when (val state = uiState) {
-            is SeriesListUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = 32.dp), androidx.compose.ui.Alignment.TopCenter) { CircularProgressIndicator() }
+            is SeriesListUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), androidx.compose.ui.Alignment.TopCenter) { CircularProgressIndicator() }
             is SeriesListUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SeriesListUiState.Success -> {
                 if (state.series.isEmpty()) {
@@ -44,7 +44,7 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
                     // баг, у backend-контента нет понятия "сериал".
                     Text("Сериалов не найдено. Раздел заполняется из Xtream (get_series) и M3U (по названиям вида S01E02).", color = Color.Gray)
                 } else {
-                    LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                         items(state.series, key = { it.seriesId }) { s -> SeriesCard(s, onClick = { onSeriesClick(s.seriesId) }) }
                     }
                 }
@@ -73,7 +73,7 @@ private fun SeriesCard(series: SeriesSummary, onClick: () -> Unit) {
     ) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(model = request, contentDescription = series.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), placeholder = ColorPainter(MaterialTheme.colorScheme.surface), error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant))
-            Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(8.dp)) {
+            Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(ZenithDimens.paddingS)) {
                 Column {
                     Text(series.title, color = Color.White, maxLines = 1)
                     Text("${series.episodeCount} эп.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)

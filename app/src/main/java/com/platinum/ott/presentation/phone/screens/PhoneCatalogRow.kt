@@ -8,7 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.presentation.components.MovieCard
 
@@ -28,12 +28,12 @@ fun PhoneCatalogRow(title: String, movies: List<Movie>, onMovieClick: (String) -
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = Color.White,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(horizontal = ZenithDimens.paddingM),
+            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
         ) {
             items(movies, key = { it.id }) { movie ->
                 MovieCard(movie = movie, onClick = { onMovieClick(movie.id) })
