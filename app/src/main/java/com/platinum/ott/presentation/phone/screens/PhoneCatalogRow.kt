@@ -37,7 +37,10 @@ fun PhoneCatalogRow(
     onResolvePoster: (Movie, Int) -> Unit = { _, _ -> }
 ) {
     val density = LocalDensity.current
-    val posterWidthPx = remember(density) { with(density) { ZenithDimens.cardWidth.roundToPx() } }
+    // Тот же фикс, что и в CatalogRow.kt (TV): ZenithDimens.cardWidth —
+    // @Composable get(), нельзя читать внутри лямбды remember{}.
+    val cardWidth = ZenithDimens.cardWidth
+    val posterWidthPx = remember(density, cardWidth) { with(density) { cardWidth.roundToPx() } }
 
     Column(modifier = modifier) {
         Text(

@@ -34,7 +34,12 @@ fun CatalogRow(
     onResolvePoster: (Movie, Int) -> Unit = { _, _ -> }
 ) {
     val density = LocalDensity.current
-    val posterWidthPx = remember(density) { with(density) { ZenithDimens.cardWidth.roundToPx() } }
+    // ZenithDimens.cardWidth — @Composable get() (адаптивен по WindowSize,
+    // см. Platform.kt), его нельзя читать внутри лямбды remember{} (та не
+    // @Composable-контекст, "invocations can only happen from..." на CI) —
+    // читаем здесь, в теле composable-функции, а не внутри remember.
+    val cardWidth = ZenithDimens.cardWidth
+    val posterWidthPx = remember(density, cardWidth) { with(density) { cardWidth.roundToPx() } }
 
     Column(modifier = modifier) {
         Text(

@@ -25,7 +25,12 @@ class CompanionHttpServer(
 ) : NanoHTTPD(port) {
 
     fun startServer(): Int {
-        start(SOCKET_READY_TIMEOUT_MILLIS, false)
+        // SOCKET_READY_TIMEOUT_MILLIS не существует в NanoHTTPD 2.3.1 (CI:
+        // "Unresolved reference") — судя по всему, это название из другой
+        // версии/форка библиотеки. Литеральные 5000мс — то же значение,
+        // что и у самого распространённого дефолта в примерах NanoHTTPD,
+        // без завязки на constant, которого в этой версии нет.
+        start(5000, false)
         return listeningPort
     }
 
