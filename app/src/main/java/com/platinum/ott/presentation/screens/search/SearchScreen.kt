@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.core.companion.CompanionHttpServer
+import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
 import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.screens.qr.QrScanScreen
 
 // Раньше поиск существовал только снаружи приложения (системный поиск TV
 // через MovieSearchProvider) — внутри самого приложения зайти в поиск
@@ -33,6 +36,41 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
+
+    // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md),
+    // применение 2 — та же инфраструктура, что и внешние субтитры в
+    // PlayerScreen.kt (CompanionHttpServer/QrScanScreen), эндпоинт "/search"
+    // вместо "/subtitle". Набирать поисковый запрос пультом неудобно
+    // посимвольно — телефонная клавиатура быстрее.
+    var showCompanionQr by remember { mutableStateOf(false) }
+    var companionAddress by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(showCompanionQr) {
+        var server: CompanionHttpServer? = null
+        if (showCompanionQr) {
+            server = CompanionHttpServer(endpointPath = "/search") { text ->
+                // Как и в PlayerScreen.kt: обработчик NanoHTTPD вызывается
+                // не в главном потоке — onQueryChange трогает StateFlow,
+                // технически можно и не из Main, но showCompanionQr — это
+                // Compose state, запись в него обязана уйти на главный поток.
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    viewModel.onQueryChange(text)
+                    showCompanionQr = false
+                }
+            }
+            val port = server.startServer()
+            val ip = LocalNetworkUtils.getLocalIpAddress()
+            companionAddress = if (ip != null) "http://$ip:$port#search" else null
+        } else {
+            companionAddress = null
+        }
+        onDispose { server?.stop() }
+    }
+    // Без этого системная "Назад" на пульте закрыла бы весь экран поиска
+    // прямо через открытый QR-оверлей, а не сам оверлей — тот же принцип,
+    // что и обработка Key.Back в PlayerScreen.kt, только здесь через
+    // BackHandler, а не onKeyEvent (в SearchScreen своего перехвата клавиш
+    // раньше не было вообще).
+    androidx.activity.compose.BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -50,6 +88,8 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
                     inner()
                 }
             )
+            Spacer(Modifier.width(ZenithDimens.paddingM))
+            OutlinedButton(onClick = { showCompanionQr = true }) { Text("По QR с телефона") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
         when (val state = uiState) {
@@ -66,5 +106,13 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
                 }
             }
         }
+    }
+
+    if (showCompanionQr) {
+        QrScanScreen(
+            content = companionAddress,
+            onDismiss = { showCompanionQr = false },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

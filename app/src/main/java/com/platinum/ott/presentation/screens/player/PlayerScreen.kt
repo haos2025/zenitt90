@@ -56,7 +56,7 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
     DisposableEffect(showCompanionQr) {
         var server: CompanionHttpServer? = null
         if (showCompanionQr) {
-            server = CompanionHttpServer { url ->
+            server = CompanionHttpServer(endpointPath = "/subtitle") { url ->
                 // NanoHTTPD обрабатывает запрос в своём собственном потоке —
                 // viewModel.loadExternalSubtitle() и запись в Compose-state
                 // (showCompanionQr) должны уйти на главный поток явно.
@@ -67,7 +67,10 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
             }
             val port = server.startServer()
             val ip = LocalNetworkUtils.getLocalIpAddress()
-            companionAddress = if (ip != null) "http://$ip:$port" else null
+            // "#subtitle" — подсказка телефону, какой экран показать после
+            // сканирования (см. PhoneQrScanScreen.kt: разбирает суффикс
+            // после "#", чтобы не заводить для этого отдельный QR-формат/JSON).
+            companionAddress = if (ip != null) "http://$ip:$port#subtitle" else null
         } else {
             companionAddress = null
         }
