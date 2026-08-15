@@ -15,7 +15,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
+import com.platinum.ott.core.companion.CompanionHttpServer
+import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import androidx.tv.material3.*
 import kotlinx.coroutines.delay
 
@@ -43,6 +46,33 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
     var lastInteraction by remember { mutableStateOf(0L) }
     var currentPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
+
+    // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) —
+    // сервер живёт ровно пока открыт этот оверлей, не дольше: DisposableEffect
+    // на showCompanionQr стартует его при открытии и гарантированно
+    // останавливает при закрытии (отменой, получением URL или уходом с экрана).
+    var showCompanionQr by remember { mutableStateOf(false) }
+    var companionAddress by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(showCompanionQr) {
+        var server: CompanionHttpServer? = null
+        if (showCompanionQr) {
+            server = CompanionHttpServer { url ->
+                // NanoHTTPD обрабатывает запрос в своём собственном потоке —
+                // viewModel.loadExternalSubtitle() и запись в Compose-state
+                // (showCompanionQr) должны уйти на главный поток явно.
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    viewModel.loadExternalSubtitle(url)
+                    showCompanionQr = false
+                }
+            }
+            val port = server.startServer()
+            val ip = LocalNetworkUtils.getLocalIpAddress()
+            companionAddress = if (ip != null) "http://$ip:$port" else null
+        } else {
+            companionAddress = null
+        }
+        onDispose { server?.stop() }
+    }
 
     val readyState = uiState as? PlayerUiState.Ready
 
@@ -73,6 +103,13 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val ready = uiState as? PlayerUiState.Ready ?: return@onKeyEvent false
+
+                if (showCompanionQr) {
+                    return@onKeyEvent when (event.key) {
+                        Key.Back -> { showCompanionQr = false; true }
+                        else -> false
+                    }
+                }
 
                 if (ready.showPlaybackMenu) {
                     return@onKeyEvent when (event.key) {
@@ -158,9 +195,17 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                         subtitlesEnabled = state.subtitlesEnabled,
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
                         onDisableSubtitles = { viewModel.disableSubtitles() },
+                        onScanSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
                         playbackSpeed = state.playbackSpeed,
                         onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
                         onDismiss = { viewModel.dismissPlaybackMenu() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                if (showCompanionQr) {
+                    QrScanScreen(
+                        content = companionAddress,
+                        onDismiss = { showCompanionQr = false },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

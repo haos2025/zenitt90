@@ -76,6 +76,20 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 Text("Перенести избранное и историю на другое устройство", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
+        // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) — не
+        // то же самое, что "Синхронизация устройств" выше: тот канал через
+        // zenith-backend по 6-значному коду (SyncPairingViewModel), этот —
+        // напрямую по локальной сети, без бэкенда (см. QrScanScreen.kt на TV).
+        // Отдельная карточка, чтобы не путать два разных механизма.
+        Card(
+            onClick = { navController.navigate("qr_scan") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
+        ) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
+                Text("Телефон-компаньон", style = MaterialTheme.typography.titleMedium)
+                Text("Отсканировать QR с TV — например, чтобы отправить ссылку на субтитры", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         // Раньше это была карточка-заглушка из общего списка без единого
         // обработчика нажатия. "Качество по умолчанию" — единственная
         // реально существующая часть "Воспроизведения": QualityPreferences

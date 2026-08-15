@@ -26,6 +26,8 @@ ktlint = "12.1.2"
 # П3: QR
 zxingCore = "3.5.4"
 zxingEmbedded = "4.3.0"
+# ROADMAP.md п.6: телефон-компаньон — лёгкий локальный HTTP-сервер на TV
+nanohttpd = "2.3.1"
 # П4: Sync
 workManager = "2.9.1"
 # П5: TMDB (retrofit reuse)
@@ -82,6 +84,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 # П3
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
 zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingEmbedded" }
+nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
 # П4, П6, П7
 work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 # П11

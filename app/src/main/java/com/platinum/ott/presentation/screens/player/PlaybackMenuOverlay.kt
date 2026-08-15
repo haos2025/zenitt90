@@ -34,6 +34,7 @@ fun PlaybackMenuOverlay(
     subtitlesEnabled: Boolean,
     onSelectSubtitle: (TrackOption) -> Unit,
     onDisableSubtitles: () -> Unit,
+    onScanSubtitleQr: () -> Unit,
     playbackSpeed: Float,
     onSelectSpeed: (Float) -> Unit,
     onDismiss: () -> Unit,
@@ -69,6 +70,9 @@ fun PlaybackMenuOverlay(
                         item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
                         if (subtitleTracks.isEmpty()) item { Text("В потоке нет встроенных субтитров", color = Color.White.copy(0.5f), modifier = Modifier.padding(ZenithDimens.paddingM)) }
+                        // Телефон-компаньон (ROADMAP.md п.6) — внешние SRT по
+                        // ссылке через QR, когда набирать URL пультом неудобно.
+                        item { MenuRow("По QR с телефона", null, false) { onScanSubtitleQr() } }
                     }
                     PlaybackMenuTab.SPEED -> items(speedOptions) { s ->
                         MenuRow((if (s == 1f) "Обычная" else "${s}x"), null, s == playbackSpeed) { onSelectSpeed(s) }
