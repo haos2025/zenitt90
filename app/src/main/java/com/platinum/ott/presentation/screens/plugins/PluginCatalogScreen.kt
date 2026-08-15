@@ -5,11 +5,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,6 +32,7 @@ fun PluginCatalogScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle()
+    val installState by viewModel.installState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.loadCatalog() }
@@ -44,10 +49,59 @@ fun PluginCatalogScreen(
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, onFocus = {}) { Text("Обновления") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingM))
+        // Раньше в приложении не было НИ ОДНОГО поля для ручного ввода URL
+        // плагина — только каталог (fetchCatalog(), который по умолчанию
+        // упирается в несуществующий домен-заглушку, см.
+        // PluginRepository.DEFAULT_CATALOG) и installFromCatalog(). Сам
+        // installFromUrl() в PluginViewModel уже был готов и рабочий,
+        // просто ничто в UI его не вызывало. Поле — на уровне всего
+        // экрана (не только вкладки "Каталог"), потому что это не часть
+        // каталога, а независимый способ установки.
+        InstallFromUrlRow(installState, onInstall = viewModel::installFromUrl, onReset = viewModel::resetInstallState)
+        Spacer(Modifier.height(ZenithDimens.paddingM))
         when (selectedTab) {
             0 -> InstalledTab(installed, onPluginClick, viewModel)
             1 -> CatalogTab(uiState, viewModel)
             2 -> UpdatesTab(uiState, viewModel)
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun InstallFromUrlRow(installState: PluginViewModel.InstallState, onInstall: (String) -> Unit, onReset: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    val installing = installState is PluginViewModel.InstallState.Installing
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = url,
+                onValueChange = { url = it },
+                singleLine = true,
+                enabled = !installing,
+                textStyle = TextStyle(Color.White, 16.sp),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                decorationBox = { inner ->
+                    if (url.isEmpty()) Text("Ссылка на плагин (URL .js)…", style = TextStyle(Color.White.copy(0.3f), 16.sp))
+                    inner()
+                }
+            )
+            Spacer(Modifier.width(ZenithDimens.paddingS))
+            Button(enabled = url.isNotBlank() && !installing, onClick = { onInstall(url.trim()) }) {
+                Text(if (installing) "Установка…" else "Установить по URL")
+            }
+        }
+        when (val state = installState) {
+            is PluginViewModel.InstallState.Done -> {
+                Text("✓ Установлен: ${state.manifest.name}", color = ZenithSuccess, modifier = Modifier.padding(top = ZenithDimens.paddingS))
+                LaunchedEffect(state) { url = ""; onReset() }
+            }
+            is PluginViewModel.InstallState.Failed -> {
+                Text("⚠ ${state.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = ZenithDimens.paddingS))
+                LaunchedEffect(state) { onReset() }
+            }
+            else -> {}
         }
     }
 }

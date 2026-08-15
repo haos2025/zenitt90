@@ -55,6 +55,15 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                 Tab(selectedTab == 1, onClick = { selectedTab = 1 }) { Text("Каталог") }
             }
 
+            // Раньше в приложении не было НИ ОДНОГО поля для ручного ввода
+            // URL плагина (installFromUrl() в PluginViewModel уже был
+            // готов и рабочий, просто ничто в UI его не вызывало) — только
+            // каталог, который по умолчанию упирается в несуществующий
+            // домен-заглушку (PluginRepository.DEFAULT_CATALOG). Поле — над
+            // вкладками, а не внутри "Каталога": это независимый способ
+            // установки, не часть каталога.
+            PhoneInstallFromUrlRow(installState, onInstall = viewModel::installFromUrl, onReset = viewModel::resetInstallState)
+
             // Install status
             when (val state = installState) {
                 is PluginViewModel.InstallState.Installing -> LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -73,6 +82,32 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
                 1 -> PhoneCatalogTab(uiState, viewModel)
             }
         }
+    }
+}
+
+@Composable
+private fun PhoneInstallFromUrlRow(installState: PluginViewModel.InstallState, onInstall: (String) -> Unit, onReset: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    val installing = installState is PluginViewModel.InstallState.Installing
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(ZenithDimens.paddingSM),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = url, onValueChange = { url = it },
+            label = { Text("Ссылка на плагин (URL .js)") }, singleLine = true,
+            enabled = !installing,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(ZenithDimens.paddingS))
+        Button(enabled = url.isNotBlank() && !installing, onClick = { onInstall(url.trim()); }) {
+            Text(if (installing) "…" else "Уст.")
+        }
+    }
+    // Поле очищается только по успешной установке — после ошибки текст
+    // остаётся, чтобы не перепечатывать длинный URL заново.
+    LaunchedEffect(installState) {
+        if (installState is PluginViewModel.InstallState.Done) url = ""
     }
 }
 
