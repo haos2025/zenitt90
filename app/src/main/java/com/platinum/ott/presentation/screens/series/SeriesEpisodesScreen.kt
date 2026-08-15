@@ -35,9 +35,16 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                 val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
                 var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+                val isAnime by viewModel.isAnime.collectAsStateWithLifecycle()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(state.episodes.firstOrNull()?.seriesTitle ?: "Сериал", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { viewModel.toggleFavorite() }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
+                    // Как и в DetailScreen.kt: помечать аниме можно только уже
+                    // добавленный в избранное сериал.
+                    if (isFavorite) {
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
+                        OutlinedButton(onClick = { viewModel.setAnime(!isAnime) }) { Text(if (isAnime) "✓ Аниме" else "Пометить как аниме") }
+                    }
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 if (seasons.size > 1) {

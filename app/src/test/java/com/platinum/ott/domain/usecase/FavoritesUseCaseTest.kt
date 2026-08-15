@@ -58,13 +58,38 @@ class FavoritesUseCaseTest {
     }
 
     @Test
-    fun `createFolder and deleteFolder are direct pass-through to dao`() = runTest {
+    fun `createFolder is a direct pass-through to dao`() = runTest {
         val folder = FolderEntity(name = "Ужасы")
 
         useCase.createFolder(folder)
         coVerify(exactly = 1) { dao.insertFolder(folder) }
+    }
+
+    @Test
+    fun `deleteFolder deletes contents together with the folder`() = runTest {
+        // Решено при обсуждении PROMPT_FAVORITES_FOLDERS.md: удаление папки
+        // удаляет и её содержимое (не переносит в "без папки") — использует
+        // dao.deleteFolderWithContents(), а не голый dao.deleteFolder().
+        val folder = FolderEntity(id = 5L, name = "Ужасы")
 
         useCase.deleteFolder(folder)
-        coVerify(exactly = 1) { dao.deleteFolder(folder) }
+
+        coVerify(exactly = 1) { dao.deleteFolderWithContents(folder) }
+    }
+
+    @Test
+    fun `setAnime forwards contentId and flag to dao`() = runTest {
+        useCase.setAnime("yt_1", true)
+        coVerify(exactly = 1) { dao.setAnime("yt_1", true) }
+    }
+
+    @Test
+    fun `getByContentId is a direct pass-through to dao`() = runTest {
+        val fav = FavoriteEntity(contentId = "yt_1", title = "Матрица", isAnime = true)
+        coEvery { dao.getFavoriteByContentId("yt_1") } returns fav
+
+        val result = useCase.getByContentId("yt_1")
+
+        assert(result == fav)
     }
 }

@@ -62,6 +62,12 @@ class SeriesEpisodesViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite
 
+    // Задача "папки в избранном" заодно добавила флаг "аниме" (FavoriteEntity.isAnime,
+    // независимый от contentType) — для сериалов та же логика, что и для
+    // фильмов в DetailViewModel.
+    private val _isAnime = MutableStateFlow(false)
+    val isAnime: StateFlow<Boolean> = _isAnime
+
     private var currentSeriesId: String? = null
     private var currentSeriesTitle: String = ""
     private var currentSeriesPoster: String? = null
@@ -75,7 +81,9 @@ class SeriesEpisodesViewModel @Inject constructor(
                 currentSeriesTitle = episodes.firstOrNull()?.seriesTitle ?: episodes.firstOrNull()?.title ?: ""
                 currentSeriesPoster = episodes.firstOrNull()?.poster
                 _uiState.value = SeriesEpisodesUiState.Success(episodes)
-                _isFavorite.value = sessionGraph.favoritesUseCase.isFavorite(seriesId)
+                val favEntity = sessionGraph.favoritesUseCase.getByContentId(seriesId)
+                _isFavorite.value = favEntity != null
+                _isAnime.value = favEntity?.isAnime ?: false
             } catch (e: Exception) {
                 _uiState.value = SeriesEpisodesUiState.Error(e.message ?: "Не удалось загрузить эпизоды")
             }
@@ -93,7 +101,20 @@ class SeriesEpisodesViewModel @Inject constructor(
                     poster = currentSeriesPoster
                 )
             )
-            _isFavorite.value = sessionGraph.favoritesUseCase.isFavorite(seriesId)
+            val favEntity = sessionGraph.favoritesUseCase.getByContentId(seriesId)
+            _isFavorite.value = favEntity != null
+            // Снятие с избранного удаляет строку целиком — вместе с ней и isAnime.
+            _isAnime.value = favEntity?.isAnime ?: false
+        }
+    }
+
+    // Осмысленно только для уже добавленного в избранное сериала — UI
+    // отключает кнопку при !isFavorite (см. SeriesEpisodesScreen.kt).
+    fun setAnime(isAnime: Boolean) {
+        val seriesId = currentSeriesId ?: return
+        viewModelScope.launch {
+            sessionGraph.favoritesUseCase.setAnime(seriesId, isAnime)
+            _isAnime.value = isAnime
         }
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,8 +35,16 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
             navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } },
             actions = {
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+                val isAnime by viewModel.isAnime.collectAsStateWithLifecycle()
                 IconButton(onClick = { viewModel.toggleFavorite() }) {
                     Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "В избранное", tint = if (isFavorite) ZenithFavorite else Color.Unspecified)
+                }
+                // Как и на TV: помечать аниме можно только уже добавленный в
+                // избранное сериал (SeriesEpisodesViewModel.setAnime).
+                if (isFavorite) {
+                    IconButton(onClick = { viewModel.setAnime(!isAnime) }) {
+                        Icon(Icons.Default.Movie, if (isAnime) "Снять отметку аниме" else "Пометить как аниме", tint = if (isAnime) ZenithFavorite else Color.Unspecified)
+                    }
                 }
             }
         )

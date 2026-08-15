@@ -11,8 +11,12 @@ class FavoritesUseCase(private val dao: FavoritesDao) {
     fun getByFolder(folderId: Long): Flow<List<FavoriteEntity>> = dao.getFavoritesByFolder(folderId)
     fun getAllFolders(): Flow<List<FolderEntity>> = dao.getAllFolders()
     suspend fun isFavorite(contentId: String) = dao.isFavorite(contentId)
+    suspend fun getByContentId(contentId: String) = dao.getFavoriteByContentId(contentId)
     suspend fun toggle(fav: FavoriteEntity) { if (dao.isFavorite(fav.contentId)) dao.deleteByContentId(fav.contentId) else dao.insertFavorite(fav) }
+    suspend fun setAnime(contentId: String, isAnime: Boolean) = dao.setAnime(contentId, isAnime)
     suspend fun moveToFolder(contentId: String, folderId: Long?) = dao.moveToFolder(contentId, folderId)
     suspend fun createFolder(folder: FolderEntity) = dao.insertFolder(folder)
-    suspend fun deleteFolder(folder: FolderEntity) = dao.deleteFolder(folder)
+    // Решено с пользователем: удаление папки удаляет и её содержимое
+    // (не переносит в "без папки") — см. deleteFolderWithContents в DAO.
+    suspend fun deleteFolder(folder: FolderEntity) = dao.deleteFolderWithContents(folder)
 }

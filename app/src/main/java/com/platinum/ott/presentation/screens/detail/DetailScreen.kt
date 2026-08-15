@@ -90,6 +90,14 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                         OutlinedButton(onClick = { viewModel.toggleFavorite(movieId, state.movie.title, state.movie.poster) }) {
                             Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
                         }
+                        // Отметка "аниме" осмысленна только для уже
+                        // добавленной в избранное записи (см. DetailViewModel.setAnime) —
+                        // до этого нечего помечать, кнопка отключена.
+                        if (state.isFavorite) {
+                            OutlinedButton(onClick = { viewModel.setAnime(movieId, !state.isAnime) }) {
+                                Text(if (state.isAnime) "✓ Аниме" else "Пометить как аниме")
+                            }
+                        }
                         OutlinedButton(onClick = onBackPressed) { Text("Назад") }
                     }
                 }

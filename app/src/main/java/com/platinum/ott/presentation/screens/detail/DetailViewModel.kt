@@ -26,10 +26,10 @@ class DetailViewModel @Inject constructor(
             _uiState.value = DetailUiState.Loading
             getMovie.execute(movieId).onSuccess { movie ->
                 val meta = try { tmdb.getMetadata(movieId, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
-                val isFav = favorites.isFavorite(movieId)
+                val favEntity = favorites.getByContentId(movieId)
                 val hist = history.getByContentId(movieId)
                 val progress = if (hist != null && hist.durationMs > 0) hist.positionMs.toFloat() / hist.durationMs else null
-                _uiState.value = DetailUiState.Success(movie, meta, isFav, progress)
+                _uiState.value = DetailUiState.Success(movie, meta, favEntity != null, progress, favEntity?.isAnime ?: false)
             }.onFailure { _uiState.value = DetailUiState.Error(it.message ?: "Ошибка") }
         }
     }
@@ -43,8 +43,22 @@ class DetailViewModel @Inject constructor(
             // происходит, хотя запись/удаление в таблице favorites работали.
             val current = _uiState.value
             if (current is DetailUiState.Success) {
-                _uiState.value = current.copy(isFavorite = favorites.isFavorite(movieId))
+                val favEntity = favorites.getByContentId(movieId)
+                // Снятие с избранного удаляет саму строку — вместе с ней
+                // теряется и isAnime (по дизайну: это атрибут записи в
+                // favorites, не самого фильма/сериала).
+                _uiState.value = current.copy(isFavorite = favEntity != null, isAnime = favEntity?.isAnime ?: false)
             }
+        }
+    }
+
+    // Флаг "аниме" осмысленен только для уже добавленной в избранное записи —
+    // UI отключает кнопку, если !isFavorite (см. DetailScreen.kt).
+    fun setAnime(movieId: String, isAnime: Boolean) {
+        viewModelScope.launch {
+            favorites.setAnime(movieId, isAnime)
+            val current = _uiState.value
+            if (current is DetailUiState.Success) _uiState.value = current.copy(isAnime = isAnime)
         }
     }
 }

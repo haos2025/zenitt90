@@ -86,6 +86,11 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     Button(onClick = { navController.navigate("player/$movieId") }, modifier = Modifier.weight(1f)) { Text(if (state.watchProgress != null) "Продолжить" else "Смотреть") }
                     OutlinedButton(onClick = { viewModel.toggleFavorite(movieId, state.movie.title, state.movie.poster) }) { Text(if (state.isFavorite) "♥" else "♡") }
+                    // Как и на TV: помечать аниме можно только уже
+                    // добавленную в избранное запись (DetailViewModel.setAnime).
+                    if (state.isFavorite) {
+                        OutlinedButton(onClick = { viewModel.setAnime(movieId, !state.isAnime) }) { Text(if (state.isAnime) "✓ Аниме" else "Аниме?") }
+                    }
                 }
             }
         }

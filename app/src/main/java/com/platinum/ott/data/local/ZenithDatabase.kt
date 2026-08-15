@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 8, exportSchema = true
+    version = 9, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -77,10 +77,21 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Задача "папки в избранном": фильтр ANIME в FavoritesScreen раньше
+        // сравнивал contentType с "ANIME" напрямую, хотя contentType уже
+        // занят под MOVIE/SERIES и используется для роутинга — независимый
+        // столбец, а не переиспользование contentType. NOT NULL DEFAULT 0
+        // безопасен для SQLite (все существующие строки получат false).
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `favorites` ADD COLUMN `isAnime` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }
