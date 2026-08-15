@@ -62,7 +62,11 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
                 LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
                     grouped.forEach { (genre, movies) ->
                         item(key = genre) {
-                            CatalogRow(title = genre, movies = movies, onMovieClick = onMovieClick)
+                            CatalogRow(
+                                title = genre, movies = movies, onMovieClick = onMovieClick,
+                                resolvedPosters = viewModel.resolvedPosters,
+                                onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
+                            )
                         }
                     }
                     if (state.isLoadingMore) {

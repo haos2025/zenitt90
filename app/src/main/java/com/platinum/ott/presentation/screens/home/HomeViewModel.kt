@@ -1,8 +1,10 @@
 package com.platinum.ott.presentation.screens.home
 
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
+import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.domain.model.Movie
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,8 +18,43 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
     private val getCatalog = sessionGraph.getCatalogUseCase
     private val getPlaylistCatalog = sessionGraph.getPlaylistCatalogUseCase
+    private val tmdbRepository = sessionGraph.tmdbRepository
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
+
+    // ROADMAP.md п.11 (TMDB-постеры в сетке каталога) — раньше сознательно
+    // не делалось: 30-50 карточек одновременно на экране означало бы TMDB-
+    // запрос на каждую разом. LazyRow/LazyColumn в CatalogRow.kt/
+    // PhoneCatalogRow.kt и так композируют только карточки рядом с
+    // видимой областью (плюс небольшой запас на прокрутку) — LaunchedEffect
+    // внутри самого элемента списка (см. CatalogRow.kt) де-факто и есть
+    // "загрузка под видимые карточки" без отдельной системы отслеживания
+    // видимости. Держим как SnapshotStateMap (не StateFlow<Map<>>), чтобы
+    // разрешение ОДНОГО постера рекомпозировало только его карточку, а не
+    // весь список — TmdbRepository.getMetadata() уже кэширует результат в
+    // Room на 24ч (см. TmdbRepositoryImpl), это только сессионный кэш
+    // поверх него, чтобы не перезапускать корутину на каждую рекомпозицию.
+    val resolvedPosters = mutableStateMapOf<String, String>()
+    private val posterAttempted = HashSet<String>()
+
+    // Те же префиксы, что ZENITH_BACKEND_PREFIXES в GetPlayableUrlUseCase
+    // (private там, дублируем константу здесь — вынести в общее место при
+    // следующей структурной правке, не тянуть отдельным диффом ради двух строк).
+    // Плейлист (m3u_/xt_) — собственные каналы/фильмы пользователя, TMDB-
+    // поиск по их названиям (часто это имена IPTV-каналов, не фильмов) дал
+    // бы случайные неверные совпадения и тратил бы запросы впустую.
+    private val tmdbEligiblePrefixes = setOf("yt", "ia")
+
+    fun resolvePosterIfNeeded(movie: Movie, targetWidthPx: Int) {
+        val prefix = movie.id.substringBefore('_', missingDelimiterValue = "")
+        if (prefix !in tmdbEligiblePrefixes) return
+        if (!posterAttempted.add(movie.id)) return // уже запрашивали (успех/неудача) — не повторяем на каждую рекомпозицию
+        viewModelScope.launch {
+            val meta = try { tmdbRepository.getMetadata(movie.id, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
+            val url = meta?.posterPath?.let { TmdbImage.posterUrl(it, targetWidthPx) }
+            if (url != null) resolvedPosters[movie.id] = url
+        }
+    }
 
     // Плейлист подмешивается только на первую загрузку (loadCatalog) —
     // loadMore() дальше дозаписывает только страницы backend, не трогая

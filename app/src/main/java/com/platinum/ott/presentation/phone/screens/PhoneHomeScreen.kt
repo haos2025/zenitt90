@@ -87,7 +87,11 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM), contentPadding = PaddingValues(top = ZenithDimens.paddingM, bottom = ZenithDimens.paddingM)) {
                         grouped.forEach { (genre, movies) ->
                             item(key = genre) {
-                                PhoneCatalogRow(title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") })
+                                PhoneCatalogRow(
+                                    title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") },
+                                    resolvedPosters = viewModel.resolvedPosters,
+                                    onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
+                                )
                             }
                         }
                         if (state.isLoadingMore) {

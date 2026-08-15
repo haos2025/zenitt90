@@ -6,8 +6,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.presentation.components.MovieCard
@@ -22,7 +25,20 @@ import com.platinum.ott.presentation.components.MovieCard
  * карточка сохраняет свою декларативную ширину и ряд просто скроллится.
  */
 @Composable
-fun PhoneCatalogRow(title: String, movies: List<Movie>, onMovieClick: (String) -> Unit, modifier: Modifier = Modifier) {
+fun PhoneCatalogRow(
+    title: String,
+    movies: List<Movie>,
+    onMovieClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    // ROADMAP.md п.11 — то же самое, что и в CatalogRow.kt (TV): резолв
+    // TMDB-постера приходит от HomeViewModel, дефолты пустые для мест, где
+    // PhoneCatalogRow используется без этой логики.
+    resolvedPosters: Map<String, String> = emptyMap(),
+    onResolvePoster: (Movie, Int) -> Unit = { _, _ -> }
+) {
+    val density = LocalDensity.current
+    val posterWidthPx = remember(density) { with(density) { ZenithDimens.cardWidth.roundToPx() } }
+
     Column(modifier = modifier) {
         Text(
             text = title,
@@ -36,7 +52,12 @@ fun PhoneCatalogRow(title: String, movies: List<Movie>, onMovieClick: (String) -
             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
         ) {
             items(movies, key = { it.id }) { movie ->
-                MovieCard(movie = movie, onClick = { onMovieClick(movie.id) })
+                LaunchedEffect(movie.id) { onResolvePoster(movie, posterWidthPx) }
+                MovieCard(
+                    title = movie.title, year = movie.year,
+                    poster = resolvedPosters[movie.id] ?: movie.poster,
+                    onClick = { onMovieClick(movie.id) }
+                )
             }
         }
     }

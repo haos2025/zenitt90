@@ -350,9 +350,35 @@ class PlayerViewModel @Inject constructor(
         // Свои заголовки канала (#EXTVLCOPT) поверх общего дефолта — если
         // канал ничего не требует явно, edge-case не ломается, просто
         // используется тот же generic User-Agent, что и раньше.
-        val effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
+        var effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
+        // ЧИНИМ баг "детальная карточка и плеер открываются, видео не идёт"
+        // для backend-контента (source == "Zenith" — GetPlayableUrlUseCase,
+        // префиксы yt_/ia_, ia_ = Archive.org). М3U/Xtream играют нормально
+        // — разница именно в этом источнике. ГИПОТЕЗА, не подтверждена
+        // логами ExoPlayer с реального устройства: часть зеркал
+        // ia*.us.archive.org отклоняет запросы к файлу без Referer,
+        // расценивая их как хотлинк. Добавление лишнего заголовка ничего
+        // не ломает для источников, которые его не проверяют — если
+        // проблема не в этом, нужен logcat с фактической ошибкой ExoPlayer
+        // (PlaybackException в onPlayerError) при следующем воспроизведении.
+        if (v.source == "Zenith") {
+            effectiveHeaders = effectiveHeaders + ("Referer" to "https://archive.org/")
+        }
         httpDataSourceFactory.setDefaultRequestProperties(effectiveHeaders)
         val mediaItemBuilder = MediaItem.Builder().setUri(v.url)
+        // ВТОРАЯ гипотеза той же природы: ExoPlayer определяет контейнер по
+        // расширению в URL (Util.inferContentType) — рабочие М3У/Xtream-
+        // ссылки почти всегда оканчиваются на .m3u8/.mp4/.ts явно, а
+        // backend/Archive.org иногда отдаёт ссылку на файл без узнаваемого
+        // расширения (редирект/API-эндпоинт). Без подсказки MIME-типа
+        // ExoPlayer в этом случае либо падает с ошибкой (тогда её увидит
+        // onPlayerError), либо в редких случаях зависает на буферизации
+        // без явной ошибки — снаружи выглядит как "плеер открылся, видео
+        // нет". Явный video/mp4 не трогает случаи, где расширение уже
+        // узнаётся (в т.ч. HLS-плейлисты М3У/Xtream — там ветка не сработает).
+        if (v.source == "Zenith" && !hasRecognizableMediaExtension(v.url)) {
+            mediaItemBuilder.setMimeType(MimeTypes.VIDEO_MP4)
+        }
         externalSubtitleUrl?.let { subUrl ->
             mediaItemBuilder.setSubtitleConfigurations(listOf(
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl))
@@ -367,6 +393,12 @@ class PlayerViewModel @Inject constructor(
         if (seekTo > 0) exoPlayer.seekTo(seekTo)
         exoPlayer.play()
     }
+    private fun hasRecognizableMediaExtension(url: String): Boolean {
+        val path = url.substringBefore('?').substringBefore('#')
+        return listOf(".mp4", ".m3u8", ".mkv", ".webm", ".ts", ".mov", ".avi", ".ogv")
+            .any { path.endsWith(it, ignoreCase = true) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         historyAutosaveJob?.cancel()
