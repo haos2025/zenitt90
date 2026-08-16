@@ -208,6 +208,10 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewMod
                     playbackSpeed = state.playbackSpeed,
                     onSelectSpeed = { viewModel.setPlaybackSpeed(it); lastInteraction = System.currentTimeMillis() },
                     onBackPressed = { navController.popBackStack() },
+                    hasNextEpisode = state.nextEpisodeId != null,
+                    hasPreviousEpisode = state.previousEpisodeId != null,
+                    onNextEpisode = { viewModel.playNextEpisode(); lastInteraction = System.currentTimeMillis() },
+                    onPreviousEpisode = { viewModel.playPreviousEpisode(); lastInteraction = System.currentTimeMillis() },
                     isFullscreen = isFullscreen,
                     onToggleFullscreen = { isFullscreen = !isFullscreen; lastInteraction = System.currentTimeMillis() },
                     modifier = Modifier.fillMaxSize()

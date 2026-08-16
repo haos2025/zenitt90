@@ -125,8 +125,19 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                 showControls = true
                 when (event.key) {
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { viewModel.togglePlayPause(); true }
-                    Key.DirectionRight -> { viewModel.seekForward(); true }
-                    Key.DirectionLeft -> { viewModel.seekBackward(); true }
+                    // Раньше Left/Right всегда были перемоткой ±10с. При
+                    // просмотре сериала (nextEpisodeId/previousEpisodeId
+                    // заданы) те же клавиши теперь переключают серию — те
+                    // же кнопки, что видны в PlayerController, ведут себя
+                    // одинаково что с пульта, что по клику.
+                    Key.DirectionRight -> {
+                        if (ready.nextEpisodeId != null) viewModel.playNextEpisode() else viewModel.seekForward()
+                        true
+                    }
+                    Key.DirectionLeft -> {
+                        if (ready.previousEpisodeId != null) viewModel.playPreviousEpisode() else viewModel.seekBackward()
+                        true
+                    }
                     // Key.Menu оставлен для пультов/клавиатур, где он есть, но
                     // у многих современных TV-пультов (например, штатный пульт
                     // Xiaomi TV Stick 4K) физической кнопки Menu нет вообще —
@@ -136,6 +147,12 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                     // открыто) — свободная клавиша, ничего не отбирает у
                     // перемотки/паузы.
                     Key.Menu, Key.DirectionUp -> { viewModel.togglePlaybackMenu(); true }
+                    // "Подключить телефон" убрали из вложенного меню (см.
+                    // PlaybackMenuOverlay.kt) — DirectionDown, как и
+                    // DirectionUp выше, ничем не занят во время обычного
+                    // воспроизведения, свободная клавиша под новую кнопку
+                    // на самом контроллере (PlayerController.kt).
+                    Key.DirectionDown -> { showCompanionQr = true; true }
                     Key.Back -> { onBackPressed(); true }
                     else -> false // любая другая кнопка — контроллер уже показан выше
                 }
@@ -183,6 +200,11 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                     onSeekBackward = { viewModel.seekBackward() },
                     onTogglePlay = { viewModel.togglePlayPause() },
                     title = state.title,
+                    hasNextEpisode = state.nextEpisodeId != null,
+                    hasPreviousEpisode = state.previousEpisodeId != null,
+                    onNextEpisode = { viewModel.playNextEpisode() },
+                    onPreviousEpisode = { viewModel.playPreviousEpisode() },
+                    onConnectPhone = { showCompanionQr = true },
                     modifier = Modifier.fillMaxSize()
                 )
                 if (state.showPlaybackMenu) {
@@ -198,7 +220,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerVi
                         subtitlesEnabled = state.subtitlesEnabled,
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
                         onDisableSubtitles = { viewModel.disableSubtitles() },
-                        onScanSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
                         playbackSpeed = state.playbackSpeed,
                         onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
                         onDismiss = { viewModel.dismissPlaybackMenu() },

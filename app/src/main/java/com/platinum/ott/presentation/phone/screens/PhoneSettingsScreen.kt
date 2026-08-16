@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.settings.SettingsViewModel
 import com.platinum.ott.core.QualityPreferences
+import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.presentation.components.MovieCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,13 +92,18 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             }
         }
         // Раньше это была карточка-заглушка из общего списка без единого
-        // обработчика нажатия. "Качество по умолчанию" — единственная
-        // реально существующая часть "Воспроизведения": QualityPreferences
-        // уже читается в PlayerViewModel.loadMovie() как стартовое качество
-        // для любого фильма. "Автовоспроизведение"/"Субтитры" НЕ сделаны —
-        // в коде нет ни понятия "следующая серия", ни обработки субтитровых
-        // дорожек вообще, это была бы иллюзия настройки без реальной фичи
-        // за ней — сознательно оставлено на будущее, не выдумывается здесь.
+        // обработчика нажатия. "Автовоспроизведение следующей серии" по-
+        // прежнему не заведено отдельной настройкой — сама возможность
+        // переключиться на следующий эпизод есть (PlayerViewModel.
+        // playNextEpisode(), кнопки вместо перемотки при просмотре
+        // сериала — см. PhonePlayerController.kt), но автозапуска БЕЗ
+        // нажатия нет, это другая функция. "Субтитры по умолчанию" —
+        // теперь реальная настройка (было убрано как выдуманное, пока не
+        // было обработки субтитровых дорожек вообще, см. TrackOption/
+        // selectSubtitleTrack) — управляет тем, пытается ли ExoPlayer
+        // сразу показать субтитры, а не саму ссылку на .srt: та по-прежнему
+        // вводится в плеере на конкретное видео (см. PhonePlayerController.kt) —
+        // это не то же самое, что глобальный переключатель "вкл/выкл по умолчанию".
         Card(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) {
             Column(Modifier.padding(ZenithDimens.paddingM)) {
                 Text("Воспроизведение", style = MaterialTheme.typography.titleMedium)
@@ -113,6 +119,16 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                         if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
                         selectedQuality = next
                     }) { Text(selectedQuality) }
+                }
+                Spacer(Modifier.height(ZenithDimens.paddingSM))
+                val subtitlePrefs = remember { SubtitlePreferences(context) }
+                var showSubsByDefault by remember { mutableStateOf(subtitlePrefs.getShowByDefault()) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Субтитры по умолчанию", color = Color.White, modifier = Modifier.weight(1f))
+                    Switch(checked = showSubsByDefault, onCheckedChange = {
+                        showSubsByDefault = it
+                        subtitlePrefs.setShowByDefault(it)
+                    })
                 }
             }
         }

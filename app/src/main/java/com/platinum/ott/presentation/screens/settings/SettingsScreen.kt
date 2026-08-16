@@ -17,6 +17,7 @@ import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.NetworkPreferences
 import com.platinum.ott.core.NotificationPreferences
+import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -44,13 +45,17 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         // Sections: Playback, Notifications, Network, Interface, Account, About
         SettingsSection("Воспроизведение") {
             // Раньше "Качество по умолчанию"/"Автовоспроизведение"/"Субтитры"
-            // были тремя захардкоженными строками подряд. Реально существует
-            // только первое — QualityPreferences уже читается в
-            // PlayerViewModel.loadMovie() как стартовое качество. У
-            // автовоспроизведения следующей серии и субтитров нет вообще
-            // никакой реализации в коде (ни понятия "следующий эпизод", ни
-            // обработки субтитровых дорожек в ExoPlayer/PlayerView) — не
-            // стал выдумывать настройки под несуществующие фичи.
+            // были тремя захардкоженными строками подряд, и для двух из них
+            // не было НИКАКОЙ реализации (ни "следующего эпизода", ни
+            // обработки субтитровых дорожек) — убрали как выдуманные
+            // настройки. Теперь оба реализованы: следующий/предыдущий эпизод
+            // — PlayerViewModel.playNextEpisode()/playPreviousEpisode()
+            // (кнопки в PlayerController.kt/PhonePlayerController.kt вместо
+            // перемотки при просмотре сериала), субтитры — TrackOption/
+            // selectSubtitleTrack. "Автовоспроизведение следующей серии"
+            // по-прежнему не заведено отдельной настройкой — сама
+            // возможность есть, но нет автозапуска без нажатия, это другая
+            // функция, не переименование того, что уже добавлено.
             val qualityPrefs = remember { QualityPreferences(context) }
             val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
             var selectedQuality by remember { mutableStateOf(qualityPrefs.getSelectedQuality() ?: "Авто") }
@@ -58,6 +63,18 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
                 val next = qualityOptions[(qualityOptions.indexOf(selectedQuality) + 1) % qualityOptions.size]
                 if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
                 selectedQuality = next
+            }
+            // Раньше настройки внешних субтитров не было нигде, кроме самого
+            // плеера (ссылка на .srt вводилась заново на каждое видео) — это
+            // единственная ЧАСТЬ субтитров, которая действительно глобальна
+            // (не привязана к конкретному фильму), поэтому именно она здесь,
+            // а не сам ввод ссылки — тот остаётся в плеере, см. комментарий
+            // в PhonePlayerController.kt.
+            val subtitlePrefs = remember { SubtitlePreferences(context) }
+            var showSubsByDefault by remember { mutableStateOf(subtitlePrefs.getShowByDefault()) }
+            CycleSetting("Субтитры по умолчанию", if (showSubsByDefault) "Вкл" else "Выкл") {
+                showSubsByDefault = !showSubsByDefault
+                subtitlePrefs.setShowByDefault(showSubsByDefault)
             }
         }
         SettingsSection("Уведомления") {

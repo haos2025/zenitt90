@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.SessionGraph
+import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.domain.model.StreamVariant
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -46,7 +47,16 @@ sealed interface PlayerUiState {
         val audioTracks: List<TrackOption> = emptyList(),
         val subtitleTracks: List<TrackOption> = emptyList(),
         val subtitlesEnabled: Boolean = false,
-        val playbackSpeed: Float = 1f
+        val playbackSpeed: Float = 1f,
+        // Убрали перемотку на ±10с из панели управления при просмотре
+        // сериала — при линейном последовательном просмотре следующий/
+        // предыдущий эпизод нужнее чаще, чем перемотка внутри одной серии
+        // (сама перемотка никуда не делась: остаётся на D-pad Left/Right на
+        // TV, свайпе прогресс-бара на телефоне). null у обоих — контент не
+        // сериал (обычный фильм, или единственная известная серия), тогда
+        // остаются кнопки перемотки, см. PlayerController.kt/PhonePlayerController.kt.
+        val nextEpisodeId: String? = null,
+        val previousEpisodeId: String? = null
     ) : PlayerUiState
     data class Error(val message: String) : PlayerUiState
 }
@@ -65,7 +75,17 @@ class PlayerViewModel @Inject constructor(
     private val getPlayableUrl = sessionGraph.getPlayableUrlUseCase
     private val getMovie = sessionGraph.getMovieByIdUseCase
     private val watchHistory = sessionGraph.watchHistoryUseCase
+    // Next/Previous episode (см. loadMovie()) — переиспользует тот же
+    // источник, что и SeriesEpisodesViewModel (уже сортирует по
+    // seasonNumber/episodeNumber), отдельного use case заводить не стали
+    // ради одного вызова.
+    private val playlistRepository = sessionGraph.playlistRepository
     private val qualityPrefs = QualityPreferences(application)
+    // "Показывать субтитры по умолчанию" (см. loadMovie()) — раньше эта
+    // настройка была убрана из SettingsScreen.kt как выдуманная под
+    // несуществующую фичу; теперь субтитры реально поддерживаются
+    // (TrackOption/selectSubtitleTrack), настройка снова осмысленна.
+    private val subtitlePrefs = SubtitlePreferences(application)
     // Раньше ExoPlayer собирался с дефолтным ExoPlayer.Builder(application).build()
     // без кастомного HTTP data source — MediaItem.fromUri() уходил на сервер
     // с дефолтным User-Agent'ом ExoPlayer'а. Многие IPTV-панели (M3U/Xtream —
@@ -250,11 +270,56 @@ class PlayerViewModel @Inject constructor(
                 // активное соединение метровое (мобильные данные/раздача Wi-Fi),
                 // не трогая ручной выбор пользователя в плеере после старта.
                 val initial = capForMeteredNetwork(variants, preferred)
+                // "Показывать субтитры по умолчанию" (Настройки →
+                // Воспроизведение) — не даёт стопроцентной гарантии, что
+                // ExoPlayer сразу выберет конкретную дорожку (это по-прежнему
+                // системное поведение DefaultTrackSelector/CaptioningManager,
+                // если явно не выбрать трек через selectSubtitleTrack()), но
+                // явно РАЗРЕШАЕТ или ЗАПРЕЩАЕТ тип трека — реальный переключатель,
+                // а не фиктивный, как было убрано из настроек раньше.
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlePrefs.getShowByDefault())
+                    .build()
                 playVariant(initial, resumePositionMs)
-                _uiState.value = PlayerUiState.Ready(variants, initial, currentTitle)
+
+                // "Следующий/предыдущий эпизод" вместо перемотки в панели
+                // управления (просили заменить кнопки ±10с при просмотре
+                // сериала) — раньше в проекте вообще не было понятия
+                // "следующий эпизод" нигде (см. старый комментарий в
+                // SettingsScreen.kt про несуществующие настройки). movie.seriesId
+                // — тот же признак, что уже использует SeriesEpisodesScreen.
+                var nextEpisodeId: String? = null
+                var previousEpisodeId: String? = null
+                if (movie?.seriesId != null) {
+                    try {
+                        val episodes = playlistRepository.getEpisodesForSeries(movie.seriesId)
+                        val idx = episodes.indexOfFirst { it.id == movieId }
+                        if (idx >= 0) {
+                            previousEpisodeId = episodes.getOrNull(idx - 1)?.id
+                            nextEpisodeId = episodes.getOrNull(idx + 1)?.id
+                        }
+                    } catch (_: Exception) { /* не сериал/плейлист недоступен — оставляем перемотку как есть */ }
+                }
+
+                _uiState.value = PlayerUiState.Ready(variants, initial, currentTitle, nextEpisodeId = nextEpisodeId, previousEpisodeId = previousEpisodeId)
                 startHistoryAutosave()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
         }
+    }
+
+    // loadMovie() уже сохраняет позицию/переинициализирует всё нужное —
+    // следующий/предыдущий эпизод переиспользуют его целиком, а не
+    // отдельный облегчённый путь, чтобы история просмотра/качество/
+    // субтитры вели себя одинаково что при обычном открытии, что при
+    // переключении серии.
+    fun playNextEpisode() {
+        val id = (_uiState.value as? PlayerUiState.Ready)?.nextEpisodeId ?: return
+        loadMovie(id)
+    }
+
+    fun playPreviousEpisode() {
+        val id = (_uiState.value as? PlayerUiState.Ready)?.previousEpisodeId ?: return
+        loadMovie(id)
     }
 
     private val qualityRankOrder = listOf("240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
