@@ -101,8 +101,22 @@ class HomeViewModel @Inject constructor(
         val current = _uiState.value as? HomeUiState.Success ?: return
         if (current.isLoadingMore || current.page >= current.totalPages) return
 
+        // РАНЬШЕ isLoadingMore=true выставлялся ПЕРВОЙ строкой внутри
+        // viewModelScope.launch{} — то есть асинхронно, на следующей
+        // диспетчеризации корутины, а не сразу. HomeScreen.kt триггерит
+        // loadMore() из snapshotFlow{}.collect{} на КАЖДОЕ изменение
+        // последнего видимого индекса — во время быстрого скролла это
+        // несколько вызовов за доли секунды, и все они успевали прочитать
+        // ещё не обновлённый _uiState (isLoadingMore всё ещё false) прежде
+        // чем первый launch вообще начинал выполняться — отсюда
+        // "пагинация работает с перебоями" (несколько параллельных
+        // загрузок одной и той же страницы, гонка за тем, чей результат
+        // запишется в state последним). Флаг теперь выставляется
+        // синхронно, до launch — второй вызов увидит isLoadingMore=true
+        // и выйдет по guard'у выше ещё до того, как попадёт в корутину.
+        _uiState.value = current.copy(isLoadingMore = true)
+
         viewModelScope.launch {
-            _uiState.value = current.copy(isLoadingMore = true)
             getCatalog.execute(current.page + 1)
                 .onSuccess { result ->
                     val existing = _uiState.value as? HomeUiState.Success ?: return@onSuccess

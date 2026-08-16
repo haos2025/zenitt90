@@ -21,6 +21,7 @@ import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.navigation.ZenithNavHost
 import com.platinum.ott.ui.theme.ZenithBackground
 import com.platinum.ott.ui.theme.ZenithTheme
+import com.platinum.ott.ui.theme.ZenithTvTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -101,11 +102,30 @@ class MainActivity : ComponentActivity() {
             // читает тот же инстанс, мост-дублирование через ServiceLocator убран.
             val darkTheme by themeManager.darkThemeFlow.collectAsState()
             ZenithTheme(darkTheme = darkTheme) {
-                ZenithNavHost(
-                    startDestination = startDestination,
-                    isTV = isTv,
-                    modifier = Modifier.fillMaxSize().background(ZenithBackground)
-                )
+                // ИСПРАВЛЕНО: ZenithTvTheme() существовала в Theme.kt, но
+                // никогда и нигде не вызывалась во всём проекте — TV-экраны
+                // (androidx.tv.material3.MaterialTheme.colorScheme.xxx)
+                // без неё получали встроенную дефолтную схему библиотеки
+                // tv-material3, а не Zenith-тему и уж тем более не
+                // пользовательский переключатель. compose.material3-виджеты,
+                // которые тоже встречаются на TV-экранах (AlertDialog,
+                // CircularProgressIndicator) — уже получают тему от внешнего
+                // ZenithTheme{}, им отдельная обёртка не нужна.
+                if (isTv) {
+                    ZenithTvTheme(darkTheme = darkTheme) {
+                        ZenithNavHost(
+                            startDestination = startDestination,
+                            isTV = isTv,
+                            modifier = Modifier.fillMaxSize().background(ZenithBackground)
+                        )
+                    }
+                } else {
+                    ZenithNavHost(
+                        startDestination = startDestination,
+                        isTV = isTv,
+                        modifier = Modifier.fillMaxSize().background(ZenithBackground)
+                    )
+                }
             }
         }
     }

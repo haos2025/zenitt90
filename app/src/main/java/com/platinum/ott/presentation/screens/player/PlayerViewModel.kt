@@ -351,17 +351,18 @@ class PlayerViewModel @Inject constructor(
         // канал ничего не требует явно, edge-case не ломается, просто
         // используется тот же generic User-Agent, что и раньше.
         var effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
-        // ЧИНИМ баг "детальная карточка и плеер открываются, видео не идёт"
-        // для backend-контента (source == "Zenith" — GetPlayableUrlUseCase,
-        // префиксы yt_/ia_, ia_ = Archive.org). М3U/Xtream играют нормально
-        // — разница именно в этом источнике. ГИПОТЕЗА, не подтверждена
-        // логами ExoPlayer с реального устройства: часть зеркал
-        // ia*.us.archive.org отклоняет запросы к файлу без Referer,
-        // расценивая их как хотлинк. Добавление лишнего заголовка ничего
-        // не ломает для источников, которые его не проверяют — если
-        // проблема не в этом, нужен logcat с фактической ошибкой ExoPlayer
-        // (PlaybackException в onPlayerError) при следующем воспроизведении.
-        if (v.source == "Zenith") {
+        // ИСПРАВЛЕНО: раньше здесь стояла проверка `v.source == "Zenith"` —
+        // но source="Zenith" стоит у ЛЮБОГО backend-варианта, и у yt_, и у
+        // ia_ (см. GetPlayableUrlUseCase.executeWithPluginRace — оба
+        // префикса дают один и тот же source). Реально Archive.org — это
+        // ТОЛЬКО ia_. Добавление Referer archive.org к yt_-вариантам,
+        // которые к Archive.org никакого отношения не имеют, могло сбивать
+        // их собственные CDN (часть проверяет Referer на конкретный домен
+        // и не ожидает чужой) — правдоподобное объяснение репорта "один
+        // раз сработало, потом опять сломалось": скорее всего сработавший
+        // раз был ia_, а сломавшийся — yt_ с другим сервером. Проверяем
+        // по фактическому хосту URL, не по source.
+        if (v.url.contains("archive.org", ignoreCase = true)) {
             effectiveHeaders = effectiveHeaders + ("Referer" to "https://archive.org/")
         }
         httpDataSourceFactory.setDefaultRequestProperties(effectiveHeaders)

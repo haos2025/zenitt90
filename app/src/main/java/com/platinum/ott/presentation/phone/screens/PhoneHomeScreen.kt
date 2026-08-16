@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.phone.components.PhoneCatalogRow
+import com.platinum.ott.presentation.components.SkeletonCatalog
 import com.platinum.ott.presentation.screens.home.HomeUiState
 import com.platinum.ott.presentation.screens.home.HomeViewModel
 
@@ -61,7 +62,9 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
-                is HomeUiState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                // Раньше здесь был голый CircularProgressIndicator — SkeletonCatalog
+                // имитирует форму будущих рядов, тот же адаптивный размер карточек.
+                is HomeUiState.Loading -> SkeletonCatalog(modifier = Modifier.fillMaxSize())
                 is HomeUiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)

@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.presentation.components.CatalogRow
+import com.platinum.ott.presentation.components.SkeletonCatalog
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -32,7 +33,9 @@ fun HomeScreen(onMovieClick: (String) -> Unit, onSettingsClick: () -> Unit, onFa
         }
         Spacer(Modifier.height(ZenithDimens.paddingM))
         when (val state = uiState) {
-            is HomeUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            // Раньше здесь был голый CircularProgressIndicator — SkeletonCatalog
+            // имитирует форму будущих рядов, тот же адаптивный размер карточек.
+            is HomeUiState.Loading -> SkeletonCatalog(modifier = Modifier.fillMaxSize())
             is HomeUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = { viewModel.loadCatalog() }) { Text("Повторить") } }
             is HomeUiState.Success -> {
                 // Раньше здесь был единый LazyVerticalGrid по всем фильмам сразу —
