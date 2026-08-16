@@ -25,12 +25,15 @@ import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, viewModel: DetailViewModel = hiltViewModel()) {
+fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            // Эпизод сериала — сразу уводим на общий экран сериала, не
+            // рисуя здесь вообще ничего (см. DetailViewModel.load()).
+            is DetailUiState.RedirectToSeries -> LaunchedEffect(state.seriesId) { onNavigateToSeries(state.seriesId) }
             is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = onBackPressed) { Text("Назад") } }
             is DetailUiState.Success -> {
                 // Раньше тут не было ни одной картинки — ни постера, ни backdrop'а,

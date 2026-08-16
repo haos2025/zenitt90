@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesUiState
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesViewModel
+import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.ui.theme.*
 import com.platinum.ott.core.platform.ZenithDimens
 
@@ -28,6 +29,14 @@ import com.platinum.ott.core.platform.ZenithDimens
 fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController, viewModel: SeriesEpisodesViewModel = hiltViewModel()) {
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingVariantChoice by viewModel.pendingVariantChoice.collectAsStateWithLifecycle()
+
+    // Общий для TV/телефона способ собрать "player/{id}?variantUrl=..." —
+    // тот же приём, что в ZenithNavHost.kt (там для TV-варианта).
+    fun navigateToPlayer(episodeId: String, variantUrl: String?) {
+        val route = if (variantUrl != null) "player/$episodeId?variantUrl=${android.net.Uri.encode(variantUrl)}" else "player/$episodeId"
+        navController.navigate(route)
+    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -67,7 +76,7 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                         val episodesInSeason = state.episodes.filter { selectedSeason == null || it.seasonNumber == selectedSeason }
                         LazyColumn(contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                             items(episodesInSeason, key = { it.id }) { ep ->
-                                Card(onClick = { navController.navigate("player/${ep.id}") }, modifier = Modifier.fillMaxWidth()) {
+                                Card(onClick = { viewModel.onEpisodeSelected(ep.id) { episodeId, variantUrl -> navigateToPlayer(episodeId, variantUrl) } }, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(ZenithDimens.paddingSM))
@@ -83,5 +92,25 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                 }
             }
         }
+    }
+
+    // Выбор озвучки/варианта потока — только когда у эпизода реально
+    // больше одного (см. SeriesEpisodesViewModel.onEpisodeSelected).
+    pendingVariantChoice?.let { (episodeId, variants) ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissVariantChoice() },
+            title = { Text("Выберите вариант") },
+            text = {
+                Column {
+                    variants.forEach { v: StreamVariant ->
+                        TextButton(
+                            onClick = { viewModel.selectVariant(episodeId, v) { id, url -> navigateToPlayer(id, url) } },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("${v.quality} · ${v.source}", modifier = Modifier.fillMaxWidth()) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.dismissVariantChoice() }) { Text("Отмена") } }
+        )
     }
 }

@@ -36,6 +36,13 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingM)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+            // Эпизод сериала — сразу уводим на общий экран сериала вместо
+            // отдельной детальной карточки (см. DetailViewModel.load()).
+            // popUpTo убирает саму карточку-редирект из бэкстека — иначе
+            // "Назад" с экрана сериала вернул бы на пустой промежуточный шаг.
+            is DetailUiState.RedirectToSeries -> LaunchedEffect(state.seriesId) {
+                navController.navigate("series/${state.seriesId}") { popUpTo("detail/{movieId}") { inclusive = true } }
+            }
             is DetailUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is DetailUiState.Success -> {
                 // Раньше здесь тоже не было ни одной картинки — только текст.

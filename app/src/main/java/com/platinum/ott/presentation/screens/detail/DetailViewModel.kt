@@ -25,6 +25,14 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = DetailUiState.Loading
             getMovie.execute(movieId).onSuccess { movie ->
+                // Единая точка: любой movieId, у которого есть seriesId
+                // (эпизод сериала из плейлиста, см. Movie.kt), уводит на
+                // общий экран сериала вместо отдельной детальной карточки —
+                // независимо от того, откуда пришли (лента, поиск, история).
+                if (movie.seriesId != null) {
+                    _uiState.value = DetailUiState.RedirectToSeries(movie.seriesId)
+                    return@onSuccess
+                }
                 val meta = try { tmdb.getMetadata(movieId, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
                 val favEntity = favorites.getByContentId(movieId)
                 val hist = history.getByContentId(movieId)

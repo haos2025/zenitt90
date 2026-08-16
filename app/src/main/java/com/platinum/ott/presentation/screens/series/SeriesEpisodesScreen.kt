@@ -14,14 +14,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
+import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.ui.theme.*
 import com.platinum.ott.core.platform.ZenithDimens
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeClick: (String) -> Unit, viewModel: SeriesEpisodesViewModel = hiltViewModel()) {
+fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeClick: (episodeId: String, variantUrl: String?) -> Unit, viewModel: SeriesEpisodesViewModel = hiltViewModel()) {
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingVariantChoice by viewModel.pendingVariantChoice.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -58,12 +60,44 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                 val episodesInSeason = state.episodes.filter { selectedSeason == null || it.seasonNumber == selectedSeason }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     items(episodesInSeason, key = { it.id }) { ep ->
-                        EpisodeRow(ep.episodeNumber, ep.title, onClick = { onEpisodeClick(ep.id) })
+                        EpisodeRow(ep.episodeNumber, ep.title, onClick = {
+                            viewModel.onEpisodeSelected(ep.id) { episodeId, variantUrl -> onEpisodeClick(episodeId, variantUrl) }
+                        })
                     }
                 }
             }
         }
     }
+
+    // Выбор озвучки/варианта потока — до запуска плеера, не после (см.
+    // SeriesEpisodesViewModel.onEpisodeSelected). Показывается только когда
+    // у эпизода реально больше одного варианта — для одного варианта
+    // диалог не появляется вообще, ведёт в плеер напрямую.
+    pendingVariantChoice?.let { (episodeId, variants) ->
+        VariantChoiceDialog(
+            variants = variants,
+            onSelect = { variant -> viewModel.selectVariant(episodeId, variant) { id, url -> onEpisodeClick(id, url) } },
+            onDismiss = { viewModel.dismissVariantChoice() }
+        )
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable
+private fun VariantChoiceDialog(variants: List<StreamVariant>, onSelect: (StreamVariant) -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { androidx.compose.material3.Text("Выберите вариант") },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                variants.forEach { v ->
+                    androidx.compose.material3.TextButton(onClick = { onSelect(v) }, modifier = Modifier.fillMaxWidth()) {
+                        androidx.compose.material3.Text("${v.quality} · ${v.source}", modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text("Отмена") } }
+    )
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable

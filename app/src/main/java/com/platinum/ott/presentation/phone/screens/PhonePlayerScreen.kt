@@ -41,8 +41,8 @@ import kotlin.math.roundToInt
 // время просмотра. Теперь свой оверлей, как на TV, только под тач вместо
 // D-pad — см. PhonePlayerController.kt.
 @Composable
-fun PhonePlayerScreen(movieId: String, navController: NavHostController, viewModel: PlayerViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.loadMovie(movieId) }
+fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferredVariantUrl: String? = null, viewModel: PlayerViewModel = hiltViewModel()) {
+    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
 

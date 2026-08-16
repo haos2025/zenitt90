@@ -236,7 +236,7 @@ class PlayerViewModel @Inject constructor(
         exoPlayer.seekTo(if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0))
     }
 
-    fun loadMovie(movieId: String) {
+    fun loadMovie(movieId: String, preferredVariantUrl: String? = null) {
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
         exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
@@ -262,7 +262,15 @@ class PlayerViewModel @Inject constructor(
                 val resumePositionMs = if (existingHistory != null && !existingHistory.completed) existingHistory.positionMs else 0L
 
                 val saved = qualityPrefs.getSelectedQuality()
-                val preferred = variants.firstOrNull { it.quality == saved } ?: variants.first()
+                // Выбор озвучки/варианта в едином окне сериала
+                // (SeriesEpisodesScreen.kt) приходит сюда как конкретный
+                // URL — если он есть и совпадает с одним из реально
+                // доступных вариантов, он приоритетнее сохранённого
+                // качества по умолчанию (пользователь только что выбрал
+                // осознанно, это не то же самое, что "начать как обычно").
+                val preferred = variants.firstOrNull { it.url == preferredVariantUrl }
+                    ?: variants.firstOrNull { it.quality == saved }
+                    ?: variants.first()
                 // "Макс. качество на моб." (QualityPreferences.getMaxQualityOnMobile)
                 // существовал в коде с самого начала, но нигде не читался — экран
                 // настроек показывал захардкоженное "720p", которое ни на что не

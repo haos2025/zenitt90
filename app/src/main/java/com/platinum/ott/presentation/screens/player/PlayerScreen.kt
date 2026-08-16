@@ -37,8 +37,8 @@ import kotlinx.coroutines.delay
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
-fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, viewModel: PlayerViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.loadMovie(movieId) }
+fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl: String? = null, viewModel: PlayerViewModel = hiltViewModel()) {
+    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
 

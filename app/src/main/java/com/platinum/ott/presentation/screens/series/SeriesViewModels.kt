@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.repository.SeriesSummary
 import com.platinum.ott.domain.model.Movie
+import com.platinum.ott.domain.model.StreamVariant
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +72,35 @@ class SeriesEpisodesViewModel @Inject constructor(
     private var currentSeriesId: String? = null
     private var currentSeriesTitle: String = ""
     private var currentSeriesPoster: String? = null
+
+    // Единое окно сериала: раньше клик по эпизоду сразу вёл в плеер,
+    // который сам разбирался с вариантами потока (качество/озвучка от
+    // разных источников — StreamVariant.source, см. GetPlayableUrlUseCase).
+    // Если вариантов у эпизода больше одного, выбор теперь делается здесь,
+    // до запуска плеера — episodeId нужен вместе со списком, потому что
+    // пользователь может успеть кликнуть другой эпизод, пока запрос летит.
+    private val _pendingVariantChoice = MutableStateFlow<Pair<String, List<StreamVariant>>?>(null)
+    val pendingVariantChoice: StateFlow<Pair<String, List<StreamVariant>>?> = _pendingVariantChoice
+
+    fun onEpisodeSelected(episodeId: String, onNavigate: (episodeId: String, variantUrl: String?) -> Unit) {
+        viewModelScope.launch {
+            val variants = try { sessionGraph.getPlayableUrlUseCase.execute(episodeId) } catch (_: Exception) { emptyList() }
+            if (variants.size > 1) {
+                _pendingVariantChoice.value = episodeId to variants
+            } else {
+                // Один вариант или ни одного — выбирать не из чего, ведём в
+                // плеер как раньше, он сам покажет "Нет потоков", если пусто.
+                onNavigate(episodeId, variants.firstOrNull()?.url)
+            }
+        }
+    }
+
+    fun selectVariant(episodeId: String, variant: StreamVariant, onNavigate: (episodeId: String, variantUrl: String?) -> Unit) {
+        _pendingVariantChoice.value = null
+        onNavigate(episodeId, variant.url)
+    }
+
+    fun dismissVariantChoice() { _pendingVariantChoice.value = null }
 
     fun load(seriesId: String) {
         currentSeriesId = seriesId
