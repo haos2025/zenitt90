@@ -13,6 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
@@ -100,7 +101,7 @@ fun PlaybackMenuOverlay(
                         MenuRow(v.quality, v.source, v.url == currentVariant.url) { onSelectVariant(v) }
                     }
                     PlaybackMenuTab.AUDIO -> {
-                        if (audioTracks.isEmpty()) EmptyHint("Только одна дорожка")
+                        if (audioTracks.isEmpty()) item { EmptyHint("Только одна дорожка") }
                         items(audioTracks) { t -> MenuRow(t.label, null, t.isSelected) { onSelectAudio(t) } }
                     }
                     PlaybackMenuTab.SUBTITLES -> {

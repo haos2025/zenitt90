@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Fullscreen
@@ -117,7 +119,7 @@ fun PhonePlayerController(
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         TransportButton(
-                            icon = if (isSeries) Icons.Default.SkipPrevious else androidx.compose.material.icons.Icons.Default.Replay10,
+                            icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
                             contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
                             enabled = !isSeries || hasPreviousEpisode,
                             onClick = if (isSeries) onPreviousEpisode else onSeekBackward
@@ -131,7 +133,7 @@ fun PhonePlayerController(
                         )
                         Spacer(Modifier.width(ZenithDimens.paddingL))
                         TransportButton(
-                            icon = if (isSeries) Icons.Default.SkipNext else androidx.compose.material.icons.Icons.Default.Forward10,
+                            icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
                             contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
                             enabled = !isSeries || hasNextEpisode,
                             onClick = if (isSeries) onNextEpisode else onSeekForward
