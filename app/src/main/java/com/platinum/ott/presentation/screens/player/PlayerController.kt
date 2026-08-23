@@ -3,8 +3,6 @@ package com.platinum.ott.presentation.screens.player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
-import com.platinum.ott.ui.theme.ZenithSurface
+import com.platinum.ott.ui.theme.*
 
 /**
  * Контроллер плеера для Android TV — редизайн (было: полноширинный
@@ -44,6 +48,18 @@ import com.platinum.ott.ui.theme.ZenithSurface
  * никуда не делась (те же onSeekForward/onSeekBackward, просто кнопки
  * заняты под эпизоды когда есть сериал — перемотка на TV всё ещё доступна
  * с D-pad Left/Right, см. PlayerScreen.onKeyEvent).
+ *
+ * Редизайн оверлея (второй раунд, PROMPT_PLAYER_OVERLAY_REDESIGN.md):
+ * качество/аудио/субтитры/скорость раньше жили ТОЛЬКО в отдельной панели
+ * (PlaybackMenuOverlay), доступной по Menu/DirectionUp — на самой капсуле
+ * не было ни одной иконки, указывающей на это. Теперь у капсулы справа
+ * есть те же четыре иконки, каждая открывает PlaybackMenuOverlay сразу на
+ * своей вкладке одним действием (см. onOpenMenuTab/PlayerViewModel.
+ * openPlaybackMenu). В отличие от кнопок перемотки/эпизодов слева, эти
+ * четыре — НАСТОЯЩИЕ интерактивные TV-компоненты (tv-material3 Surface,
+ * получают фокус пульта нормально), потому что взаимодействие с ними
+ * реально ожидается через клик/OK на сфокусированной иконке, а не только
+ * через глобальные горячие клавиши.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -61,6 +77,14 @@ fun PlayerController(
     onNextEpisode: () -> Unit = {},
     onPreviousEpisode: () -> Unit = {},
     onConnectPhone: () -> Unit = {},
+    // Состояние для подсветки активных иконок справа — то же самое, что
+    // уже частично было на телефоне (subtitlesEnabled), плюс скорость.
+    // Для аудио/качества устойчивого понятия "активно" нет (нет
+    // единого дефолта, с которым сравнивать), поэтому эти две иконки
+    // всегда нейтральные — кликабельны, просто без подсветки состояния.
+    subtitlesEnabled: Boolean = false,
+    playbackSpeed: Float = 1f,
+    onOpenMenuTab: (PlaybackMenuTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isSeries = hasNextEpisode || hasPreviousEpisode
@@ -95,18 +119,25 @@ fun PlayerController(
 
             // Капсула — не на весь экран, у неё собственная плашка с рамкой
             // и скруглением, а не растянутый на всю ширину градиент.
+            // Ширина увеличена относительно первой версии редизайна — та
+            // же плашка теперь вмещает ещё четыре иконки справа от
+            // транспорта, без этого им было бы тесно.
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = ZenithDimens.paddingXXL)
-                    .widthIn(max = 720.dp)
-                    .fillMaxWidth(0.62f)
+                    .widthIn(max = 860.dp)
+                    .fillMaxWidth(0.8f)
                     .clip(RoundedCornerShape(28.dp))
                     .background(ZenithSurface.copy(alpha = 0.92f))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
                     .padding(horizontal = ZenithDimens.paddingXL, vertical = ZenithDimens.paddingL),
                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
             ) {
+                // Тонкий прогресс-бар с временем в ОДНУ строку (текущее
+                // слева от бара, длительность справа) — раньше уже было
+                // так, макет редизайна намеренно это сохраняет, не
+                // растягивать обратно в отдельную строку над/под баром.
                 ProgressBar(currentMs = currentPositionMs, durationMs = durationMs)
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -114,34 +145,49 @@ fun PlayerController(
                     Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
                 }
 
+                // Один ряд: слева — транспорт (перемотка/эпизоды + play-
+                // pause чуть крупнее в этом же кластере), справа — четыре
+                // маленькие квадратные иконки настроек воспроизведения.
+                // Без подписей под иконками — состояние видно по
+                // подсветке, подписи только раздували бы высоту капсулы.
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS),
-                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconGlyphButton(
-                        icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
-                        contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
-                        onClick = if (isSeries) onPreviousEpisode else onSeekBackward,
-                        enabled = !isSeries || hasPreviousEpisode,
-                        size = 52.dp
-                    )
-                    Spacer(modifier = Modifier.width(ZenithDimens.paddingXL))
-                    IconGlyphButton(
-                        icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Пауза" else "Смотреть",
-                        onClick = onTogglePlay,
-                        isPrimary = true,
-                        size = 68.dp
-                    )
-                    Spacer(modifier = Modifier.width(ZenithDimens.paddingXL))
-                    IconGlyphButton(
-                        icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
-                        contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
-                        onClick = if (isSeries) onNextEpisode else onSeekForward,
-                        enabled = !isSeries || hasNextEpisode,
-                        size = 52.dp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconGlyphButton(
+                            icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
+                            contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
+                            onClick = if (isSeries) onPreviousEpisode else onSeekBackward,
+                            enabled = !isSeries || hasPreviousEpisode,
+                            size = 52.dp
+                        )
+                        Spacer(modifier = Modifier.width(ZenithDimens.paddingL))
+                        IconGlyphButton(
+                            icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Пауза" else "Смотреть",
+                            onClick = onTogglePlay,
+                            isPrimary = true,
+                            size = 68.dp
+                        )
+                        Spacer(modifier = Modifier.width(ZenithDimens.paddingL))
+                        IconGlyphButton(
+                            icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
+                            contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
+                            onClick = if (isSeries) onNextEpisode else onSeekForward,
+                            enabled = !isSeries || hasNextEpisode,
+                            size = 52.dp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), verticalAlignment = Alignment.CenterVertically) {
+                        MenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled) { onOpenMenuTab(PlaybackMenuTab.SUBTITLES) }
+                        MenuIconButton(icon = Icons.Default.Audiotrack, contentDescription = "Аудиодорожка", isActive = false) { onOpenMenuTab(PlaybackMenuTab.AUDIO) }
+                        MenuIconButton(icon = Icons.Default.HighQuality, contentDescription = "Качество", isActive = false) { onOpenMenuTab(PlaybackMenuTab.QUALITY) }
+                        MenuIconButton(icon = Icons.Default.Speed, contentDescription = "Скорость", isActive = playbackSpeed != 1f) { onOpenMenuTab(PlaybackMenuTab.SPEED) }
+                    }
                 }
             }
         }
@@ -150,17 +196,21 @@ fun PlayerController(
 
 @Composable
 private fun IconGlyphButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    size: androidx.compose.ui.unit.Dp,
+    size: Dp,
     isPrimary: Boolean = false,
     enabled: Boolean = true
 ) {
     // Box+clickable, не Surface — D-pad уже обрабатывается глобально в
     // PlayerScreen.onKeyEvent, эти кнопки не получают фокус напрямую и не
     // нуждаются в отдельной focus/indication-логике (то же решение, что
-    // было в старой ControlButton).
+    // было в старой ControlButton). Это осознанно НЕ меняли в этом
+    // редизайне — попытка притвориться, что они фокусируемые, была бы
+    // хуже честного decorative-состояния (см. центральную надпись
+    // "10 сек"/название серии в PlayerScreen.kt, которая теперь реально
+    // даёт обратную связь на DirectionLeft/DirectionRight).
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(size)
@@ -177,6 +227,36 @@ private fun IconGlyphButton(
             icon, contentDescription,
             tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f),
             modifier = Modifier.size(size * 0.5f)
+        )
+    }
+}
+
+/**
+ * Четыре маленькие квадратные иконки справа (субтитры/аудио/качество/
+ * скорость) — в отличие от IconGlyphButton выше, это НАСТОЯЩИЙ
+ * фокусируемый TV-компонент (tv-material3 Surface), потому что клик по
+ * каждой должен реально работать с пульта, не быть декоративным.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun MenuIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
+            focusedContainerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.38f) else ZenithFocusContainerActive
+        )
+    ) {
+        Icon(
+            icon, contentDescription,
+            tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
+            modifier = Modifier.padding(9.dp).size(20.dp)
         )
     }
 }

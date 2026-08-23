@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,10 +29,18 @@ import com.platinum.ott.ui.theme.*
 // Menu-кнопки удобнее одна панель с разделами, чем разные горячие
 // клавиши), но с закруглённой карточкой, отступом от края экрана (не
 // впритык), сегментированными вкладками-пилюлями и строками с чек-иконкой
-// вместо текстового "✓". "По QR с телефона" убрано из списка субтитровых
-// дорожек — семантически другое действие (подключение устройства, не
-// выбор дорожки), теперь отдельная кнопка на самом плеере (см.
-// PlayerController.kt), не спрятана в этом списке.
+// вместо текстового "✓".
+//
+// Второй раунд редизайна (PROMPT_PLAYER_OVERLAY_REDESIGN.md): вкладка
+// "Субт." раньше показывала только "Выключены" + встроенные дорожки —
+// внешние субтитры по ссылке были доступны на TV ТОЛЬКО через отдельную
+// кнопку/QR на самом плеере (см. PlayerController.kt/PlayerScreen.kt,
+// showCompanionQr), никак не отражены в этом списке — с телефона это
+// выглядело как "список дорожек плюс невзрачное поле ввода снизу", на TV
+// вообще не было заметно, что такая возможность есть. Теперь "Свой файл
+// по ссылке" — равноправная строка в том же списке; печатать URL пультом
+// по-прежнему неудобно, так что клик по ней не открывает поле ввода на
+// месте (как на телефоне), а вызывает тот же QR-поток — onRequestExternalSubtitleQr.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlaybackMenuOverlay(
@@ -46,6 +55,7 @@ fun PlaybackMenuOverlay(
     subtitlesEnabled: Boolean,
     onSelectSubtitle: (TrackOption) -> Unit,
     onDisableSubtitles: () -> Unit,
+    onRequestExternalSubtitleQr: () -> Unit,
     playbackSpeed: Float,
     onSelectSpeed: (Float) -> Unit,
     onDismiss: () -> Unit,
@@ -106,6 +116,20 @@ fun PlaybackMenuOverlay(
                     }
                     PlaybackMenuTab.SUBTITLES -> {
                         item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
+                        // Равноправный пункт списка, не поле ввода снизу —
+                        // единственный способ получить субтитры-ПЕРЕВОД на
+                        // другой язык (встроенные дорожки — это язык
+                        // оригинала). trailingIcon вместо чек-иконки: это
+                        // действие (открыть QR), а не выбор текущего
+                        // состояния, отмечать как "выбрано" нечем.
+                        item {
+                            MenuRow(
+                                label = "Свой файл по ссылке",
+                                subLabel = "по QR с телефона",
+                                isSelected = false,
+                                trailingIcon = Icons.Default.QrCode
+                            ) { onRequestExternalSubtitleQr() }
+                        }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
                         if (subtitleTracks.isEmpty()) item { EmptyHint("В потоке нет встроенных субтитров") }
                     }
@@ -137,7 +161,13 @@ private fun MenuTabButton(label: String, selected: Boolean, modifier: Modifier =
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
-private fun MenuRow(label: String, subLabel: String?, isSelected: Boolean, onClick: () -> Unit) {
+private fun MenuRow(
+    label: String,
+    subLabel: String?,
+    isSelected: Boolean,
+    trailingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -155,7 +185,13 @@ private fun MenuRow(label: String, subLabel: String?, isSelected: Boolean, onCli
                 Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White)
                 subLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.45f)) }
             }
-            if (isSelected) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            when {
+                // Действие (например "Свой файл по ссылке" → QR), а не
+                // текущий выбор — trailingIcon показывает ЧТО произойдёт,
+                // не помечает строку как "выбранную".
+                trailingIcon != null -> Icon(trailingIcon, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                isSelected -> Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

@@ -53,12 +53,17 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
     // Раньше MainActivity форсила SCREEN_ORIENTATION_PORTRAIT для не-TV
     // безусловно, и ничего на экране плеера это не переопределяло — видео
     // физически не могло открыться на весь экран в альбомной ориентации.
-    // По умолчанию сразу landscape-fullscreen при входе в плеер (как в
-    // большинстве видео-приложений), с ручной кнопкой на случай, если
-    // пользователь предпочитает портретный режим.
+    // Тогда же решили сразу форсить landscape-fullscreen при входе в
+    // плеер — но по факту это означало, что плеер ВСЕГДА открывался на
+    // весь экран с первого кадра, даже если пользователь просто хотел
+    // посмотреть в портрете (как остальной интерфейс). Пересмотрено
+    // (PROMPT_PLAYER_OVERLAY_REDESIGN.md): по умолчанию — портрет, как и
+    // весь остальной UI; на весь экран/landscape — только по явному
+    // действию (кнопка fullscreen ниже, либо физический поворот телефона,
+    // если на нём уже завязана системная логика через сенсор).
     val context = LocalContext.current
     val activity = context as? Activity
-    var isFullscreen by remember { mutableStateOf(true) }
+    var isFullscreen by remember { mutableStateOf(false) }
     LaunchedEffect(isFullscreen) {
         activity?.requestedOrientation = if (isFullscreen) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         activity?.window?.let { window ->

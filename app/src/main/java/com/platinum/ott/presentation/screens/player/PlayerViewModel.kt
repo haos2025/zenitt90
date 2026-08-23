@@ -56,7 +56,12 @@ sealed interface PlayerUiState {
         // сериал (обычный фильм, или единственная известная серия), тогда
         // остаются кнопки перемотки, см. PlayerController.kt/PhonePlayerController.kt.
         val nextEpisodeId: String? = null,
-        val previousEpisodeId: String? = null
+        val previousEpisodeId: String? = null,
+        // Названия соседних эпизодов — нужны только для короткой надписи
+        // по центру экрана при DirectionLeft/DirectionRight на TV (см.
+        // PlayerScreen.kt), сам переход по-прежнему работает по id.
+        val nextEpisodeTitle: String? = null,
+        val previousEpisodeTitle: String? = null
     ) : PlayerUiState
     data class Error(val message: String) : PlayerUiState
 }
@@ -298,18 +303,28 @@ class PlayerViewModel @Inject constructor(
                 // — тот же признак, что уже использует SeriesEpisodesScreen.
                 var nextEpisodeId: String? = null
                 var previousEpisodeId: String? = null
+                var nextEpisodeTitle: String? = null
+                var previousEpisodeTitle: String? = null
                 if (movie?.seriesId != null) {
                     try {
                         val episodes = playlistRepository.getEpisodesForSeries(movie.seriesId)
                         val idx = episodes.indexOfFirst { it.id == movieId }
                         if (idx >= 0) {
-                            previousEpisodeId = episodes.getOrNull(idx - 1)?.id
-                            nextEpisodeId = episodes.getOrNull(idx + 1)?.id
+                            val previous = episodes.getOrNull(idx - 1)
+                            val next = episodes.getOrNull(idx + 1)
+                            previousEpisodeId = previous?.id
+                            previousEpisodeTitle = previous?.title
+                            nextEpisodeId = next?.id
+                            nextEpisodeTitle = next?.title
                         }
                     } catch (_: Exception) { /* не сериал/плейлист недоступен — оставляем перемотку как есть */ }
                 }
 
-                _uiState.value = PlayerUiState.Ready(variants, initial, currentTitle, nextEpisodeId = nextEpisodeId, previousEpisodeId = previousEpisodeId)
+                _uiState.value = PlayerUiState.Ready(
+                    variants, initial, currentTitle,
+                    nextEpisodeId = nextEpisodeId, previousEpisodeId = previousEpisodeId,
+                    nextEpisodeTitle = nextEpisodeTitle, previousEpisodeTitle = previousEpisodeTitle
+                )
                 startHistoryAutosave()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
         }
@@ -373,6 +388,14 @@ class PlayerViewModel @Inject constructor(
         _uiState.value = current.copy(currentVariant = variant, showPlaybackMenu = false)
     }
     fun togglePlaybackMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(showPlaybackMenu = !c.showPlaybackMenu) }
+    // Клик по одной из четырёх иконок в капсуле (PlayerController.kt)
+    // должен открыть панель СРАЗУ на нужной вкладке одним действием, не
+    // переключать вкладку отдельным вторым шагом после открытия через
+    // togglePlaybackMenu() — тот остаётся как есть для Menu/DirectionUp.
+    fun openPlaybackMenu(tab: PlaybackMenuTab) {
+        val c = _uiState.value as? PlayerUiState.Ready ?: return
+        _uiState.value = c.copy(showPlaybackMenu = true, menuTab = tab)
+    }
     fun dismissPlaybackMenu() { val c = _uiState.value as? PlayerUiState.Ready ?: return; if (c.showPlaybackMenu) { _uiState.value = c.copy(showPlaybackMenu = false); exoPlayer.play() } }
     fun setMenuTab(tab: PlaybackMenuTab) { val c = _uiState.value as? PlayerUiState.Ready ?: return; _uiState.value = c.copy(menuTab = tab) }
 

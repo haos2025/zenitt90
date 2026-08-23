@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.HighQuality
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.StreamVariant
@@ -45,6 +47,18 @@ import com.platinum.ott.ui.theme.ZenithSurface
 // (см. PhonePlayerScreen.kt, seekDeltaFromDrag) уже делает то же самое,
 // так что при просмотре сериала (hasNextEpisode/hasPreviousEpisode) эти
 // две кнопки не теряют перемотку вообще, она остаётся жестом.
+//
+// Второй раунд редизайна (PROMPT_PLAYER_OVERLAY_REDESIGN.md): раньше
+// субтитры/скорость/качество/fullscreen были ОТДЕЛЬНЫМ рядом голых иконок
+// без собственного фона ПОД транспортной капсулой — выглядело как два
+// разных элемента UI, не один плеер. Теперь один Column с общим фоном/
+// рамкой/скруглением — транспорт и четыре иконки настроек в одной и той
+// же плашке, в одном ряду (транспорт слева, иконки справа). Fullscreen
+// вынесен из этого ряда наверх, к заголовку — это переключатель ориентации
+// экрана, а не параметр воспроизведения текущего видео, как остальные
+// четыре (которые теперь буквально совпадают с четырьмя вкладками
+// PlaybackMenuOverlay на TV: субтитры/аудио/качество/скорость — раньше
+// кнопки аудиодорожки на телефоне не было вообще).
 @Composable
 fun PhonePlayerController(
     isVisible: Boolean,
@@ -90,14 +104,24 @@ fun PhonePlayerController(
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
                 Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                // Fullscreen — переключатель ориентации экрана целиком, не
+                // параметр воспроизведения текущего видео (как остальные
+                // четыре иконки капсулы ниже) — поэтому живёт в верхней
+                // строке рядом с заголовком, а не внутри транспортной
+                // плашки.
+                IconButton(onClick = onToggleFullscreen) {
+                    Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "На весь экран", tint = Color.White)
+                }
             }
 
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingM),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Транспортная капсула — та же визуальная идея, что и на TV:
-                // не голый ряд иконок поверх видео, а собственная плашка.
+                // Единая капсула — транспорт и ряд иконок настроек теперь
+                // один Column с общим фоном/рамкой/скруглением (раньше
+                // иконки были отдельным элементом без своего фона под
+                // капсулой).
                 Column(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
@@ -117,44 +141,47 @@ fun PhonePlayerController(
                         Text(formatMs(currentPositionMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
                         Text(formatMs(durationMs), color = Color.White.copy(0.5f), style = MaterialTheme.typography.bodySmall)
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        TransportButton(
-                            icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
-                            contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
-                            enabled = !isSeries || hasPreviousEpisode,
-                            onClick = if (isSeries) onPreviousEpisode else onSeekBackward
-                        )
-                        Spacer(Modifier.width(ZenithDimens.paddingL))
-                        TransportButton(
-                            icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Пауза" else "Play",
-                            isPrimary = true,
-                            onClick = onTogglePlay
-                        )
-                        Spacer(Modifier.width(ZenithDimens.paddingL))
-                        TransportButton(
-                            icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
-                            contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
-                            enabled = !isSeries || hasNextEpisode,
-                            onClick = if (isSeries) onNextEpisode else onSeekForward
-                        )
-                    }
-                }
 
-                Spacer(Modifier.height(ZenithDimens.paddingS))
+                    // Один ряд: слева — транспортный кластер (перемотка/
+                    // эпизоды + play/pause покрупнее посередине кластера),
+                    // справа — четыре маленькие квадратные иконки настроек
+                    // воспроизведения. Тот же макет, что на TV
+                    // (PlayerController.kt).
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TransportButton(
+                                icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
+                                contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
+                                enabled = !isSeries || hasPreviousEpisode,
+                                onClick = if (isSeries) onPreviousEpisode else onSeekBackward
+                            )
+                            Spacer(Modifier.width(ZenithDimens.paddingM))
+                            TransportButton(
+                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Пауза" else "Play",
+                                isPrimary = true,
+                                onClick = onTogglePlay
+                            )
+                            Spacer(Modifier.width(ZenithDimens.paddingM))
+                            TransportButton(
+                                icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
+                                contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
+                                enabled = !isSeries || hasNextEpisode,
+                                onClick = if (isSeries) onNextEpisode else onSeekForward
+                            )
+                        }
 
-                // Раньше субтитры/скорость/качество/fullscreen были в правом
-                // верхнем углу — в альбомной ориентации, когда телефон держат
-                // двумя руками, большие пальцы естественно лежат внизу
-                // экрана. Теперь под транспортной капсулой, тоже внизу.
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { menuTab = PlaybackMenuTab.SUBTITLES }) { Icon(Icons.Default.ClosedCaption, "Субтитры", tint = if (subtitlesEnabled) MaterialTheme.colorScheme.primary else Color.White) }
-                    IconButton(onClick = { menuTab = PlaybackMenuTab.SPEED }) { Icon(Icons.Default.Speed, "Скорость", tint = if (playbackSpeed != 1f) MaterialTheme.colorScheme.primary else Color.White) }
-                    if (variants.size > 1) {
-                        IconButton(onClick = { menuTab = PlaybackMenuTab.QUALITY }) { Icon(Icons.Default.HighQuality, "Качество", tint = Color.White) }
-                    }
-                    IconButton(onClick = onToggleFullscreen) {
-                        Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "На весь экран", tint = Color.White)
+                        Spacer(Modifier.weight(1f))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
+                            SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled) { menuTab = PlaybackMenuTab.SUBTITLES }
+                            SmallMenuIconButton(icon = Icons.Default.Audiotrack, contentDescription = "Аудиодорожка", isActive = false) { menuTab = PlaybackMenuTab.AUDIO }
+                            SmallMenuIconButton(icon = Icons.Default.HighQuality, contentDescription = "Качество", isActive = false) { menuTab = PlaybackMenuTab.QUALITY }
+                            SmallMenuIconButton(icon = Icons.Default.Speed, contentDescription = "Скорость", isActive = playbackSpeed != 1f) { menuTab = PlaybackMenuTab.SPEED }
+                        }
                     }
                 }
             }
@@ -171,25 +198,28 @@ fun PhonePlayerController(
         }
         PlaybackMenuTab.SUBTITLES -> {
             var externalUrl by remember { mutableStateOf("") }
+            // "Свой файл по ссылке" раньше был полем ввода мелким шрифтом
+            // внизу диалога, отдельно от остальных пунктов. Теперь —
+            // равноправная строка списка (как "Выключены"/дорожки); клик
+            // по ней разворачивает то же поле ввода прямо под ней, а не
+            // держит его видимым постоянно.
+            var showExternalField by remember { mutableStateOf(false) }
             PlaybackOptionDialog("Субтитры", onDismiss = { menuTab = null }) {
                 DialogRow("Выключены", !subtitlesEnabled) { onDisableSubtitles(); menuTab = null }
+                DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
+                if (showExternalField) {
+                    Column(Modifier.fillMaxWidth().padding(start = ZenithDimens.paddingM, bottom = ZenithDimens.paddingS)) {
+                        OutlinedTextField(value = externalUrl, onValueChange = { externalUrl = it }, label = { Text("Ссылка на .srt") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        TextButton(onClick = { if (externalUrl.isNotBlank()) { onLoadExternalSubtitle(externalUrl); menuTab = null } }, modifier = Modifier.fillMaxWidth()) { Text("Загрузить") }
+                    }
+                }
                 subtitleTracks.forEach { t -> DialogRow(t.label, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t); menuTab = null } }
                 if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = Color.Gray, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
-                Spacer(Modifier.height(ZenithDimens.paddingS))
-                // Внешние SRT по ссылке остаются здесь — телефон, в отличие
-                // от TV, печатает без проблем, отдельный QR-канал самому
-                // себе не нужен (QR — только чтобы TV принимал текст от
-                // телефона, см. ROADMAP.md п.6). Общее включено/выключено
-                // по умолчанию — теперь в Настройки → Воспроизведение →
-                // Субтитры (см. PhoneSettingsScreen.kt), не здесь: это
-                // относится ко всем видео сразу, а не к конкретному фильму.
-                OutlinedTextField(value = externalUrl, onValueChange = { externalUrl = it }, label = { Text("Ссылка на .srt") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = { if (externalUrl.isNotBlank()) { onLoadExternalSubtitle(externalUrl); menuTab = null } }, modifier = Modifier.fillMaxWidth()) { Text("Загрузить по ссылке") }
             }
         }
         PlaybackMenuTab.SPEED -> PlaybackOptionDialog("Скорость", onDismiss = { menuTab = null }) {
             listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { s ->
-                DialogRow(if (s == 1f) "Обычная" else "${s}x", s == playbackSpeed) { onSelectSpeed(s); menuTab = null }
+                DialogRow((if (s == 1f) "Обычная" else "${s}x"), s == playbackSpeed) { onSelectSpeed(s); menuTab = null }
             }
         }
         null -> {}
@@ -198,7 +228,7 @@ fun PhonePlayerController(
 
 @Composable
 private fun TransportButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     isPrimary: Boolean = false,
@@ -212,6 +242,31 @@ private fun TransportButton(
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
             Icon(icon, contentDescription, tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 30.dp else 22.dp))
+        }
+    }
+}
+
+/**
+ * Четыре маленькие квадратные иконки настроек (субтитры/аудио/качество/
+ * скорость) — тот же визуальный язык, что и на TV (MenuIconButton в
+ * PlayerController.kt): закруглённый квадрат, активная — с подсветкой
+ * фоном/цветом иконки, неактивная — нейтральная полупрозрачная подложка.
+ */
+@Composable
+private fun SmallMenuIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f))
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+            Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
         }
     }
 }

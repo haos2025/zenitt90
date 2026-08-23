@@ -1,16 +1,22 @@
 package com.platinum.ott.presentation.screens.player
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -19,6 +25,7 @@ import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.ui.theme.ZenithSurface
 import androidx.tv.material3.*
 import kotlinx.coroutines.delay
 
@@ -31,9 +38,18 @@ import kotlinx.coroutines.delay
  *    Up/Down/Center НЕ перехватываются здесь, чтобы его собственный
  *    LazyColumn нормально работал через встроенную фокус-навигацию Compose.
  *  - D-pad Center/OK и системная Play/Pause с пульта — пауза/воспроизведение.
- *  - Left/Right — перемотка на 10 секунд.
+ *  - Left/Right — перемотка на 10 секунд (или переключение серии, если
+ *    сериал) — сопровождается короткой надписью по центру экрана
+ *    (seekToast), которая ненадолго появляется и гаснет.
  *  - Back — если открыто меню качества, сначала закрывает его; иначе
  *    вызывает onBackPressed (раньше этот параметр не использовался вообще).
+ *
+ * Редизайн оверлея (второй раунд, PROMPT_PLAYER_OVERLAY_REDESIGN.md):
+ * раньше PlayerController.isVisible зависело от !state.showPlaybackMenu —
+ * пока открыта панель качества/аудио/субтитров/скорости, капсула ПОЛНОСТЬЮ
+ * пряталась, ощущалось как два разных экрана вместо одного плеера. Теперь
+ * капсула остаётся видна (просто притемнена полупрозрачным фоном самой
+ * панели) — isVisible зависит только от showControls.
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -46,6 +62,21 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
     var lastInteraction by remember { mutableStateOf(0L) }
     var currentPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
+
+    // Кнопки перемотки/эпизодов в капсуле — decorative (см.
+    // PlayerController.kt: не получают фокус пульта напрямую, реальное
+    // действие идёт через DirectionLeft/DirectionRight ниже). Раньше
+    // нажатие этих клавиш не давало вообще никакой визуальной обратной
+    // связи — просто перематывало/переключало серию молча. Теперь короткая
+    // полупрозрачная надпись по центру экрана ("10 сек" / название серии),
+    // тот же паттерн автоскрытия, что уже используется для showControls.
+    var seekToast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(seekToast) {
+        if (seekToast != null) {
+            delay(700)
+            seekToast = null
+        }
+    }
 
     // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) —
     // сервер живёт ровно пока открыт этот оверлей, не дольше: DisposableEffect
@@ -131,11 +162,23 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     // же кнопки, что видны в PlayerController, ведут себя
                     // одинаково что с пульта, что по клику.
                     Key.DirectionRight -> {
-                        if (ready.nextEpisodeId != null) viewModel.playNextEpisode() else viewModel.seekForward()
+                        if (ready.nextEpisodeId != null) {
+                            seekToast = ready.nextEpisodeTitle?.let { "Следующая: $it" } ?: "Следующая серия"
+                            viewModel.playNextEpisode()
+                        } else {
+                            seekToast = "+10 сек"
+                            viewModel.seekForward()
+                        }
                         true
                     }
                     Key.DirectionLeft -> {
-                        if (ready.previousEpisodeId != null) viewModel.playPreviousEpisode() else viewModel.seekBackward()
+                        if (ready.previousEpisodeId != null) {
+                            seekToast = ready.previousEpisodeTitle?.let { "Предыдущая: $it" } ?: "Предыдущая серия"
+                            viewModel.playPreviousEpisode()
+                        } else {
+                            seekToast = "-10 сек"
+                            viewModel.seekBackward()
+                        }
                         true
                     }
                     // Key.Menu оставлен для пультов/клавиатур, где он есть, но
@@ -192,7 +235,11 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
             }
             is PlayerUiState.Ready -> {
                 PlayerController(
-                    isVisible = showControls && !state.showPlaybackMenu,
+                    // Раньше: showControls && !state.showPlaybackMenu —
+                    // капсула полностью пряталась, пока открыта панель
+                    // настроек. Теперь капсула не зависит от showPlaybackMenu,
+                    // остаётся видна под затемнением самой панели.
+                    isVisible = showControls,
                     isPlaying = isPlaying,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
@@ -205,6 +252,12 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     onNextEpisode = { viewModel.playNextEpisode() },
                     onPreviousEpisode = { viewModel.playPreviousEpisode() },
                     onConnectPhone = { showCompanionQr = true },
+                    subtitlesEnabled = state.subtitlesEnabled,
+                    playbackSpeed = state.playbackSpeed,
+                    // Клик по одной из четырёх новых иконок капсулы — один
+                    // шаг до нужной вкладки (не открыть меню, потом ещё раз
+                    // переключить вкладку отдельно).
+                    onOpenMenuTab = { viewModel.openPlaybackMenu(it) },
                     modifier = Modifier.fillMaxSize()
                 )
                 if (state.showPlaybackMenu) {
@@ -220,6 +273,10 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         subtitlesEnabled = state.subtitlesEnabled,
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
                         onDisableSubtitles = { viewModel.disableSubtitles() },
+                        // "Свой файл по ссылке" в списке субтитров на TV —
+                        // закрывает панель настроек и открывает тот же
+                        // QR-поток, что и кнопка "Подключить телефон".
+                        onRequestExternalSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
                         playbackSpeed = state.playbackSpeed,
                         onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
                         onDismiss = { viewModel.dismissPlaybackMenu() },
@@ -233,6 +290,25 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+            }
+        }
+
+        // Короткая надпись по центру экрана на DirectionLeft/DirectionRight
+        // — тот же AnimatedVisibility fade-in/fade-out + LaunchedEffect-
+        // таймер, что уже используется для автоскрытия капсулы выше.
+        AnimatedVisibility(
+            visible = seekToast != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(ZenithSurface.copy(alpha = 0.85f))
+                    .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
+            ) {
+                Text(text = seekToast ?: "", style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
     }
