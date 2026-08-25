@@ -3,6 +3,7 @@ package com.platinum.ott.presentation.screens.series
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
+import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.data.repository.SeriesSummary
 import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.domain.model.StreamVariant
@@ -82,6 +83,13 @@ class SeriesEpisodesViewModel @Inject constructor(
     private val _pendingVariantChoice = MutableStateFlow<Pair<String, List<StreamVariant>>?>(null)
     val pendingVariantChoice: StateFlow<Pair<String, List<StreamVariant>>?> = _pendingVariantChoice
 
+    // Прогресс просмотра по каждому эпизоду — один пакетный запрос
+    // (WatchHistoryUseCase.getByContentIds) на весь список сразу при load(),
+    // не getByContentId() по одному в цикле на 15-20+ серий. Ключ — id
+    // эпизода, тот же, что и ep.id в списке серий.
+    private val _episodeHistory = MutableStateFlow<Map<String, WatchHistoryEntity>>(emptyMap())
+    val episodeHistory: StateFlow<Map<String, WatchHistoryEntity>> = _episodeHistory
+
     fun onEpisodeSelected(episodeId: String, onNavigate: (episodeId: String, variantUrl: String?) -> Unit) {
         viewModelScope.launch {
             val variants = try { sessionGraph.getPlayableUrlUseCase.execute(episodeId) } catch (_: Exception) { emptyList() }
@@ -114,6 +122,11 @@ class SeriesEpisodesViewModel @Inject constructor(
                 val favEntity = sessionGraph.favoritesUseCase.getByContentId(seriesId)
                 _isFavorite.value = favEntity != null
                 _isAnime.value = favEntity?.isAnime ?: false
+                _episodeHistory.value = try {
+                    sessionGraph.watchHistoryUseCase.getByContentIds(episodes.map { it.id }).associateBy { it.contentId }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
             } catch (e: Exception) {
                 _uiState.value = SeriesEpisodesUiState.Error(e.message ?: "Не удалось загрузить эпизоды")
             }

@@ -12,6 +12,11 @@ interface WatchHistoryDao {
     fun getRecent(limit: Int = 50): Flow<List<WatchHistoryEntity>>
     @Query("SELECT * FROM watch_history WHERE contentId = :contentId LIMIT 1")
     suspend fun getByContentId(contentId: String): WatchHistoryEntity?
+    // Список эпизодов сериала (15-20+ штук) — один SQL-запрос вместо
+    // getByContentId() по одному в цикле на каждую серию (см.
+    // SeriesEpisodesViewModel.load()).
+    @Query("SELECT * FROM watch_history WHERE contentId IN (:contentIds)")
+    suspend fun getByContentIds(contentIds: List<String>): List<WatchHistoryEntity>
     @Query("DELETE FROM watch_history WHERE contentId = :contentId")
     suspend fun deleteByContentId(contentId: String): Int
     @Query("DELETE FROM watch_history")
