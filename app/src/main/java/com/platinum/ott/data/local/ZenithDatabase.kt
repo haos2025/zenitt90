@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 10, exportSchema = true
+    version = 11, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -99,10 +99,21 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Карусель актёров с фото (PROMPT_DETAIL_SCREEN_UPGRADE.md, п.4) —
+        // castJson хранит сериализованный Gson-ом список CastMember, nullable
+        // ADD COLUMN без DEFAULT, тот же безопасный паттерн, что и во всех
+        // предыдущих миграциях этого файла (старые строки получат NULL,
+        // карусель для них появится после следующего фетча по TTL).
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `metadata` ADD COLUMN `castJson` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

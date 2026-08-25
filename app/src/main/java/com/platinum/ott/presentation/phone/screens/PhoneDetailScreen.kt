@@ -22,6 +22,8 @@ import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.presentation.components.CastRow
+import com.platinum.ott.presentation.components.RecommendationsRow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -85,7 +87,16 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 }
                 Text(state.movie.title, style = MaterialTheme.typography.headlineLarge, color = Color.White)
                 state.metadata?.let { m ->
-                    m.genres?.let { Text(it, color = Color.Gray) }
+                    // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1,
+                    // тот же приём, что в DetailScreen.kt (TV): пропускаем
+                    // пустые части, duration у части источников — пустая
+                    // строка по умолчанию.
+                    val metaLine = listOfNotNull(
+                        state.movie.year.takeIf { it > 0 }?.toString(),
+                        state.movie.duration.takeIf { it.isNotBlank() },
+                        m.genres?.takeIf { it.isNotBlank() }
+                    ).joinToString(" · ")
+                    if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
                     m.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                     m.overview?.let { Text(it, color = Color.White.copy(0.8f), modifier = Modifier.padding(top = ZenithDimens.paddingS)) }
                 }
@@ -98,6 +109,16 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                     if (state.isFavorite) {
                         OutlinedButton(onClick = { viewModel.setAnime(movieId, !state.isAnime) }) { Text(if (state.isAnime) "✓ Аниме" else "Аниме?") }
                     }
+                }
+                // Карусель актёров (п.4) — как на TV, не рисуется, если пусто.
+                if (state.metadata?.cast?.isNotEmpty() == true) {
+                    Spacer(Modifier.height(ZenithDimens.paddingM))
+                    CastRow(state.metadata.cast)
+                }
+                // "Смотрите также" (п.5) — только когда TMDB нашёл совпадение.
+                if (state.recommendations.isNotEmpty()) {
+                    Spacer(Modifier.height(ZenithDimens.paddingM))
+                    RecommendationsRow(state.recommendations)
                 }
             }
         }

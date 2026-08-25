@@ -1,8 +1,12 @@
 package com.platinum.ott.data.repository
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.platinum.ott.data.local.dao.MetadataDao
 import com.platinum.ott.data.local.entity.MetadataEntity
 import com.platinum.ott.data.remote.tmdb.TmdbApiService
+import com.platinum.ott.domain.model.CastMember
+import com.platinum.ott.domain.model.Recommendation
 import com.platinum.ott.domain.model.TmdbMetadata
 import com.platinum.ott.domain.repository.TmdbRepository
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +30,8 @@ import retrofit2.HttpException
 // случайный скриншот": сама детальная карточка могла попасть под раздачу
 // 429 от того, что каталог только что отстрелял пачку запросов.
 private val tmdbConcurrencyLimiter = Semaphore(permits = 4)
+private val gson = Gson()
+private val castListType = object : TypeToken<List<CastMember>>() {}.type
 
 class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDao: MetadataDao) : TmdbRepository {
     override suspend fun getMetadata(contentId: String, title: String, year: Int?): Result<TmdbMetadata> = withContext(Dispatchers.IO) {
@@ -47,17 +53,27 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
 
     // До 2 повторных попыток именно на 429 (Too Many Requests) с паузой —
     // на любую другую ошибку (404/сеть/таймаут) повтор не имеет смысла,
-    // ситуация не изменится за секунду.
+    // ситуация не изменится за секунду. Кредиты (PROMPT_DETAIL_SCREEN_UPGRADE.md,
+    // п.4) запрашиваются отдельным вызовом внутри того же retry — если 429
+    // словит именно он, а не getMovieDetails, вся попытка просто повторяется
+    // целиком, отдельный счётчик под кредиты не заводится (лишняя сложность
+    // ради события, которое и так редко — getMetadata уже под общим лимитом
+    // в 4 параллельных запроса).
     private suspend fun fetchWithRetry(contentId: String, title: String, year: Int?, attempt: Int = 0): MetadataEntity {
         try {
             val search = api.searchMovie(title, year)
             val result = search.results.firstOrNull() ?: throw Exception("TMDB: не найдено")
             val details = api.getMovieDetails(result.id)
             val trailer = details.videos?.results?.firstOrNull { it.site == "YouTube" && it.type == "Trailer" }
-            val cast = details.credits?.cast?.take(5)?.joinToString(", ") { it.name } ?: ""
             val genres = details.genres.joinToString(", ") { it.name }
+            val castMembers = try {
+                api.getMovieCredits(result.id).cast.take(15)
+                    .map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path) }
+            } catch (e: Exception) { emptyList() } // карусель актёров — второстепенная деталь, не должна ронять всю карточку фильма
+            val castJson = if (castMembers.isNotEmpty()) gson.toJson(castMembers) else null
             return MetadataEntity(contentId, result.id, details.poster_path, details.backdrop_path,
-                details.overview, details.vote_average, genres, trailer?.key?.let { "https://youtube.com/watch?v=$it" }, cast)
+                details.overview, details.vote_average, genres, trailer?.key?.let { "https://youtube.com/watch?v=$it" },
+                castJson = castJson)
         } catch (e: HttpException) {
             if (e.code() == 429 && attempt < 2) {
                 delay(800L * (attempt + 1)) // 800мс, потом 1600мс — TMDB отдаёт Retry-After, но не все версии okhttp/retrofit прокидывают заголовок сюда без доп. интерцептора, литеральная пауза надёжнее без лишней связности
@@ -67,7 +83,29 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
         }
     }
 
-    private fun MetadataEntity.toDomain() = TmdbMetadata(tmdbId, posterPath, backdropPath, overview, voteAverage, genres, trailerUrl, cast)
+    private fun MetadataEntity.toDomain(): TmdbMetadata {
+        val cast = castJson?.let { json ->
+            try { gson.fromJson<List<CastMember>>(json, castListType) } catch (e: Exception) { emptyList() }
+        } ?: emptyList()
+        return TmdbMetadata(tmdbId, posterPath, backdropPath, overview, voteAverage, genres, trailerUrl, cast)
+    }
+
+    // PROMPT_DETAIL_SCREEN_UPGRADE.md, п.5 — вариант (б): чистая витрина,
+    // без сопоставления с собственным каталогом и без кэша в Room (см.
+    // комментарий в TmdbRepository.kt). Любая ошибка — пустой список,
+    // экран деталки просто не рисует блок, а не показывает ошибку поверх
+    // уже загруженного фильма.
+    override suspend fun getRecommendations(tmdbId: Int): List<Recommendation> = withContext(Dispatchers.IO) {
+        try {
+            tmdbConcurrencyLimiter.withPermit {
+                api.getMovieRecommendations(tmdbId).results.mapNotNull { item ->
+                    val title = item.title ?: item.name ?: return@mapNotNull null
+                    val year = item.release_date?.takeIf { it.length >= 4 }?.substring(0, 4)?.toIntOrNull()
+                    Recommendation(item.id, title, item.poster_path, year)
+                }
+            }
+        } catch (e: Exception) { emptyList() }
+    }
 
     // Раньше SeriesTrackerUseCase.updateSchedule() был заглушкой — весь этот
     // путь (поиск сериала → следующая серия → дата выхода) нигде не был

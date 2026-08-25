@@ -2,6 +2,8 @@ package com.platinum.ott.presentation.screens.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +23,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.presentation.components.CastRow
+import com.platinum.ott.presentation.components.RecommendationsRow
 import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -80,13 +84,32 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background.copy(alpha = 0.75f), Color.Transparent))))
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background), startY = 300f)))
                 }
-                Column(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                // verticalScroll — раньше содержимое просто обрезалось снизу
+                // без возможности докрутить (см. PROMPT_DETAIL_SCREEN_UPGRADE.md,
+                // п.2): при длинном описании кнопки "Смотреть"/"В избранное"
+                // могло вытолкнуть за нижний край экрана. Тот же паттерн, что
+                // уже проверен на TV в SettingsScreen.kt (обычный Column +
+                // verticalScroll с tv-material3 Button внутри, фокус D-pad
+                // работает) — TvLazyColumn не понадобился, тут нет своего
+                // отдельного набора фокусируемых строк, как в CycleSetting,
+                // просто текст и ряд кнопок.
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)
                     state.metadata?.let { meta ->
-                        meta.genres?.let { Text(it, color = Color.Gray) }
+                        // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1.
+                        // Поля year/duration есть на Movie и раньше нигде не
+                        // выводились ни на TV, ни на телефоне. duration может
+                        // быть пустой строкой по умолчанию у части источников —
+                        // пропускаем пустые части, чтобы не показать "·" без
+                        // содержимого по обе стороны.
+                        val metaLine = listOfNotNull(
+                            state.movie.year.takeIf { it > 0 }?.toString(),
+                            state.movie.duration.takeIf { it.isNotBlank() },
+                            meta.genres?.takeIf { it.isNotBlank() }
+                        ).joinToString(" · ")
+                        if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
                         meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
                         meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
-                        meta.cast?.let { Text("Актёры: $it", color = Color.Gray, style = MaterialTheme.typography.bodyMedium) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                         Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
@@ -102,6 +125,18 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                             }
                         }
                         OutlinedButton(onClick = onBackPressed) { Text("Назад") }
+                    }
+                    // Карусель актёров (п.4) — не рисуется вовсе, если TMDB
+                    // credits не вернул ничего (старая закэшированная запись
+                    // без castJson, ошибка сети, или у фильма правда нет cast).
+                    if (state.metadata?.cast?.isNotEmpty() == true) {
+                        CastRow(state.metadata.cast)
+                    }
+                    // "Смотрите также" (п.5) — только для контента, у которого
+                    // TMDB нашёл совпадение (см. DetailViewModel.load()); для
+                    // собственного M3U/Xtream-плейлиста список всегда пуст.
+                    if (state.recommendations.isNotEmpty()) {
+                        RecommendationsRow(state.recommendations)
                     }
                 }
             }

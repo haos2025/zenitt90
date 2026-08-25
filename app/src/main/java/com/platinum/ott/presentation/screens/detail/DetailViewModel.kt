@@ -37,7 +37,14 @@ class DetailViewModel @Inject constructor(
                 val favEntity = favorites.getByContentId(movieId)
                 val hist = history.getByContentId(movieId)
                 val progress = if (hist != null && hist.durationMs > 0) hist.positionMs.toFloat() / hist.durationMs else null
-                _uiState.value = DetailUiState.Success(movie, meta, favEntity != null, progress, favEntity?.isAnime ?: false)
+                // "Смотрите также" — только когда TMDB реально нашёл фильм
+                // (meta.tmdbId != null); для собственного M3U/Xtream-плейлиста
+                // без совпадения с TMDB список остаётся пустым, экран просто
+                // не рисует блок (см. DetailScreen.kt). Ошибка сети здесь же
+                // гасится внутри getRecommendations() — сюда долетает пустой
+                // список, а не исключение.
+                val recommendations = meta?.tmdbId?.let { tmdb.getRecommendations(it) } ?: emptyList()
+                _uiState.value = DetailUiState.Success(movie, meta, favEntity != null, progress, favEntity?.isAnime ?: false, recommendations)
             }.onFailure { _uiState.value = DetailUiState.Error(it.message ?: "Ошибка") }
         }
     }
