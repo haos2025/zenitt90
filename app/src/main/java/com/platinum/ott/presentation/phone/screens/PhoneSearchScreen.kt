@@ -1,12 +1,16 @@
 package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,6 +31,7 @@ import com.platinum.ott.presentation.screens.search.SearchViewModel
 fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "", viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
 
@@ -46,7 +51,31 @@ fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
             when (val state = uiState) {
-                is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                is SearchUiState.Idle -> {
+                    if (recentSearches.isEmpty()) {
+                        Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                    } else {
+                        LazyColumn {
+                            lazyColumnItems(recentSearches, key = { it }) { entry ->
+                                ListItem(
+                                    headlineContent = { Text(entry) },
+                                    modifier = Modifier.clickable { viewModel.onQueryChange(entry) },
+                                    trailingContent = {
+                                        IconButton(onClick = { viewModel.removeRecentSearch(entry) }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Удалить из истории")
+                                        }
+                                    }
+                                )
+                            }
+                            item(key = "__clear_history__") {
+                                ListItem(
+                                    headlineContent = { Text("Очистить историю запросов", color = MaterialTheme.colorScheme.error) },
+                                    modifier = Modifier.clickable { viewModel.clearRecentSearches() }
+                                )
+                            }
+                        }
+                    }
+                }
                 is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), Alignment.TopCenter) { CircularProgressIndicator() }
                 is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingM))
                 is SearchUiState.Success -> {

@@ -5,6 +5,7 @@ import com.platinum.ott.core.AuthPreferences
 import com.platinum.ott.core.InterfacePreferences
 import com.platinum.ott.core.NetworkPreferences
 import com.platinum.ott.core.NotificationPreferences
+import com.platinum.ott.core.RecentSearchPreferences
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,4 +43,9 @@ object PreferencesModule {
     @Singleton
     fun provideNotificationPreferences(@ApplicationContext context: Context): NotificationPreferences =
         NotificationPreferences(context)
+
+    @Provides
+    @Singleton
+    fun provideRecentSearchPreferences(@ApplicationContext context: Context): RecentSearchPreferences =
+        RecentSearchPreferences(context)
 }

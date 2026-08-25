@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyColumnItems
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +37,7 @@ import com.platinum.ott.presentation.screens.qr.QrScanScreen
 fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, initialQuery: String = "", viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
 
@@ -93,7 +97,27 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
         when (val state = uiState) {
-            is SearchUiState.Idle -> Text("Начните вводить название (минимум 2 символа)", color = Color.Gray)
+            is SearchUiState.Idle -> {
+                // Пока запрос не введён — вместо статичной подсказки
+                // показываем последние уникальные запросы (если они есть),
+                // подсказка остаётся только для пустой истории.
+                if (recentSearches.isEmpty()) {
+                    Text("Начните вводить название (минимум 2 символа)", color = Color.Gray)
+                } else {
+                    LazyColumn {
+                        lazyColumnItems(recentSearches, key = { it }) { entry ->
+                            RecentSearchRow(
+                                text = entry,
+                                onClick = { viewModel.onQueryChange(entry) },
+                                onRemove = { viewModel.removeRecentSearch(entry) }
+                            )
+                        }
+                        item(key = "__clear_history__") {
+                            RecentSearchClearRow(onClick = { viewModel.clearRecentSearches() })
+                        }
+                    }
+                }
+            }
             is SearchUiState.Loading -> Box(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXL), Alignment.TopCenter) { CircularProgressIndicator() }
             is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
             is SearchUiState.Success -> {
@@ -113,6 +137,59 @@ fun SearchScreen(onBackPressed: () -> Unit, onMovieClick: (String) -> Unit, init
             content = companionAddress,
             onDismiss = { showCompanionQr = false },
             modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+// Та же идея, что и CycleSetting в SettingsScreen.kt — фокусируемая
+// область на всю строку, а не только на узкой кнопке, чтобы D-pad
+// уверенно попадал. Крестик удаления — отдельный focus-target внутри
+// той же строки (второй Surface), а не часть основного onClick.
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            onClick = onClick,
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            ),
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(text, color = Color.White, modifier = Modifier.padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp))
+        }
+        Spacer(Modifier.width(ZenithDimens.paddingSM))
+        Surface(
+            onClick = onRemove,
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+            )
+        ) {
+            Text("✕", color = Color.Gray, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = 14.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun RecentSearchClearRow(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+        ),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+    ) {
+        Text(
+            "Очистить историю запросов",
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)
         )
     }
 }
