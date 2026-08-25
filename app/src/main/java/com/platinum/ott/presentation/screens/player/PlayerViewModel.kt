@@ -142,6 +142,10 @@ class PlayerViewModel @Inject constructor(
     private var currentMovieId: String = ""
     private var currentTitle: String = ""
     private var currentPoster: String? = null
+    // Группировка серий одного сериала в истории (PROMPT_HISTORY_UPGRADE.md) —
+    // тот же movie?.seriesId, что уже используется чуть ниже в loadMovie()
+    // для next/previous episode, просто сохраняется до saveHistoryNow().
+    private var currentSeriesId: String? = null
     private var historyAutosaveJob: Job? = null
 
     init {
@@ -257,6 +261,7 @@ class PlayerViewModel @Inject constructor(
                 val movie = getMovie.execute(movieId).getOrNull()
                 currentTitle = movie?.title ?: ""
                 currentPoster = movie?.poster
+                currentSeriesId = movie?.seriesId
 
                 // "Продолжить N%" на DetailScreen показывал прогресс из истории,
                 // но кнопка "Смотреть"/"Продолжить" вела в плеер без передачи
@@ -378,7 +383,7 @@ class PlayerViewModel @Inject constructor(
         if (currentMovieId.isEmpty()) return
         val duration = exoPlayer.duration
         if (duration <= 0) return // длительность ещё не определена — нечего сохранять
-        watchHistory.saveProgress(currentMovieId, currentTitle, currentPoster, exoPlayer.currentPosition, duration)
+        watchHistory.saveProgress(currentMovieId, currentTitle, currentPoster, exoPlayer.currentPosition, duration, currentSeriesId)
     }
 
     fun selectQuality(variant: StreamVariant) {

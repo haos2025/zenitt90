@@ -7,9 +7,9 @@ import kotlinx.coroutines.flow.Flow
 class WatchHistoryUseCase(private val dao: WatchHistoryDao) {
     fun getRecent(limit: Int = 50): Flow<List<WatchHistoryEntity>> = dao.getRecent(limit)
     suspend fun getByContentId(contentId: String) = dao.getByContentId(contentId)
-    suspend fun saveProgress(contentId: String, title: String, poster: String?, positionMs: Long, durationMs: Long) {
+    suspend fun saveProgress(contentId: String, title: String, poster: String?, positionMs: Long, durationMs: Long, seriesId: String? = null) {
         val completed = durationMs > 0 && positionMs.toFloat() / durationMs > 0.95f
-        dao.upsert(WatchHistoryEntity(contentId, title, poster, positionMs, durationMs, completed = completed))
+        dao.upsert(WatchHistoryEntity(contentId, title, poster, positionMs, durationMs, completed = completed, seriesId = seriesId))
     }
     suspend fun delete(contentId: String) = dao.deleteByContentId(contentId)
     suspend fun clearAll() = dao.clearAll()

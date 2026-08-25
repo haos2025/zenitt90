@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 9, exportSchema = true
+    version = 10, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -88,10 +88,21 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // История просмотров: группировка серий одного сериала в одну строку
+        // (PROMPT_HISTORY_UPGRADE.md) требует знать, какой серии какой сериал
+        // принадлежит — nullable ADD COLUMN без DEFAULT, тот же безопасный
+        // паттерн, что и в MIGRATION_5_6/6_7/7_8 (существующие строки watch_history
+        // просто получат NULL, что и означает "обычный фильм, не серия").
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `watch_history` ADD COLUMN `seriesId` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

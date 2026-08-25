@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -37,45 +39,104 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
-Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
-    LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-        items(history, key = { it.contentId }) { entry ->
-            val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
-            Card(
-                onClick = { navController.navigate("detail/${entry.contentId}") },
-                modifier = Modifier.fillMaxWidth()
-            ) { Row(Modifier.padding(ZenithDimens.paddingSM)) {
-                // Раньше здесь не было картинки вообще — только текст, хотя
-                // entry.poster уже приходит из WatchHistoryEntity. На TV этот
-                // же список рендерится через MovieCard и постер есть, здесь
-                // просто забыли — визуальный разнобой между платформами.
-                val context = LocalContext.current
-                val density = LocalDensity.current
-                val widthPx = with(density) { 56.dp.roundToPx() }
-                val heightPx = with(density) { 84.dp.roundToPx() }
-                val request = remember(entry.poster, widthPx, heightPx) {
-                    ImageRequest.Builder(context).data(entry.poster).size(widthPx, heightPx).crossfade(true).build()
+var showClearAllConfirm by remember { mutableStateOf(false) }
+
+Scaffold(
+    topBar = {
+        TopAppBar(
+            title = { Text("История") },
+            actions = {
+                // Видима только когда есть что чистить — то же решение, что
+                // на TV в HistoryScreen.kt.
+                if (history.isNotEmpty()) {
+                    IconButton(onClick = { showClearAllConfirm = true }) {
+                        Icon(Icons.Default.DeleteSweep, "Очистить всю историю")
+                    }
                 }
-                AsyncImage(
-                    model = request,
-                    contentDescription = entry.title,
-                    contentScale = ContentScale.Fit,
-                    placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
-                    error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
+            }
+        )
+    },
+    bottomBar = { PhoneBottomBar(navController) }
+) { padding ->
+    if (history.isEmpty()) {
+        // Тот же принцип, что уже сделан в SeriesListScreen.kt/
+        // PhoneSeriesListScreen.kt для пустого списка сериалов.
+        Box(Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.TopCenter) {
+            Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+        }
+    } else {
+        LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+            items(history, key = { it.contentId }) { entry ->
+                val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
+                // Удаление одной записи — свайп (SwipeToDismissBox из
+                // Material3), как и предполагалось для телефона; долгое
+                // нажатие с подтверждением сюда не добавляли — свайпа с
+                // подложкой-подсказкой уже достаточно, не дублируем два
+                // способа для одного действия.
+                val dismissState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = { value ->
+                        if (value == SwipeToDismissBoxValue.EndToStart || value == SwipeToDismissBoxValue.StartToEnd) {
+                            viewModel.delete(entry)
+                            true
+                        } else false
+                    }
                 )
-                Spacer(Modifier.width(ZenithDimens.paddingSM))
-                Column(Modifier.weight(1f)) {
-                Text(entry.title, color = Color.White)
-                // Раньше здесь был только прогресс-бар без текста — на ТВ
-                // процент показывается, на телефоне не было вообще.
-                Text(
-                    if (entry.completed) "Просмотрено" else "Прогресс: ${(p * 100).toInt()}%",
-                    color = Color.Gray, style = MaterialTheme.typography.bodySmall
-                )
-                LinearProgressIndicator({ p })
-            } } }
+                SwipeToDismissBox(
+                    state = dismissState,
+                    backgroundContent = {
+                        Box(
+                            Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = ZenithDimens.paddingM),
+                            contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
+                        ) { Icon(Icons.Default.Delete, "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer) }
+                    }
+                ) {
+                    Card(
+                        onClick = { navController.navigate("detail/${entry.contentId}") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Row(Modifier.padding(ZenithDimens.paddingSM)) {
+                        // Раньше здесь не было картинки вообще — только текст, хотя
+                        // entry.poster уже приходит из WatchHistoryEntity. На TV этот
+                        // же список рендерится через MovieCard и постер есть, здесь
+                        // просто забыли — визуальный разнобой между платформами.
+                        val context = LocalContext.current
+                        val density = LocalDensity.current
+                        val widthPx = with(density) { 56.dp.roundToPx() }
+                        val heightPx = with(density) { 84.dp.roundToPx() }
+                        val request = remember(entry.poster, widthPx, heightPx) {
+                            ImageRequest.Builder(context).data(entry.poster).size(widthPx, heightPx).crossfade(true).build()
+                        }
+                        AsyncImage(
+                            model = request,
+                            contentDescription = entry.title,
+                            contentScale = ContentScale.Fit,
+                            placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
+                            error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                            modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
+                        )
+                        Spacer(Modifier.width(ZenithDimens.paddingSM))
+                        Column(Modifier.weight(1f)) {
+                        Text(entry.title, color = Color.White)
+                        // Раньше здесь был только прогресс-бар без текста — на ТВ
+                        // процент показывается, на телефоне не было вообще.
+                        Text(
+                            if (entry.completed) "Просмотрено" else "Прогресс: ${(p * 100).toInt()}%",
+                            color = Color.Gray, style = MaterialTheme.typography.bodySmall
+                        )
+                        LinearProgressIndicator({ p })
+                    } } }
+                }
+            }
         }
     }
+}
+
+if (showClearAllConfirm) {
+    AlertDialog(
+        onDismissRequest = { showClearAllConfirm = false },
+        title = { Text("Удалить всю историю?") },
+        text = { Text("Это нельзя отменить.") },
+        confirmButton = { TextButton(onClick = { viewModel.clearAll(); showClearAllConfirm = false }) { Text("Удалить") } },
+        dismissButton = { TextButton(onClick = { showClearAllConfirm = false }) { Text("Отмена") } }
+    )
 }
 }
