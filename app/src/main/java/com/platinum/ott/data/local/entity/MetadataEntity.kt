@@ -23,5 +23,15 @@ data class MetadataEntity(
     // заново (TTL 24ч в getMetadata(), тот же принцип, что и в
     // MIGRATION_5_6/6_7/7_8/9_10 — ничего принудительно не мигрируем).
     val castJson: String? = null,
+    // Язык оригинала (ISO 639-1, "ja" для японского) — для авто-определения
+    // аниме при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md, п.1,
+    // см. TmdbMetadata.looksLikeAnime()). Nullable ADD COLUMN без DEFAULT,
+    // тот же безопасный паттерн, что и во всех предыдущих миграциях этого
+    // файла (см. ZenithDatabase.kt MIGRATION_11_12) — старые закэшированные
+    // строки получат NULL, что просто означает "неизвестно", авто-эвристика
+    // для них не сработает до следующего фетча по TTL (не проблема: сама
+    // эвристика применяется только в момент добавления в избранное, не при
+    // каждом чтении кэша).
+    val originalLanguage: String? = null,
     val cachedAt: Long = System.currentTimeMillis()
 )

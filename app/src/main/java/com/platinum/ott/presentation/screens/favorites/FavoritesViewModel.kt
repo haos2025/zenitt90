@@ -33,4 +33,12 @@ class FavoritesViewModel @Inject constructor(
     fun setAnime(contentId: String, isAnime: Boolean) {
         viewModelScope.launch { sessionGraph.favoritesUseCase.setAnime(contentId, isAnime) }
     }
+
+    // Единое меню на карточке в FavoritesScreen/PhoneFavoritesScreen
+    // (PROMPT_FAVORITES_REDESIGN.md, п.3) — "Убрать из избранного", без
+    // диалога подтверждения (симметрично с тем, как снятие с избранного уже
+    // устроено на DetailScreen/SeriesEpisodesScreen).
+    fun removeFavorite(contentId: String) {
+        viewModelScope.launch { sessionGraph.favoritesUseCase.remove(contentId) }
+    }
 }

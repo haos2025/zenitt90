@@ -32,7 +32,11 @@ interface TmdbApiService {
 
 data class TmdbSearchResponse(val results: List<TmdbSearchResult> = emptyList())
 data class TmdbSearchResult(val id: Int, val title: String?, val name: String?, val release_date: String?, val poster_path: String?, val vote_average: Double?)
-data class TmdbMovieDetails(val id: Int, val title: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val credits: TmdbCredits? = null, val videos: TmdbVideos? = null)
+// original_language добавлен для авто-определения аниме (PROMPT_FAVORITES_REDESIGN.md,
+// п.1) — ISO 639-1 код языка оригинала ("ja" для японского); у эндпоинта
+// /movie/{id} именно это поле, не origin_country (оно только у /tv/{id}, а
+// getMetadata() работает только с фильмами, см. комментарий в TmdbApiService).
+data class TmdbMovieDetails(val id: Int, val title: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val credits: TmdbCredits? = null, val videos: TmdbVideos? = null, val original_language: String? = null)
 data class TmdbTvDetails(val id: Int, val name: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val next_episode_to_air: TmdbNextEpisode? = null)
 data class TmdbGenre(val id: Int, val name: String)
 data class TmdbCredits(val cast: List<TmdbCast> = emptyList())

@@ -29,12 +29,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.detail.DetailUiState
 import com.platinum.ott.presentation.screens.detail.DetailViewModel
+import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
 
 @Composable
 fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Как и на TV: диалог выбора папки только при добавлении, снятие с
+    // избранного — сразу (PROMPT_FAVORITES_REDESIGN.md, п.2).
+    var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingM)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
@@ -103,12 +108,13 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     Button(onClick = { navController.navigate("player/$movieId") }, modifier = Modifier.weight(1f)) { Text(if (state.watchProgress != null) "Продолжить" else "Смотреть") }
-                    OutlinedButton(onClick = { viewModel.toggleFavorite(movieId, state.movie.title, state.movie.poster) }) { Text(if (state.isFavorite) "♥" else "♡") }
-                    // Как и на TV: помечать аниме можно только уже
-                    // добавленную в избранное запись (DetailViewModel.setAnime).
-                    if (state.isFavorite) {
-                        OutlinedButton(onClick = { viewModel.setAnime(movieId, !state.isAnime) }) { Text(if (state.isAnime) "✓ Аниме" else "Аниме?") }
-                    }
+                    // Добавление показывает выбор папки, снятие — сразу, без
+                    // диалога. Отметка "аниме" убрана с этого экрана — теперь
+                    // только в едином меню на карточке в FavoritesScreen
+                    // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                    OutlinedButton(onClick = {
+                        if (state.isFavorite) viewModel.removeFavorite(movieId) else showAddFavoriteDialog = true
+                    }) { Text(if (state.isFavorite) "♥" else "♡") }
                 }
                 // Карусель актёров (п.4) — как на TV, не рисуется, если пусто.
                 if (state.metadata?.cast?.isNotEmpty() == true) {
@@ -119,6 +125,16 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 if (state.recommendations.isNotEmpty()) {
                     Spacer(Modifier.height(ZenithDimens.paddingM))
                     RecommendationsRow(state.recommendations)
+                }
+                if (showAddFavoriteDialog) {
+                    MoveToFolderDialog(
+                        folders = folders,
+                        onSelect = { folderId ->
+                            viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, folderId)
+                            showAddFavoriteDialog = false
+                        },
+                        onDismiss = { showAddFavoriteDialog = false }
+                    )
                 }
             }
         }

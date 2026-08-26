@@ -15,7 +15,7 @@ import com.platinum.ott.data.local.entity.*
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class
     ],
-    version = 11, exportSchema = true
+    version = 12, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -110,10 +110,21 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Авто-определение аниме при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md,
+        // п.1) требует знать язык оригинала фильма — TMDB отдаёт его как
+        // original_language, отдельного поля под это в metadata раньше не
+        // было. Nullable ADD COLUMN без DEFAULT — тот же безопасный паттерн,
+        // что и во всех предыдущих миграциях этого файла.
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `metadata` ADD COLUMN `originalLanguage` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

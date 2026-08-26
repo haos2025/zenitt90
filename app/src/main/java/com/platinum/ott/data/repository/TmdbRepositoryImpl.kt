@@ -73,7 +73,7 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             val castJson = if (castMembers.isNotEmpty()) gson.toJson(castMembers) else null
             return MetadataEntity(contentId, result.id, details.poster_path, details.backdrop_path,
                 details.overview, details.vote_average, genres, trailer?.key?.let { "https://youtube.com/watch?v=$it" },
-                castJson = castJson)
+                castJson = castJson, originalLanguage = details.original_language)
         } catch (e: HttpException) {
             if (e.code() == 429 && attempt < 2) {
                 delay(800L * (attempt + 1)) // 800мс, потом 1600мс — TMDB отдаёт Retry-After, но не все версии okhttp/retrofit прокидывают заголовок сюда без доп. интерцептора, литеральная пауза надёжнее без лишней связности
@@ -87,7 +87,7 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
         val cast = castJson?.let { json ->
             try { gson.fromJson<List<CastMember>>(json, castListType) } catch (e: Exception) { emptyList() }
         } ?: emptyList()
-        return TmdbMetadata(tmdbId, posterPath, backdropPath, overview, voteAverage, genres, trailerUrl, cast)
+        return TmdbMetadata(tmdbId, posterPath, backdropPath, overview, voteAverage, genres, trailerUrl, cast, originalLanguage)
     }
 
     // PROMPT_DETAIL_SCREEN_UPGRADE.md, п.5 — вариант (б): чистая витрина,

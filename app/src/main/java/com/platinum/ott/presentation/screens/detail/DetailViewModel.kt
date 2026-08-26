@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FavoriteEntity
+import com.platinum.ott.domain.model.looksLikeAnime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,10 @@ class DetailViewModel @Inject constructor(
     private val tmdb = sessionGraph.tmdbRepository
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val uiState: StateFlow<DetailUiState> = _uiState
+    // Для пикера папки при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md,
+    // п.2) — DetailScreen/PhoneDetailScreen показывают MoveToFolderDialog
+    // на основе этого списка перед вызовом addFavorite().
+    val folders = sessionGraph.favoritesUseCase.getAllFolders()
 
     fun load(movieId: String) {
         viewModelScope.launch {
@@ -49,21 +54,32 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite(movieId: String, title: String, poster: String?) {
+    // Раньше "В избранное" сразу вставляло запись через toggle(), без выбора
+    // папки. Теперь (PROMPT_FAVORITES_REDESIGN.md, п.2) точка входа —
+    // DetailScreen/PhoneDetailScreen — сначала показывает MoveToFolderDialog
+    // и вызывает этот метод уже с выбранным folderId; при снятии с
+    // избранного (isFavorite == true) UI вызывает removeFavorite() напрямую,
+    // без диалога. isAnime — эвристика по TMDB-метаданным, уже загруженным в
+    // текущий state.Success на момент добавления (см. TmdbMetadata.looksLikeAnime());
+    // для контента без TMDB (M3U/Xtream) остаётся false, ручной оверрайд —
+    // через единое меню на карточке в FavoritesScreen/PhoneFavoritesScreen (п.3).
+    fun addFavorite(movieId: String, title: String, poster: String?, folderId: Long?) {
         viewModelScope.launch {
-            favorites.toggle(FavoriteEntity(contentId = movieId, title = title, poster = poster))
-            // Раньше здесь запись в БД реально проходила, но _uiState никогда
-            // не обновлялся после toggle() — кнопка "В избранное" всегда
-            // показывала старое состояние, выглядело как будто ничего не
-            // происходит, хотя запись/удаление в таблице favorites работали.
-            val current = _uiState.value
-            if (current is DetailUiState.Success) {
-                val favEntity = favorites.getByContentId(movieId)
-                // Снятие с избранного удаляет саму строку — вместе с ней
-                // теряется и isAnime (по дизайну: это атрибут записи в
-                // favorites, не самого фильма/сериала).
-                _uiState.value = current.copy(isFavorite = favEntity != null, isAnime = favEntity?.isAnime ?: false)
-            }
+            val current = _uiState.value as? DetailUiState.Success
+            val isAnime = current?.metadata.looksLikeAnime()
+            favorites.add(FavoriteEntity(contentId = movieId, title = title, poster = poster, folderId = folderId, isAnime = isAnime))
+            if (current != null) _uiState.value = current.copy(isFavorite = true, isAnime = isAnime)
+        }
+    }
+
+    // Снятие с избранного — без диалога, сразу удаление (см. промт, п.2).
+    // Снятие удаляет саму строку — вместе с ней теряется и isAnime (по
+    // дизайну: это атрибут записи в favorites, не самого фильма/сериала).
+    fun removeFavorite(movieId: String) {
+        viewModelScope.launch {
+            favorites.remove(movieId)
+            val current = _uiState.value as? DetailUiState.Success
+            if (current != null) _uiState.value = current.copy(isFavorite = false, isAnime = false)
         }
     }
 

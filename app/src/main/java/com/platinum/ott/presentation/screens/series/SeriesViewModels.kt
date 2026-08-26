@@ -70,6 +70,10 @@ class SeriesEpisodesViewModel @Inject constructor(
     private val _isAnime = MutableStateFlow(false)
     val isAnime: StateFlow<Boolean> = _isAnime
 
+    // Для пикера папки при добавлении сериала в избранное
+    // (PROMPT_FAVORITES_REDESIGN.md, п.2) — тот же приём, что и в DetailViewModel.
+    val folders = sessionGraph.favoritesUseCase.getAllFolders()
+
     private var currentSeriesId: String? = null
     private var currentSeriesTitle: String = ""
     private var currentSeriesPoster: String? = null
@@ -133,21 +137,38 @@ class SeriesEpisodesViewModel @Inject constructor(
         }
     }
 
-    fun toggleFavorite() {
+    // Раньше toggleFavorite() сразу вставляло/удаляло запись. Теперь
+    // (PROMPT_FAVORITES_REDESIGN.md, п.2) добавление идёт через
+    // MoveToFolderDialog в SeriesEpisodesScreen/PhoneSeriesEpisodesScreen —
+    // сюда приходит уже выбранный folderId, снятие с избранного — отдельным
+    // методом без диалога. Сериалы здесь никогда не запрашивают TMDB-метаданные
+    // (load() ниже их не загружает), поэтому isAnime всегда false при
+    // добавлении — ручная отметка доступна позже через единое меню в
+    // FavoritesScreen (п.3 промта).
+    fun addFavorite(folderId: Long?) {
         val seriesId = currentSeriesId ?: return
         viewModelScope.launch {
-            sessionGraph.favoritesUseCase.toggle(
+            sessionGraph.favoritesUseCase.add(
                 com.platinum.ott.data.local.entity.FavoriteEntity(
                     contentId = seriesId,
                     contentType = "SERIES",
                     title = currentSeriesTitle,
-                    poster = currentSeriesPoster
+                    poster = currentSeriesPoster,
+                    folderId = folderId
                 )
             )
-            val favEntity = sessionGraph.favoritesUseCase.getByContentId(seriesId)
-            _isFavorite.value = favEntity != null
-            // Снятие с избранного удаляет строку целиком — вместе с ней и isAnime.
-            _isAnime.value = favEntity?.isAnime ?: false
+            _isFavorite.value = true
+            _isAnime.value = false
+        }
+    }
+
+    // Снятие с избранного — без диалога, сразу удаление (см. промт, п.2).
+    fun removeFavorite() {
+        val seriesId = currentSeriesId ?: return
+        viewModelScope.launch {
+            sessionGraph.favoritesUseCase.remove(seriesId)
+            _isFavorite.value = false
+            _isAnime.value = false
         }
     }
 

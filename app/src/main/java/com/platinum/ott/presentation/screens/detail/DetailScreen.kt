@@ -25,6 +25,7 @@ import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.presentation.components.CastRow
 import com.platinum.ott.presentation.components.RecommendationsRow
+import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -32,6 +33,12 @@ import com.platinum.ott.ui.theme.*
 fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Пикер папки при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md, п.2) —
+    // показывается только на пути "не в избранном" -> "в избранном", снятие
+    // с избранного происходит сразу, без диалога. remember(movieId) — чтобы
+    // не унаследовать открытый диалог при переходе на другой фильм.
+    var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -113,16 +120,15 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                         Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
-                        OutlinedButton(onClick = { viewModel.toggleFavorite(movieId, state.movie.title, state.movie.poster) }) {
+                        // Добавление показывает выбор папки, снятие — сразу,
+                        // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
+                        // Отметка "аниме" на этом экране убрана — управление
+                        // ей теперь только в едином меню на карточке в
+                        // FavoritesScreen (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                        OutlinedButton(onClick = {
+                            if (state.isFavorite) viewModel.removeFavorite(movieId) else showAddFavoriteDialog = true
+                        }) {
                             Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
-                        }
-                        // Отметка "аниме" осмысленна только для уже
-                        // добавленной в избранное записи (см. DetailViewModel.setAnime) —
-                        // до этого нечего помечать, кнопка отключена.
-                        if (state.isFavorite) {
-                            OutlinedButton(onClick = { viewModel.setAnime(movieId, !state.isAnime) }) {
-                                Text(if (state.isAnime) "✓ Аниме" else "Пометить как аниме")
-                            }
                         }
                         OutlinedButton(onClick = onBackPressed) { Text("Назад") }
                     }
@@ -138,6 +144,16 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     if (state.recommendations.isNotEmpty()) {
                         RecommendationsRow(state.recommendations)
                     }
+                }
+                if (showAddFavoriteDialog) {
+                    MoveToFolderDialog(
+                        folders = folders,
+                        onSelect = { folderId ->
+                            viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, folderId)
+                            showAddFavoriteDialog = false
+                        },
+                        onDismiss = { showAddFavoriteDialog = false }
+                    )
                 }
             }
         }

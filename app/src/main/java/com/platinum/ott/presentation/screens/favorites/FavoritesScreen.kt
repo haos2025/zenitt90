@@ -5,6 +5,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,8 +81,25 @@ fun FavoritesScreen(onBackPressed: () -> Unit, onItemClick: (FavoriteEntity) -> 
         LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
             items(filtered, key = { it.contentId }) { fav ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) })
-                    OutlinedButton(onClick = { moveTargetContentId = fav.contentId }, modifier = Modifier.padding(top = ZenithDimens.paddingS)) { Text("📁 В папку") }
+                    Box {
+                        MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) })
+                        // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
+                        // п.3) заменяет собой прежнюю отдельную кнопку "📁 В
+                        // папку" — три действия в одном месте: переместить в
+                        // папку, переключить аниме, убрать из избранного.
+                        // Отдельный фокусируемый элемент, не долгое нажатие —
+                        // на TV-пульте "press and hold" не универсальный жест.
+                        var showMenu by remember(fav.contentId) { mutableStateOf(false) }
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
+                            DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
+                            DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
+                        }
+                    }
                 }
             }
         }

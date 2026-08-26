@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -93,10 +94,20 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             items(filtered, key = { it.contentId }) { fav ->
                 Box {
                     MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") })
+                    // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
+                    // п.3) заменяет прежнюю отдельную иконку "Переместить в
+                    // папку" — три действия в одном месте: переместить в
+                    // папку, переключить аниме, убрать из избранного.
+                    var showMenu by remember(fav.contentId) { mutableStateOf(false) }
                     IconButton(
-                        onClick = { moveTargetContentId = fav.contentId },
+                        onClick = { showMenu = true },
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingS).clip(CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-                    ) { Icon(Icons.Default.CreateNewFolder, "Переместить в папку", tint = Color.White) }
+                    ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
+                        DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
+                        DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
+                    }
                 }
             }
         }

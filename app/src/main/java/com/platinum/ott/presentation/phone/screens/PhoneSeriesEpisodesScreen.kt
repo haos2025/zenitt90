@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +31,7 @@ import coil.request.ImageRequest
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesUiState
 import com.platinum.ott.presentation.screens.series.SeriesEpisodesViewModel
 import com.platinum.ott.domain.model.StreamVariant
+import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
 import com.platinum.ott.core.platform.ZenithDimens
 
@@ -42,6 +42,10 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pendingVariantChoice by viewModel.pendingVariantChoice.collectAsStateWithLifecycle()
     val episodeHistory by viewModel.episodeHistory.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Диалог выбора папки только при добавлении в избранное, снятие — сразу
+    // (PROMPT_FAVORITES_REDESIGN.md, п.2), тот же приём, что на TV.
+    var showAddFavoriteDialog by remember(seriesId) { mutableStateOf(false) }
 
     // Общий для TV/телефона способ собрать "player/{id}?variantUrl=..." —
     // тот же приём, что в ZenithNavHost.kt (там для TV-варианта).
@@ -56,16 +60,14 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
             navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } },
             actions = {
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
-                val isAnime by viewModel.isAnime.collectAsStateWithLifecycle()
-                IconButton(onClick = { viewModel.toggleFavorite() }) {
+                // Добавление показывает выбор папки, снятие — сразу, без
+                // диалога. Отметка "аниме" убрана с этого экрана — теперь
+                // только в едином меню на карточке в FavoritesScreen
+                // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                IconButton(onClick = {
+                    if (isFavorite) viewModel.removeFavorite() else showAddFavoriteDialog = true
+                }) {
                     Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "В избранное", tint = if (isFavorite) ZenithFavorite else Color.Unspecified)
-                }
-                // Как и на TV: помечать аниме можно только уже добавленный в
-                // избранное сериал (SeriesEpisodesViewModel.setAnime).
-                if (isFavorite) {
-                    IconButton(onClick = { viewModel.setAnime(!isAnime) }) {
-                        Icon(Icons.Default.Movie, if (isAnime) "Снять отметку аниме" else "Пометить как аниме", tint = if (isAnime) ZenithFavorite else Color.Unspecified)
-                    }
                 }
             }
         )
@@ -160,6 +162,14 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                 }
             },
             confirmButton = { TextButton(onClick = { viewModel.dismissVariantChoice() }) { Text("Отмена") } }
+        )
+    }
+
+    if (showAddFavoriteDialog) {
+        MoveToFolderDialog(
+            folders = folders,
+            onSelect = { folderId -> viewModel.addFavorite(folderId); showAddFavoriteDialog = false },
+            onDismiss = { showAddFavoriteDialog = false }
         )
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.domain.model.StreamVariant
+import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
 import com.platinum.ott.core.platform.ZenithDimens
 
@@ -37,6 +38,10 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pendingVariantChoice by viewModel.pendingVariantChoice.collectAsStateWithLifecycle()
     val episodeHistory by viewModel.episodeHistory.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Диалог выбора папки только при добавлении в избранное, снятие — сразу
+    // (PROMPT_FAVORITES_REDESIGN.md, п.2), тот же приём, что в DetailScreen.kt.
+    var showAddFavoriteDialog by remember(seriesId) { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -50,16 +55,15 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                 val seasons = state.episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
                 var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
-                val isAnime by viewModel.isAnime.collectAsStateWithLifecycle()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(state.episodes.firstOrNull()?.seriesTitle ?: "Сериал", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { viewModel.toggleFavorite() }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
-                    // Как и в DetailScreen.kt: помечать аниме можно только уже
-                    // добавленный в избранное сериал.
-                    if (isFavorite) {
-                        Spacer(Modifier.width(ZenithDimens.paddingS))
-                        OutlinedButton(onClick = { viewModel.setAnime(!isAnime) }) { Text(if (isAnime) "✓ Аниме" else "Пометить как аниме") }
-                    }
+                    // Добавление показывает выбор папки, снятие — сразу, без
+                    // диалога. Отметка "аниме" убрана с этого экрана — теперь
+                    // только в едином меню на карточке в FavoritesScreen
+                    // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                    OutlinedButton(onClick = {
+                        if (isFavorite) viewModel.removeFavorite() else showAddFavoriteDialog = true
+                    }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 if (seasons.size > 1) {
@@ -93,6 +97,14 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
             variants = variants,
             onSelect = { variant -> viewModel.selectVariant(episodeId, variant) { id, url -> onEpisodeClick(id, url) } },
             onDismiss = { viewModel.dismissVariantChoice() }
+        )
+    }
+
+    if (showAddFavoriteDialog) {
+        MoveToFolderDialog(
+            folders = folders,
+            onSelect = { folderId -> viewModel.addFavorite(folderId); showAddFavoriteDialog = false },
+            onDismiss = { showAddFavoriteDialog = false }
         )
     }
 }
