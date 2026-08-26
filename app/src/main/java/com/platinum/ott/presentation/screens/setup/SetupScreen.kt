@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
+import com.platinum.ott.core.companion.CompanionHttpServer
+import com.platinum.ott.core.companion.LocalNetworkUtils
+import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.ui.theme.*
 import com.platinum.ott.core.platform.ZenithDimens
 
@@ -41,6 +44,35 @@ fun SetupScreen(
     var selectedTab by remember { mutableStateOf(0) }
     var m3uUrl by remember { mutableStateOf("") }
     var xtHost by remember { mutableStateOf("") }; var xtUser by remember { mutableStateOf("") }; var xtPass by remember { mutableStateOf("") }
+
+    // Телефон-компаньон (PROMPT_QR_PANELS.md), четвёртое применение канала —
+    // "/m3u_url". Только вкладка M3U (одно поле, один скан) — Xtream
+    // сознательно не трогается (три поля, см. промт). Текст со скана
+    // подставляется в m3uUrl, форма не отправляется автоматически —
+    // пользователь по-прежнему сам нажимает "Подключиться".
+    var showCompanionQr by remember { mutableStateOf(false) }
+    var companionAddress by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(showCompanionQr) {
+        var server: CompanionHttpServer? = null
+        if (showCompanionQr) {
+            server = CompanionHttpServer(endpointPath = "/m3u_url") { text ->
+                // Обработчик NanoHTTPD вызывается не в главном потоке — то
+                // же самое, что уже сделано в SearchScreen.kt/PlayerScreen.kt.
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    m3uUrl = text
+                    showCompanionQr = false
+                }
+            }
+            val port = server.startServer()
+            val ip = LocalNetworkUtils.getLocalIpAddress()
+            companionAddress = if (ip != null) "http://$ip:$port#m3u_url" else null
+        } else {
+            companionAddress = null
+        }
+        onDispose { server?.stop() }
+    }
+    androidx.activity.compose.BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
+
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingL), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             OutlinedButton(onClick = onFavoritesClick) { Text("Избранное") }
@@ -54,7 +86,10 @@ fun SetupScreen(
                 TabButton("M3U Плейлист", selectedTab == 0) { selectedTab = 0 }; TabButton("Xtream Codes", selectedTab == 1) { selectedTab = 1 }
             }
             when (selectedTab) {
-                0 -> SetupTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
+                0 -> {
+                    SetupTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
+                    OutlinedButton(onClick = { showCompanionQr = true }, modifier = Modifier.fillMaxWidth()) { Text("По QR с телефона") }
+                }
                 1 -> { SetupTextField(xtHost, { xtHost = it }, "http://example.com:8080"); SetupTextField(xtUser, { xtUser = it }, "Логин"); SetupTextField(xtPass, { xtPass = it }, "Пароль", true) }
             }
             if (uiState is SetupUiState.Error) Text("⚠ ${(uiState as SetupUiState.Error).message}", color = MaterialTheme.colorScheme.error)
@@ -62,6 +97,14 @@ fun SetupScreen(
                 Text(if (uiState is SetupUiState.Loading) "Проверка..." else "Подключиться")
             }
         }
+    }
+
+    if (showCompanionQr) {
+        QrScanScreen(
+            content = companionAddress,
+            onDismiss = { showCompanionQr = false },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 

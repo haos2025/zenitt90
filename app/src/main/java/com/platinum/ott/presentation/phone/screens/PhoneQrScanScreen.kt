@@ -20,11 +20,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-// v2 телефон-компаньона (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) — два
-// применения одного канала: внешние субтитры ("/subtitle") и поиск текстом
-// ("/search"), см. QrScanScreen.kt/CompanionHttpServer.kt на стороне TV.
+// v3 телефон-компаньона (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md,
+// PROMPT_QR_PANELS.md) — четыре применения одного канала: внешние
+// субтитры ("/subtitle"), поиск текстом ("/search"), установка плагина по
+// URL ("/plugin_url") и ввод M3U-ссылки ("/m3u_url"), см.
+// QrScanScreen.kt/CompanionHttpServer.kt на стороне TV.
 // QR-код кодирует "http://ip:port#режим" — суффикс после "#" говорит
-// телефону, какой из двух экранов показать и на какой путь слать POST, без
+// телефону, какой из экранов показать и на какой путь слать POST, без
 // отдельного QR-формата/JSON ради одного слова. Раньше здесь была заглушка
 // под CameraX+ML Kit (убраны, дублировали ZXing — см. app/build.gradle.kts)
 // — сканирование через ScanContract из уже подключённого
@@ -32,7 +34,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 // runtime-permission CAMERA, свой UI камеры не нужен.
 private enum class CompanionMode(val endpointPath: String, val fieldLabel: String, val hint: String, val doneMessage: String) {
     SUBTITLE("/subtitle", "Ссылка на субтитры", "Вставьте ссылку на субтитры (.srt)", "Субтитры подключены на TV"),
-    SEARCH("/search", "Текст для поиска", "Введите, что искать", "Запрос отправлен на TV")
+    SEARCH("/search", "Текст для поиска", "Введите, что искать", "Запрос отправлен на TV"),
+    PLUGIN_URL("/plugin_url", "Ссылка на плагин (.js)", "Вставьте ссылку на плагин", "Ссылка подставлена на TV"),
+    M3U_URL("/m3u_url", "Ссылка на M3U-плейлист", "Вставьте ссылку на M3U-плейлист", "Ссылка подставлена на TV")
 }
 
 private sealed interface CompanionState {
@@ -66,6 +70,8 @@ fun PhoneQrScanScreen(navController: NavHostController) {
             // с v1, если где-то остался старый формат без "#режим").
             val mode = when (if (hashIdx >= 0) raw.substring(hashIdx + 1) else "") {
                 "search" -> CompanionMode.SEARCH
+                "plugin_url" -> CompanionMode.PLUGIN_URL
+                "m3u_url" -> CompanionMode.M3U_URL
                 else -> CompanionMode.SUBTITLE
             }
             state = CompanionState.Connected(baseUrl, mode)
