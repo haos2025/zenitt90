@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Голосовой ввод внутри самого экрана поиска (PROMPT_VOICE_SEARCH.md) —
+         отдельная фича от системного ACTION_SEARCH ниже по файлу, тот уже
+         работает через голос/текст лаунчера и это разрешение ему не нужно. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:name=".ZenithApplication"
         android:allowBackup="true"
