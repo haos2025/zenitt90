@@ -21,4 +21,12 @@ interface MovieDao {
     suspend fun getLatestCacheTime(): Long?
     @Query("DELETE FROM movies")
     suspend fun clearAll(): Int
+    // Добавлено вместе с экраном управления кэшем (PROMPT_CACHE_MANAGEMENT.md).
+    // Раньше dao.clearAll() вызывался только при page == 1
+    // (MovieRepositoryImpl.getCatalog()) — при обычной пагинации записи
+    // только добавлялись, без лимита и без чистки устаревшего, если
+    // пользователь ни разу не возвращался на первую страницу. Эта query
+    // используется репозиторием для регулярной чистки записей старше суток.
+    @Query("DELETE FROM movies WHERE cachedAt < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long): Int
 }

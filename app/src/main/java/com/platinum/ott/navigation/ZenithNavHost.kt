@@ -17,6 +17,7 @@ import com.platinum.ott.presentation.screens.setup.SetupScreen
 import com.platinum.ott.presentation.screens.favorites.FavoritesScreen
 import com.platinum.ott.presentation.screens.history.HistoryScreen
 import com.platinum.ott.presentation.screens.settings.SettingsScreen
+import com.platinum.ott.presentation.screens.cache.CacheManagementScreen
 import com.platinum.ott.presentation.screens.sync.SyncPairingScreen
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
@@ -33,6 +34,7 @@ import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSeriesListScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSeriesEpisodesScreen
+import com.platinum.ott.presentation.phone.screens.PhoneCacheManagementScreen
 
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
@@ -79,7 +81,11 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val variantUrl = entry.arguments?.getString("variantUrl")?.ifBlank { null }
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl)
         }
-        composable("settings") { if (isTV) SettingsScreen(onClearCacheClick = {}, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
+        // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
+        // же CacheManagementViewModel под обеими версиями UI.
+        composable("cache_management") { if (isTV) CacheManagementScreen(onBackPressed = { navController.popBackStack() }) else PhoneCacheManagementScreen(navController) }
         composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
         composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }

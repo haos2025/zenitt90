@@ -86,8 +86,27 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
                 val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                 val sw = StringWriter(); throwable.printStackTrace(PrintWriter(sw))
                 File(logDir, "crash_$ts.txt").writeText("Thread: ${thread.name}\\n$sw")
+                pruneOldCrashLogs(logDir)
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
+    }
+
+    // Раньше файлов в crash_logs/ писалось сколько угодно, ничего никогда
+    // не удалялось — на устройстве, которое годами крашится время от
+    // времени (например, слабый TV-чип), папка растёт неограниченно.
+    // Держим только последние MAX_CRASH_LOGS, старые удаляются сразу после
+    // записи нового — не нужен отдельный шаг при старте приложения, момент
+    // краша и так уже "фоновый" код.
+    private fun pruneOldCrashLogs(logDir: File) {
+        val files = logDir.listFiles() ?: return
+        if (files.size <= MAX_CRASH_LOGS) return
+        files.sortedBy { it.lastModified() }
+            .take(files.size - MAX_CRASH_LOGS)
+            .forEach { it.delete() }
+    }
+
+    companion object {
+        private const val MAX_CRASH_LOGS = 20
     }
 }

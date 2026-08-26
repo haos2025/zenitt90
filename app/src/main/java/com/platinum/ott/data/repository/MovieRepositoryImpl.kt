@@ -21,6 +21,14 @@ class MovieRepositoryImpl(
 ) : MovieRepository {
     private val cacheMutex = Mutex()
     private val CACHE_TTL = 10 * 60 * 1000L
+    // Записи старше суток. Раньше единственной чисткой было dao.clearAll()
+    // на page == 1 — если пользователь глубоко листал ленту, но не
+    // возвращался на первую страницу (или не заходил в приложение целыми
+    // днями, просто продолжая листать с той же точки), записи только
+    // накапливались без предела. Эта TTL — не то же самое, что CACHE_TTL
+    // выше (тот решает "показать кэш или сходить в сеть", этот — "когда
+    // запись пора считать мусором и удалить с диска").
+    private val PRUNE_AFTER_MS = 24 * 60 * 60 * 1000L
 
     // Раньше totalPages в CatalogPage считался из resp.totalItems — а это
     // поле backend (CatalogResponseOut) физически НЕ отдаёт, оно всегда
@@ -46,6 +54,13 @@ class MovieRepositoryImpl(
                 val entities = resp.items.map { it.toEntity() }
                 if (page == 1) dao.clearAll()
                 dao.upsertAll(entities)
+                // Чинит неограниченный рост таблицы независимо от того,
+                // вернулся ли пользователь на page == 1 — см. комментарий у
+                // PRUNE_AFTER_MS выше. Дешёвая операция (индекс по cachedAt
+                // не заводили специально — таблица переписывается целиком
+                // каждые 10 минут по TTL, DELETE по одному условию на
+                // десятках-сотнях строк не требует отдельного индекса).
+                dao.deleteOlderThan(System.currentTimeMillis() - PRUNE_AFTER_MS)
                 lastKnownTotalPages = resp.totalPages
                 Result.success(entities.map { it.toDomain() }.toPage(page, resp.totalPages, resp.totalItems))
             } catch (e: Exception) {

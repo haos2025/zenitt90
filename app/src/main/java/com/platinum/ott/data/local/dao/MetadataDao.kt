@@ -11,4 +11,9 @@ interface MetadataDao {
     suspend fun getByContentId(contentId: String): MetadataEntity?
     @Query("DELETE FROM metadata")
     suspend fun clearAll(): Int
+    // Добавлено для экрана управления кэшем (PROMPT_CACHE_MANAGEMENT.md) —
+    // тот же приём, что и в PlaylistMovieDao.getCount(): количество записей
+    // вместо точного размера в байтах, который недоступен без dbstat.
+    @Query("SELECT COUNT(*) FROM metadata")
+    suspend fun getCount(): Int
 }

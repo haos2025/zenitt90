@@ -22,7 +22,10 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState
 
     fun runOtaUpdate() { viewModelScope.launch { _uiState.value = SettingsUiState.Loading; sessionGraph.otaUpdateUseCase.execute().onSuccess { _uiState.value = SettingsUiState.Success(it) }.onFailure { _uiState.value = SettingsUiState.Error(it.message ?: "Ошибка") } } }
-    fun clearCache() { viewModelScope.launch { sessionGraph.clearCacheUseCase.execute(); sessionGraph.scriptProvider.clearAll() } }
+    // Раньше здесь была одна общая кнопка "Очистить кэш" (только MovieDao +
+    // ScriptProvider). Заменена экраном управления кэшем (CacheManagementScreen) —
+    // размер по категориям + отдельная кнопка очистки на каждую, см.
+    // CacheManagementViewModel. Эта кнопка теперь просто переход на тот экран.
     fun logout() { sessionGraph.logoutUseCase.execute() }
 
     fun isConnected(): Boolean = sessionGraph.checkAuthUseCase.execute()

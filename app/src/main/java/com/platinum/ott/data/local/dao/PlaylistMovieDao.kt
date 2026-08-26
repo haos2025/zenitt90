@@ -15,4 +15,9 @@ interface PlaylistMovieDao {
     suspend fun getLatestCacheTime(): Long?
     @Query("DELETE FROM playlist_movies")
     suspend fun clearAll(): Int
+    // Добавлено для экрана управления кэшем (PROMPT_CACHE_MANAGEMENT.md) —
+    // точный размер в байтах одной таблицы Room недоступен штатными
+    // средствами, показываем количество записей.
+    @Query("SELECT COUNT(*) FROM playlist_movies")
+    suspend fun getCount(): Int
 }

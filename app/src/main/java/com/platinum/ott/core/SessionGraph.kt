@@ -58,7 +58,7 @@ class SessionGraph @Inject constructor(
     lateinit var getMovieByIdUseCase: GetMovieByIdUseCase; private set
     lateinit var getPlayableUrlUseCase: GetPlayableUrlUseCase; private set
     lateinit var searchMoviesUseCase: SearchMoviesUseCase; private set
-    lateinit var clearCacheUseCase: ClearCacheUseCase; private set
+    lateinit var cacheManagementUseCase: CacheManagementUseCase; private set
     lateinit var otaUpdateUseCase: OtaUpdateUseCase; private set
     lateinit var favoritesUseCase: FavoritesUseCase; private set
     lateinit var watchHistoryUseCase: WatchHistoryUseCase; private set
@@ -102,7 +102,7 @@ class SessionGraph @Inject constructor(
         appScope.launch { pluginManager.loadAllEnabled() }
         getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, authRepository)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
-        clearCacheUseCase = ClearCacheUseCase(database.movieDao())
+        cacheManagementUseCase = CacheManagementUseCase(appContext, database.movieDao(), database.playlistMovieDao(), database.metadataDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, api)
         favoritesUseCase = FavoritesUseCase(database.favoritesDao())
         watchHistoryUseCase = WatchHistoryUseCase(database.watchHistoryDao())

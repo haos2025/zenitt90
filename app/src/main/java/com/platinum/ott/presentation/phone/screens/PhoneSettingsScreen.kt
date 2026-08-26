@@ -91,6 +91,19 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 Text("Отсканировать QR с TV — например, чтобы отправить ссылку на субтитры", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
+        // Раньше на телефоне не было НИКАКОГО способа управлять кэшем —
+        // даже той единственной блочной кнопки, что была на TV
+        // (SettingsViewModel.clearCache(), теперь удалена в пользу этого
+        // экрана — см. CacheManagementScreen.kt/PhoneCacheManagementScreen.kt).
+        Card(
+            onClick = { navController.navigate("cache_management") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
+        ) {
+            Column(Modifier.padding(ZenithDimens.paddingM)) {
+                Text("Кэш", style = MaterialTheme.typography.titleMedium)
+                Text("Размер по категориям и очистка", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         // Раньше это была карточка-заглушка из общего списка без единого
         // обработчика нажатия. "Автовоспроизведение следующей серии" по-
         // прежнему не заведено отдельной настройкой — сама возможность

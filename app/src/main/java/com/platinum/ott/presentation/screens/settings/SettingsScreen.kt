@@ -22,7 +22,7 @@ import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Раньше Column был fillMaxSize() без verticalScroll() — тот же баг,
@@ -169,7 +169,7 @@ fun SettingsScreen(onClearCacheClick: () -> Unit, onForceOtaUpdateClick: () -> U
         Spacer(Modifier.height(ZenithDimens.paddingXL))
         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
             Button(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }) { Text("Обновить парсеры") }
-            OutlinedButton(onClick = { viewModel.clearCache(); onClearCacheClick() }) { Text("Очистить кэш") }
+            OutlinedButton(onClick = onCacheManagementClick) { Text("Управление кэшем") }
             OutlinedButton(onClick = { viewModel.logout(); onLogoutClick() }) { Text("Сменить аккаунт") }
         }
     }
