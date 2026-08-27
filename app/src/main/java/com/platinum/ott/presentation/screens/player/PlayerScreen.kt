@@ -30,9 +30,9 @@ import androidx.tv.material3.*
 import kotlinx.coroutines.delay
 
 /**
- * Раньше useController=false и пустая ветка Ready ("/* Quality button,
- * controls */") — видео проигрывалось совсем без управления. Теперь:
- *  - PlayerController (перемотка/пауза/прогресс-бар) — показывается по
+ * Раньше useController=false и пустая ветка Ready (\"/* Quality button,
+ * controls */\") — видео проигрывалось совсем без управления. Теперь:
+ *  - PlayerController (пауза/прогресс-бар) — показывается по
  *    любому нажатию на пульте, автоскрытие через 3с бездействия.
  *  - PlaybackMenuOverlay (качество/аудио/субтитры/скорость) — по кнопке Menu; пока открыт, ключевые события
  *    Up/Down/Center НЕ перехватываются здесь, чтобы его собственный
@@ -42,14 +42,17 @@ import kotlinx.coroutines.delay
  *    сериал) — сопровождается короткой надписью по центру экрана
  *    (seekToast), которая ненадолго появляется и гаснет.
  *  - Back — если открыто меню качества, сначала закрывает его; иначе
- *    вызывает onBackPressed (раньше этот параметр не использовался вообще).
+ *    вызывает onBackPressed.
  *
- * Редизайн оверлея (второй раунд, PROMPT_PLAYER_OVERLAY_REDESIGN.md):
- * раньше PlayerController.isVisible зависело от !state.showPlaybackMenu —
- * пока открыта панель качества/аудио/субтитров/скорости, капсула ПОЛНОСТЬЮ
- * пряталась, ощущалось как два разных экрана вместо одного плеера. Теперь
- * капсула остаётся видна (просто притемнена полупрозрачным фоном самой
- * панели) — isVisible зависит только от showControls.
+ * Третий раунд редизайна (убраны декоративные ±10с кнопки в
+ * PlayerController — см. комментарий там, сам key handler ниже не
+ * менялся в части перемотки, только добавлено отслеживание "держит ли
+ * пользователь Left/Right сейчас" для растущего прогресс-бара):
+ * isDpadSeekActive считается по факту получения KeyDown-события
+ * DirectionLeft/DirectionRight (Android сам шлёт повторные KeyDown при
+ * удержании клавиши на пульте) — включается сразу, гаснет через 400ms
+ * после последнего такого события, тем же паттерном debounce, что уже
+ * используется для seekToast/showControls ниже.
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -65,9 +68,7 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
 
     // Кнопки перемотки/эпизодов в капсуле — decorative (см.
     // PlayerController.kt: не получают фокус пульта напрямую, реальное
-    // действие идёт через DirectionLeft/DirectionRight ниже). Раньше
-    // нажатие этих клавиш не давало вообще никакой визуальной обратной
-    // связи — просто перематывало/переключало серию молча. Теперь короткая
+    // действие идёт через DirectionLeft/DirectionRight ниже). Короткая
     // полупрозрачная надпись по центру экрана ("10 сек" / название серии),
     // тот же паттерн автоскрытия, что уже используется для showControls.
     var seekToast by remember { mutableStateOf<String?>(null) }
@@ -75,6 +76,24 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
         if (seekToast != null) {
             delay(700)
             seekToast = null
+        }
+    }
+
+    // Растущий прогресс-бар (PlayerController.ProgressBar, isSeekActive) —
+    // seekPulseNonce увеличивается на каждое реальное нажатие
+    // Left/Right-перемотки (не переключение серии — там позиция скачком
+    // меняется на новую серию, "разбухание" бара в момент скачка не несёт
+    // смысла скраббинга, поэтому не триггерим). LaunchedEffect перезапускается
+    // на каждое новое значение nonce, поэтому при удержании клавиши
+    // (повторные KeyDown от Android) индикатор остаётся включённым
+    // непрерывно, гаснет только через 400ms после последнего события.
+    var seekPulseNonce by remember { mutableStateOf(0) }
+    var isDpadSeekActive by remember { mutableStateOf(false) }
+    LaunchedEffect(seekPulseNonce) {
+        if (seekPulseNonce > 0) {
+            isDpadSeekActive = true
+            delay(400)
+            isDpadSeekActive = false
         }
     }
 
@@ -158,15 +177,14 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { viewModel.togglePlayPause(); true }
                     // Раньше Left/Right всегда были перемоткой ±10с. При
                     // просмотре сериала (nextEpisodeId/previousEpisodeId
-                    // заданы) те же клавиши теперь переключают серию — те
-                    // же кнопки, что видны в PlayerController, ведут себя
-                    // одинаково что с пульта, что по клику.
+                    // заданы) те же клавиши переключают серию.
                     Key.DirectionRight -> {
                         if (ready.nextEpisodeId != null) {
                             seekToast = ready.nextEpisodeTitle?.let { "Следующая: $it" } ?: "Следующая серия"
                             viewModel.playNextEpisode()
                         } else {
                             seekToast = "+10 сек"
+                            seekPulseNonce++
                             viewModel.seekForward()
                         }
                         true
@@ -177,6 +195,7 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                             viewModel.playPreviousEpisode()
                         } else {
                             seekToast = "-10 сек"
+                            seekPulseNonce++
                             viewModel.seekBackward()
                         }
                         true
@@ -186,29 +205,20 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     // Xiaomi TV Stick 4K) физической кнопки Menu нет вообще —
                     // без альтернативы панель качества/аудио/субтитров была
                     // недостижима. DirectionUp во время обычного воспроизведения
-                    // ничем не занят (используется только когда меню уже
-                    // открыто) — свободная клавиша, ничего не отбирает у
-                    // перемотки/паузы.
+                    // ничем не занят — свободная клавиша.
                     Key.Menu, Key.DirectionUp -> { viewModel.togglePlaybackMenu(); true }
-                    // "Подключить телефон" убрали из вложенного меню (см.
-                    // PlaybackMenuOverlay.kt) — DirectionDown, как и
+                    // "Подключить телефон" — DirectionDown, как и
                     // DirectionUp выше, ничем не занят во время обычного
-                    // воспроизведения, свободная клавиша под новую кнопку
-                    // на самом контроллере (PlayerController.kt).
+                    // воспроизведения.
                     Key.DirectionDown -> { showCompanionQr = true; true }
                     Key.Back -> { onBackPressed(); true }
                     else -> false // любая другая кнопка — контроллер уже показан выше
                 }
             }
     ) {
-        // Раньше: PlayerView(it) — конструктор без AttributeSet, Media3 по
-        // умолчанию берёт SurfaceView для видео. На части TV-приставок
-        // SurfaceView (отдельный аппаратный слой) непредсказуемо перекрывает
-        // Compose-контент, нарисованный поверх (PlayerController) — не
-        // целиком, а частично, без видимой закономерности. Инфлейт из
-        // res/layout/player_view_texture.xml с surface_type="texture_view"
-        // — единственный способ переключить PlayerView на TextureView
-        // программно (публичного сеттера в API нет, только XML-атрибут).
+        // PlayerView через TextureView (не SurfaceView) — см.
+        // res/layout/player_view_texture.xml, обходит частичное
+        // перекрытие Compose-контента на слабых TV-чипах.
         AndroidView(
             factory = { ctx ->
                 android.view.LayoutInflater.from(ctx)
@@ -224,10 +234,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(ZenithDimens.paddingM))
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                        // Раньше здесь была только кнопка "Повторить" — при
-                        // ошибке вроде HTTP 404 (сломанная ссылка, не временный
-                        // сбой) повтор просто получает ту же ошибку снова,
-                        // а выйти можно было только системным жестом назад.
                         Button(onClick = { onBackPressed() }) { Text("Назад") }
                         Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") }
                     }
@@ -235,16 +241,10 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
             }
             is PlayerUiState.Ready -> {
                 PlayerController(
-                    // Раньше: showControls && !state.showPlaybackMenu —
-                    // капсула полностью пряталась, пока открыта панель
-                    // настроек. Теперь капсула не зависит от showPlaybackMenu,
-                    // остаётся видна под затемнением самой панели.
                     isVisible = showControls,
                     isPlaying = isPlaying,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
-                    onSeekForward = { viewModel.seekForward() },
-                    onSeekBackward = { viewModel.seekBackward() },
                     onTogglePlay = { viewModel.togglePlayPause() },
                     title = state.title,
                     hasNextEpisode = state.nextEpisodeId != null,
@@ -252,11 +252,9 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     onNextEpisode = { viewModel.playNextEpisode() },
                     onPreviousEpisode = { viewModel.playPreviousEpisode() },
                     onConnectPhone = { showCompanionQr = true },
+                    isSeekActive = isDpadSeekActive,
                     subtitlesEnabled = state.subtitlesEnabled,
                     playbackSpeed = state.playbackSpeed,
-                    // Клик по одной из четырёх новых иконок капсулы — один
-                    // шаг до нужной вкладки (не открыть меню, потом ещё раз
-                    // переключить вкладку отдельно).
                     onOpenMenuTab = { viewModel.openPlaybackMenu(it) },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -273,9 +271,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         subtitlesEnabled = state.subtitlesEnabled,
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
                         onDisableSubtitles = { viewModel.disableSubtitles() },
-                        // "Свой файл по ссылке" в списке субтитров на TV —
-                        // закрывает панель настроек и открывает тот же
-                        // QR-поток, что и кнопка "Подключить телефон".
                         onRequestExternalSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
                         playbackSpeed = state.playbackSpeed,
                         onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
@@ -294,8 +289,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
         }
 
         // Короткая надпись по центру экрана на DirectionLeft/DirectionRight
-        // — тот же AnimatedVisibility fade-in/fade-out + LaunchedEffect-
-        // таймер, что уже используется для автоскрытия капсулы выше.
         AnimatedVisibility(
             visible = seekToast != null,
             enter = fadeIn(),

@@ -1,23 +1,28 @@
 package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Fullscreen
@@ -31,34 +36,41 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.screens.player.PlaybackMenuTab
 import com.platinum.ott.presentation.screens.player.TrackOption
 import com.platinum.ott.ui.theme.ZenithSurface
+import kotlinx.coroutines.launch
 
-// Редизайн (было: прямые IconButton без общей плашки, семь иконок в один
-// ряд снизу без иерархии — перемотка/пауза, качество/скорость/субтитры/
-// fullscreen все одного размера и веса). Транспортный ряд (перемотка или
-// эпизоды + play/pause) — в собственной капсуле, как на TV
-// (PlayerController.kt) — тот же язык на обеих платформах. Раньше кнопки
-// -10с/+10с были единственным способом перемотки НА ЭКРАНЕ — жест свайпа
-// (см. PhonePlayerScreen.kt, seekDeltaFromDrag) уже делает то же самое,
-// так что при просмотре сериала (hasNextEpisode/hasPreviousEpisode) эти
-// две кнопки не теряют перемотку вообще, она остаётся жестом.
+// Третий раунд редизайна: убраны кнопки ±10с (были рабочими, но
+// дублировали жест свайпа по экрану — см. PhonePlayerScreen.kt,
+// seekDeltaFromDrag — перемотка никуда не делась, просто больше не имеет
+// отдельной видимой кнопки). Для обычного фильма транспортный кластер —
+// один play/pause, на том же месте слева (не по центру всей капсулы),
+// где он стоял и раньше между двумя кнопками перемотки. Для сериала
+// след./пред. эпизода остаются — это отдельная функция, не перемотка.
 //
-// Второй раунд редизайна (PROMPT_PLAYER_OVERLAY_REDESIGN.md): раньше
-// субтитры/скорость/качество/fullscreen были ОТДЕЛЬНЫМ рядом голых иконок
-// без собственного фона ПОД транспортной капсулой — выглядело как два
-// разных элемента UI, не один плеер. Теперь один Column с общим фоном/
-// рамкой/скруглением — транспорт и четыре иконки настроек в одной и той
-// же плашке, в одном ряду (транспорт слева, иконки справа). Fullscreen
-// вынесен из этого ряда наверх, к заголовку — это переключатель ориентации
-// экрана, а не параметр воспроизведения текущего видео, как остальные
-// четыре (которые теперь буквально совпадают с четырьмя вкладками
-// PlaybackMenuOverlay на TV: субтитры/аудио/качество/скорость — раньше
-// кнопки аудиодорожки на телефоне не было вообще).
+// Fullscreen переехал из верхней строки (была отдельная кнопка рядом с
+// заголовком) в общий ряд иконок капсулы — теперь вообще все элементы
+// управления в одной плашке снизу, верхняя строка — только "Назад +
+// Название".
+//
+// Гибридный компакт: вместо четырёх отдельных иконок настроек
+// (субтитры/аудио/качество/скорость) в ряду капсулы остаются только
+// субтитры и fullscreen — самые частые действия. Аудио/качество/скорость
+// уходят под одну кнопку "⋮", открывающую модальное окно снизу
+// (ModalBottomSheet) с этими тремя категориями. Один и тот же макет и в
+// портрете, и в landscape/fullscreen — специально не заводили вторую,
+// параллельную раскладку под ориентацию.
+//
+// Прогресс-бар — свой кастомный скраббер вместо стандартного Material3
+// Slider (см. ScrubberBar ниже): растёт с 4dp до 10dp на касание/драг,
+// 150ms ease-out, тот же принцип, что и на TV (там — по удержанию D-pad,
+// см. PlayerController.kt). Время слито в один ряд со скраббером вместо
+// отдельной строки под ним — экономит высоту капсулы.
 @Composable
 fun PhonePlayerController(
     isVisible: Boolean,
@@ -71,8 +83,6 @@ fun PhonePlayerController(
     audioTracks: List<TrackOption>,
     subtitleTracks: List<TrackOption>,
     subtitlesEnabled: Boolean,
-    onSeekForward: () -> Unit,
-    onSeekBackward: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onSelectVariant: (StreamVariant) -> Unit,
@@ -92,6 +102,13 @@ fun PhonePlayerController(
     modifier: Modifier = Modifier
 ) {
     var menuTab by remember { mutableStateOf<PlaybackMenuTab?>(null) }
+    // Отдельно от menuTab (субтитры остаются собственной иконкой/диалогом,
+    // как раньше) — аудио/качество/скорость теперь живут в одном
+    // bottom sheet. moreSheetCategory == null — показывается список из
+    // трёх категорий, не null — список значений внутри выбранной
+    // категории (drill-down в том же листе, без стека диалогов).
+    var moreSheetOpen by remember { mutableStateOf(false) }
+    var moreSheetCategory by remember { mutableStateOf<PlaybackMenuTab?>(null) }
     val isSeries = hasNextEpisode || hasPreviousEpisode
 
     AnimatedVisibility(visible = isVisible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
@@ -101,86 +118,81 @@ fun PhonePlayerController(
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.3f).align(Alignment.BottomCenter)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.7f)))))
 
+            // Верхняя строка — только "Назад + Название", fullscreen
+            // отсюда убран (переехал в капсулу).
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
                 Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                // Fullscreen — переключатель ориентации экрана целиком, не
-                // параметр воспроизведения текущего видео (как остальные
-                // четыре иконки капсулы ниже) — поэтому живёт в верхней
-                // строке рядом с заголовком, а не внутри транспортной
-                // плашки.
-                IconButton(onClick = onToggleFullscreen) {
-                    Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, "На весь экран", tint = Color.White)
-                }
             }
 
             Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingM),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Единая капсула — транспорт и ряд иконок настроек теперь
-                // один Column с общим фоном/рамкой/скруглением (раньше
-                // иконки были отдельным элементом без своего фона под
-                // капсулой).
                 Column(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
                         .background(ZenithSurface.copy(alpha = 0.9f))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
-                        .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM)
+                        .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
                 ) {
-                    var sliderPosition by remember(currentPositionMs) { mutableStateOf(currentPositionMs.toFloat()) }
-                    Slider(
-                        value = sliderPosition,
-                        onValueChange = { sliderPosition = it },
-                        onValueChangeFinished = { onSeekTo(sliderPosition.toLong()) },
-                        valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Row(Modifier.fillMaxWidth().padding(bottom = ZenithDimens.paddingXS), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatMs(currentPositionMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                    // Время слито в один ряд со скраббером (было: слайдер
+                    // отдельной строкой, время отдельной строкой под ним).
+                    var previewPositionMs by remember { mutableStateOf<Long?>(null) }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(formatMs(previewPositionMs ?: currentPositionMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
+                        ScrubberBar(
+                            positionMs = currentPositionMs,
+                            durationMs = durationMs,
+                            onPreview = { previewPositionMs = it },
+                            onSeekTo = { onSeekTo(it); previewPositionMs = null },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
                         Text(formatMs(durationMs), color = Color.White.copy(0.5f), style = MaterialTheme.typography.bodySmall)
                     }
 
-                    // Один ряд: слева — транспортный кластер (перемотка/
-                    // эпизоды + play/pause покрупнее посередине кластера),
-                    // справа — четыре маленькие квадратные иконки настроек
-                    // воспроизведения. Тот же макет, что на TV
-                    // (PlayerController.kt).
+                    // Один ряд: слева — транспортный кластер (play/pause,
+                    // либо + след./пред. эпизод по бокам для сериала),
+                    // справа — субтитры / "⋮" / fullscreen.
                     Row(
                         Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            TransportButton(
-                                icon = if (isSeries) Icons.Default.SkipPrevious else Icons.Default.Replay10,
-                                contentDescription = if (isSeries) "Предыдущая серия" else "-10 секунд",
-                                enabled = !isSeries || hasPreviousEpisode,
-                                onClick = if (isSeries) onPreviousEpisode else onSeekBackward
-                            )
-                            Spacer(Modifier.width(ZenithDimens.paddingM))
+                            if (isSeries) {
+                                TransportButton(
+                                    icon = Icons.Default.SkipPrevious,
+                                    contentDescription = "Предыдущая серия",
+                                    enabled = hasPreviousEpisode,
+                                    onClick = onPreviousEpisode
+                                )
+                                Spacer(Modifier.width(ZenithDimens.paddingM))
+                            }
                             TransportButton(
                                 icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (isPlaying) "Пауза" else "Play",
                                 isPrimary = true,
                                 onClick = onTogglePlay
                             )
-                            Spacer(Modifier.width(ZenithDimens.paddingM))
-                            TransportButton(
-                                icon = if (isSeries) Icons.Default.SkipNext else Icons.Default.Forward10,
-                                contentDescription = if (isSeries) "Следующая серия" else "+10 секунд",
-                                enabled = !isSeries || hasNextEpisode,
-                                onClick = if (isSeries) onNextEpisode else onSeekForward
-                            )
+                            if (isSeries) {
+                                Spacer(Modifier.width(ZenithDimens.paddingM))
+                                TransportButton(
+                                    icon = Icons.Default.SkipNext,
+                                    contentDescription = "Следующая серия",
+                                    enabled = hasNextEpisode,
+                                    onClick = onNextEpisode
+                                )
+                            }
                         }
 
                         Spacer(Modifier.weight(1f))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                             SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled) { menuTab = PlaybackMenuTab.SUBTITLES }
-                            SmallMenuIconButton(icon = Icons.Default.Audiotrack, contentDescription = "Аудиодорожка", isActive = false) { menuTab = PlaybackMenuTab.AUDIO }
-                            SmallMenuIconButton(icon = Icons.Default.HighQuality, contentDescription = "Качество", isActive = false) { menuTab = PlaybackMenuTab.QUALITY }
-                            SmallMenuIconButton(icon = Icons.Default.Speed, contentDescription = "Скорость", isActive = playbackSpeed != 1f) { menuTab = PlaybackMenuTab.SPEED }
+                            SmallMenuIconButton(icon = Icons.Default.MoreVert, contentDescription = "Ещё настройки", isActive = false) { moreSheetOpen = true; moreSheetCategory = null }
+                            SmallMenuIconButton(icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "На весь экран", isActive = isFullscreen) { onToggleFullscreen() }
                         }
                     }
                 }
@@ -189,20 +201,8 @@ fun PhonePlayerController(
     }
 
     when (menuTab) {
-        PlaybackMenuTab.QUALITY -> PlaybackOptionDialog("Качество", onDismiss = { menuTab = null }) {
-            variants.forEach { v -> DialogRow(v.quality + " · " + v.source, v == currentVariant) { onSelectVariant(v); menuTab = null } }
-        }
-        PlaybackMenuTab.AUDIO -> PlaybackOptionDialog("Аудиодорожка", onDismiss = { menuTab = null }) {
-            if (audioTracks.isEmpty()) Text("Только одна дорожка", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingSM))
-            audioTracks.forEach { t -> DialogRow(t.label, t.isSelected) { onSelectAudio(t); menuTab = null } }
-        }
         PlaybackMenuTab.SUBTITLES -> {
             var externalUrl by remember { mutableStateOf("") }
-            // "Свой файл по ссылке" раньше был полем ввода мелким шрифтом
-            // внизу диалога, отдельно от остальных пунктов. Теперь —
-            // равноправная строка списка (как "Выключены"/дорожки); клик
-            // по ней разворачивает то же поле ввода прямо под ней, а не
-            // держит его видимым постоянно.
             var showExternalField by remember { mutableStateOf(false) }
             PlaybackOptionDialog("Субтитры", onDismiss = { menuTab = null }) {
                 DialogRow("Выключены", !subtitlesEnabled) { onDisableSubtitles(); menuTab = null }
@@ -217,12 +217,84 @@ fun PhonePlayerController(
                 if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = Color.Gray, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
             }
         }
-        PlaybackMenuTab.SPEED -> PlaybackOptionDialog("Скорость", onDismiss = { menuTab = null }) {
-            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { s ->
-                DialogRow((if (s == 1f) "Обычная" else "${s}x"), s == playbackSpeed) { onSelectSpeed(s); menuTab = null }
+        else -> {}
+    }
+
+    // Аудио/качество/скорость — один общий bottom sheet вместо трёх
+    // отдельных иконок в капсуле. moreSheetCategory == null — корневой
+    // список из трёх пунктов; иначе — значения внутри выбранной
+    // категории с кнопкой "назад" в шапке, тот же лист не закрывается.
+    if (moreSheetOpen) {
+        MoreSettingsSheet(
+            category = moreSheetCategory,
+            onSelectCategory = { moreSheetCategory = it },
+            onBack = { moreSheetCategory = null },
+            onDismiss = { moreSheetOpen = false; moreSheetCategory = null },
+            variants = variants,
+            currentVariant = currentVariant,
+            onSelectVariant = { onSelectVariant(it); moreSheetOpen = false; moreSheetCategory = null },
+            audioTracks = audioTracks,
+            onSelectAudio = { onSelectAudio(it); moreSheetOpen = false; moreSheetCategory = null },
+            playbackSpeed = playbackSpeed,
+            onSelectSpeed = { onSelectSpeed(it); moreSheetOpen = false; moreSheetCategory = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoreSettingsSheet(
+    category: PlaybackMenuTab?,
+    onSelectCategory: (PlaybackMenuTab) -> Unit,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+    variants: List<StreamVariant>,
+    currentVariant: StreamVariant?,
+    onSelectVariant: (StreamVariant) -> Unit,
+    audioTracks: List<TrackOption>,
+    onSelectAudio: (TrackOption) -> Unit,
+    playbackSpeed: Float,
+    onSelectSpeed: (Float) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(bottom = ZenithDimens.paddingL)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), verticalAlignment = Alignment.CenterVertically) {
+                if (category != null) {
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBackIosNew, "Назад", modifier = Modifier.size(18.dp)) }
+                    Spacer(Modifier.width(ZenithDimens.paddingXS))
+                }
+                Text(
+                    when (category) {
+                        PlaybackMenuTab.AUDIO -> "Аудиодорожка"
+                        PlaybackMenuTab.QUALITY -> "Качество"
+                        PlaybackMenuTab.SPEED -> "Скорость"
+                        else -> "Ещё настройки"
+                    },
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            when (category) {
+                null -> {
+                    DialogRow("Аудиодорожка") { onSelectCategory(PlaybackMenuTab.AUDIO) }
+                    DialogRow("Качество") { onSelectCategory(PlaybackMenuTab.QUALITY) }
+                    DialogRow("Скорость") { onSelectCategory(PlaybackMenuTab.SPEED) }
+                }
+                PlaybackMenuTab.AUDIO -> {
+                    if (audioTracks.isEmpty()) Text("Только одна дорожка", color = Color.Gray, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM))
+                    audioTracks.forEach { t -> DialogRow(t.label, t.isSelected) { onSelectAudio(t) } }
+                }
+                PlaybackMenuTab.QUALITY -> {
+                    variants.forEach { v -> DialogRow(v.quality + " · " + v.source, v == currentVariant) { onSelectVariant(v) } }
+                }
+                PlaybackMenuTab.SPEED -> {
+                    listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).forEach { s ->
+                        DialogRow(if (s == 1f) "Обычная" else "${s}x", s == playbackSpeed) { onSelectSpeed(s) }
+                    }
+                }
+                PlaybackMenuTab.SUBTITLES -> {} // субтитры в этот лист не входят, своя иконка/диалог
             }
         }
-        null -> {}
     }
 }
 
@@ -234,23 +306,28 @@ private fun TransportButton(
     isPrimary: Boolean = false,
     enabled: Boolean = true
 ) {
+    // Крупная кнопка play/pause уменьшена с 56dp до 48dp — это ровно
+    // минимальный тач-таргет по рекомендациям Android, дальше сжимать
+    // уже в ущерб точности попадания пальцем.
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(if (isPrimary) 56.dp else 44.dp)
+        modifier = Modifier.size(if (isPrimary) 48.dp else 40.dp)
             .clip(CircleShape)
             .background(if (isPrimary) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f))
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription, tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 30.dp else 22.dp))
+            Icon(icon, contentDescription, tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 26.dp else 20.dp))
         }
     }
 }
 
 /**
- * Четыре маленькие квадратные иконки настроек (субтитры/аудио/качество/
- * скорость) — тот же визуальный язык, что и на TV (MenuIconButton в
- * PlayerController.kt): закруглённый квадрат, активная — с подсветкой
- * фоном/цветом иконки, неактивная — нейтральная полупрозрачная подложка.
+ * Иконки настроек капсулы (субтитры/"⋮"/fullscreen) — раньше видимый
+ * цветной чип и тач-зона совпадали (36dp/36dp), из-за чего реальная
+ * область попадания была меньше рекомендованного Android-минимума
+ * (48dp). Теперь видимый чип уменьшен до 32dp, а тач-зона у самого
+ * IconButton — 44dp: капсула визуально компактнее, но пальцем попадать
+ * не сложнее, а местами даже проще.
  */
 @Composable
 private fun SmallMenuIconButton(
@@ -259,15 +336,107 @@ private fun SmallMenuIconButton(
     isActive: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f))
-    ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
-            Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(32.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f))
+        ) {
+            Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(16.dp))
         }
+    }
+}
+
+/**
+ * Кастомный скраббер вместо стандартного Material3 Slider — единственный
+ * способ получить растущий трек (4dp в покое → 10dp во время касания/
+ * драга, 150ms ease-out): у Slider нет готового параметра под анимацию
+ * толщины трека по interaction-состоянию в используемой здесь версии
+ * material3, а собственный pointerInput даёт полный контроль и не
+ * тянет зависимость от конкретной версии API компонента.
+ *
+ * onPreview вызывается на каждое движение пальца (для обновления текста
+ * текущего времени вживую, как во время перетаскивания у YouTube/
+ * большинства видеоплееров) — сам onSeekTo вызывается только один раз,
+ * по отпусканию/завершению жеста.
+ */
+@Composable
+private fun ScrubberBar(
+    positionMs: Long,
+    durationMs: Long,
+    onPreview: (Long?) -> Unit,
+    onSeekTo: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isScrubbing by remember { mutableStateOf(false) }
+    var scrubTargetMs by remember { mutableStateOf<Long?>(null) }
+    val displayedMs = scrubTargetMs ?: positionMs
+    val progress = if (durationMs > 0L) (displayedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+
+    val trackHeight by animateDpAsState(
+        targetValue = if (isScrubbing) 10.dp else 4.dp,
+        animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
+        label = "phoneScrubberHeight"
+    )
+
+    fun positionFromX(x: Float, widthPx: Int): Long =
+        ((x / widthPx) * durationMs).toLong().coerceIn(0L, durationMs.coerceAtLeast(0L))
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(24.dp) // тач-зона заметно больше видимого трека — трек тонкий, палец мимо не промахивается
+            .pointerInput(durationMs) {
+                kotlinx.coroutines.coroutineScope {
+                    launch {
+                        detectTapGestures(
+                            onPress = { offset ->
+                                isScrubbing = true
+                                val target = positionFromX(offset.x, size.width)
+                                scrubTargetMs = target
+                                onPreview(target)
+                                tryAwaitRelease()
+                                onSeekTo(target)
+                                scrubTargetMs = null
+                                onPreview(null)
+                                isScrubbing = false
+                            }
+                        )
+                    }
+                    launch {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                isScrubbing = true
+                                val target = positionFromX(offset.x, size.width)
+                                scrubTargetMs = target
+                                onPreview(target)
+                            },
+                            onDragEnd = {
+                                scrubTargetMs?.let { onSeekTo(it) }
+                                scrubTargetMs = null
+                                onPreview(null)
+                                isScrubbing = false
+                            },
+                            onDragCancel = {
+                                scrubTargetMs = null
+                                onPreview(null)
+                                isScrubbing = false
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val target = positionFromX(change.position.x, size.width)
+                                scrubTargetMs = target
+                                onPreview(target)
+                            }
+                        )
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(Modifier.fillMaxWidth().height(trackHeight).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f)))
+        Box(Modifier.fillMaxWidth(progress).height(trackHeight).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary))
     }
 }
 
