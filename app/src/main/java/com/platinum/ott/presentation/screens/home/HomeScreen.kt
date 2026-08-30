@@ -3,6 +3,8 @@ package com.platinum.ott.presentation.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -152,12 +154,12 @@ private fun ContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (Str
             color = androidx.compose.ui.graphics.Color.White,
             modifier = Modifier.padding(start = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingSM)
         )
-        androidx.compose.foundation.lazy.LazyRow(
+        LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = ZenithDimens.tvOverscanPadding),
             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)
         ) {
-            androidx.compose.foundation.lazy.items(entries, key = { it.contentId }) { entry ->
+            items(entries, key = { it.contentId }) { entry ->
                 MovieCard(title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) })
             }
         }
