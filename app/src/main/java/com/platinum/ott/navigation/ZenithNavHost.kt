@@ -47,7 +47,14 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 onFavoritesClick = { navController.navigateToTab("favorites") }
             ) else PhoneSetupRoute(navController)
         }
-        composable("home") { if (isTV) HomeScreen(onMovieClick = { navController.navigate("detail/$it") }, onSettingsClick = { navController.navigateToTab("settings") }, onFavoritesClick = { navController.navigateToTab("favorites") }, onHistoryClick = { navController.navigateToTab("history") }, onSearchClick = { navController.navigateToTab("search") }, onSeriesClick = { navController.navigateToTab("series") }) else PhoneHomeScreen(navController) }
+        // PROMPT_NAVIGATION_SIDEBAR.md — HomeScreen (TV) больше не получает
+        // отдельные onSettingsClick/onFavoritesClick/onHistoryClick/
+        // onSearchClick/onSeriesClick: локальный ряд кнопок убран целиком,
+        // навигацию по вкладкам берёт на себя постоянный сайдбар
+        // (NavSidebar.kt), которому нужен сам navController. "Сериалы" как
+        // отдельный переход с Home не переехал в сайдбар — эту роль теперь
+        // играет вкладка-фильтр внутри ленты (см. HomeScreen.kt).
+        composable("home") { if (isTV) HomeScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHomeScreen(navController) }
         composable("detail/{movieId}", arguments = listOf(navArgument("movieId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
             if (isTV) DetailScreen(
@@ -81,20 +88,20 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val variantUrl = entry.arguments?.getString("variantUrl")?.ifBlank { null }
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl)
         }
-        composable("settings") { if (isTV) SettingsScreen(onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
         composable("cache_management") { if (isTV) CacheManagementScreen(onBackPressed = { navController.popBackStack() }) else PhoneCacheManagementScreen(navController) }
         composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
-        composable("favorites") { if (isTV) FavoritesScreen(onBackPressed = { navController.popBackStack() }, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
-        composable("history") { if (isTV) HistoryScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
+        composable("favorites") { if (isTV) FavoritesScreen(navController = navController, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
+        composable("history") { if (isTV) HistoryScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens
         composable("plugins") { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) }
         composable("search?q={q}", arguments = listOf(navArgument("q") { type = NavType.StringType; defaultValue = "" })) { entry ->
             val q = entry.arguments?.getString("q") ?: ""
-            if (isTV) com.platinum.ott.presentation.screens.search.SearchScreen(onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }, initialQuery = q)
+            if (isTV) com.platinum.ott.presentation.screens.search.SearchScreen(navController = navController, onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }, initialQuery = q)
             else PhoneSearchScreen(navController, initialQuery = q)
         }
         composable("series") {

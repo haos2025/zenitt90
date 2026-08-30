@@ -1,14 +1,21 @@
 package com.platinum.ott.presentation.screens.home
 
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.platform.TmdbImage
+import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.domain.model.Movie
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,8 +26,30 @@ class HomeViewModel @Inject constructor(
     private val getCatalog = sessionGraph.getCatalogUseCase
     private val getPlaylistCatalog = sessionGraph.getPlaylistCatalogUseCase
     private val tmdbRepository = sessionGraph.tmdbRepository
+    private val watchHistoryUseCase = sessionGraph.watchHistoryUseCase
+    private val favoritesUseCase = sessionGraph.favoritesUseCase
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
+
+    // Решение 2 (PROMPT_HOME_FEED_REDESIGN.md) — «Продолжить просмотр»
+    // переиспользует уже готовую группировку серий сериала в одну запись
+    // (WatchHistoryUseCase.getRecentDeduped(), вынесена туда из
+    // HistoryViewModel специально ради этого — см. WatchHistoryUseCase.kt),
+    // а не изобретает вторую копию того же алгоритма. Живёт отдельным
+    // потоком, а не частью HomeUiState.Success — история просмотра должна
+    // обновляться сама по себе (например, сразу после выхода из плеера),
+    // не только при повторной loadCatalog().
+    val continueWatching: StateFlow<List<WatchHistoryEntity>> =
+        watchHistoryUseCase.getRecentDeduped(15)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Решение 3 — персонализация по жанрам без ML: простой счётчик, какие
+    // жанры чаще встречаются в истории просмотра/избранном пользователя,
+    // такие жанровые ряды идут выше остальных (см. сортировку grouped в
+    // HomeScreen.kt). Пересчитывается один раз на загрузку ленты
+    // (loadCatalog()), не на каждую рекомпозицию — см. computeGenrePriority.
+    var genrePriority: Map<String, Int> by mutableStateOf(emptyMap())
+        private set
 
     // ROADMAP.md п.11 (TMDB-постеры в сетке каталога) — раньше сознательно
     // не делалось: 30-50 карточек одновременно на экране означало бы TMDB-
@@ -76,17 +105,45 @@ class HomeViewModel @Inject constructor(
             cachedPlaylistMovies = try { getPlaylistCatalog.execute() } catch (_: Exception) { emptyList() }
 
             getCatalog.execute(page).onSuccess {
-                _uiState.value = HomeUiState.Success(cachedPlaylistMovies + it.movies, it.currentPage, it.totalPages)
+                val allMovies = cachedPlaylistMovies + it.movies
+                _uiState.value = HomeUiState.Success(
+                    movies = allMovies,
+                    page = it.currentPage,
+                    totalPages = it.totalPages,
+                    // Только backend-страница, не плейлист — см. комментарий
+                    // у heroMovies в HomeUiState.kt.
+                    heroMovies = it.movies.take(8)
+                )
+                computeGenrePriority(allMovies)
             }.onFailure { error ->
                 // Backend недоступен, но свой плейлист может быть жив —
                 // не превращать это в полный отказ экрана, если есть хоть что-то
                 if (cachedPlaylistMovies.isNotEmpty()) {
                     _uiState.value = HomeUiState.Success(cachedPlaylistMovies, 1, 1)
+                    computeGenrePriority(cachedPlaylistMovies)
                 } else {
                     _uiState.value = HomeUiState.Error(error.message ?: "Ошибка загрузки")
                 }
             }
         }
+    }
+
+    // Ни WatchHistoryEntity, ни FavoriteEntity не хранят жанр контента —
+    // только contentId/title/poster. Единственный источник жанра — уже
+    // загруженный на этот момент каталог (allMovies), поэтому сопоставляем
+    // по id и просто пропускаем записи, которых там нет (старый просмотр/
+    // избранное вне текущей загруженной части каталога) — считать то, чего
+    // не знаем, было бы гаданием, не персонализацией.
+    private suspend fun computeGenrePriority(movies: List<Movie>) {
+        val genreById = movies.associate { it.id to it.genre.ifBlank { "Каталог" } }
+        val historyIds = try { watchHistoryUseCase.getRecent(50).first() } catch (_: Exception) { emptyList() }.map { it.contentId }
+        val favoriteIds = try { favoritesUseCase.getAllFavorites().first() } catch (_: Exception) { emptyList() }.map { it.contentId }
+        val counts = HashMap<String, Int>()
+        (historyIds + favoriteIds).forEach { id ->
+            val genre = genreById[id] ?: return@forEach
+            counts[genre] = (counts[genre] ?: 0) + 1
+        }
+        genrePriority = counts
     }
 
     /**

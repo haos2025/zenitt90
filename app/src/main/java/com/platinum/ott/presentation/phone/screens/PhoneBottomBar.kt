@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -23,13 +24,24 @@ import com.platinum.ott.navigation.navigateToTab
 // месте, а не в пяти.
 @Composable
 fun PhoneBottomBar(navController: NavHostController) {
-    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    // "search" зарегистрирован в ZenithNavHost как "search?q={q}" —
+    // текущий route в этом случае буквально "search?q={q}", не "search".
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route?.substringBefore('?')
     NavigationBar {
         NavigationBarItem(
             selected = currentRoute == "home",
             onClick = { navController.navigateToTab("home") },
             icon = { Icon(Icons.Default.Home, "Главная") },
             label = { Text("Главная") }
+        )
+        // PROMPT_NAVIGATION_SIDEBAR.md, п.2 — "Поиск" вторым пунктом (после
+        // "Главная", перед "Избранное"): самое частое действие после захода
+        // в приложение, логично держать в начале, не в конце ряда.
+        NavigationBarItem(
+            selected = currentRoute == "search",
+            onClick = { navController.navigateToTab("search") },
+            icon = { Icon(Icons.Default.Search, "Поиск") },
+            label = { Text("Поиск") }
         )
         NavigationBarItem(
             selected = currentRoute == "favorites",

@@ -49,6 +49,10 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableStateOf(0L) }
     var currentPositionMs by remember { mutableStateOf(0L) }
+    // ExoPlayer.bufferedPosition существовал в проекте с самого начала, но
+    // ScrubberBar о нём не знал — на баре было только "просмотрено/не
+    // просмотрено", без индикации того, что уже скачано вперёд.
+    var bufferedPositionMs by remember { mutableStateOf(0L) }
 
     // Раньше MainActivity форсила SCREEN_ORIENTATION_PORTRAIT для не-TV
     // безусловно, и ничего на экране плеера это не переопределяло — видео
@@ -92,6 +96,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
     LaunchedEffect(uiState) {
         while (uiState is PlayerUiState.Ready) {
             currentPositionMs = viewModel.exoPlayer.currentPosition.coerceAtLeast(0L)
+            bufferedPositionMs = viewModel.exoPlayer.bufferedPosition.coerceAtLeast(0L)
             delay(500)
         }
     }
@@ -196,6 +201,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
                     title = state.title,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
+                    bufferedPositionMs = bufferedPositionMs,
                     variants = state.variants,
                     currentVariant = state.currentVariant,
                     audioTracks = state.audioTracks,

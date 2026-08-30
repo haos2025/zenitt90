@@ -5,14 +5,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material3.Icon
 import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.Movie
+import com.platinum.ott.ui.theme.ZenithSecondary
 
 /**
  * Горизонтальный ряд каталога с заголовком секции.
@@ -31,7 +36,12 @@ fun CatalogRow(
     // приходят от HomeViewModel (см. HomeScreen.kt), дефолты пустые, чтобы
     // CatalogRow не ломался для мест, где его вызывают без этой логики.
     resolvedPosters: Map<String, String> = emptyMap(),
-    onResolvePoster: (Movie, Int) -> Unit = { _, _ -> }
+    onResolvePoster: (Movie, Int) -> Unit = { _, _ -> },
+    // Решение 4 PROMPT_HOME_FEED_REDESIGN.md — "Мой плейлист" визуально
+    // отличается от рядов бэкенд-каталога: акцентная иконка/цвет заголовка.
+    // По умолчанию false, чтобы не ломать другие места, вызывающие
+    // CatalogRow без этой логики (сейчас — только HomeScreen.kt).
+    isPlaylistRow: Boolean = false
 ) {
     val density = LocalDensity.current
     // ZenithDimens.cardWidth — @Composable get() (адаптивен по WindowSize,
@@ -42,12 +52,16 @@ fun CatalogRow(
     val posterWidthPx = remember(density, cardWidth) { with(density) { cardWidth.roundToPx() } }
 
     Column(modifier = modifier) {
-        Text(
-            text     = title,
-            style    = MaterialTheme.typography.titleLarge,
-            color    = Color.White,
-            modifier = Modifier.padding(start = 56.dp, bottom = 12.dp)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 56.dp, bottom = 12.dp)) {
+            if (isPlaylistRow) {
+                Icon(Icons.Default.PlaylistPlay, contentDescription = "Мой плейлист", tint = ZenithSecondary, modifier = Modifier.padding(end = ZenithDimens.paddingXS))
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = if (isPlaylistRow) ZenithSecondary else Color.White
+            )
+        }
 
         LazyRow(
             modifier = Modifier.fillMaxWidth(),

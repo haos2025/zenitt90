@@ -5,26 +5,31 @@ import com.platinum.ott.navigation.navigateToTab
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.platinum.ott.data.local.entity.WatchHistoryEntity
+import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.phone.components.PhoneCatalogRow
+import com.platinum.ott.presentation.phone.components.PhoneHeroBanner
 import com.platinum.ott.presentation.components.SkeletonCatalog
+import com.platinum.ott.presentation.screens.home.HomeContentFilter
 import com.platinum.ott.presentation.screens.home.HomeUiState
 import com.platinum.ott.presentation.screens.home.HomeViewModel
+import com.platinum.ott.presentation.screens.home.isPlaylistSourced
+import com.platinum.ott.presentation.screens.home.matchesFilter
 
 /**
  * Раньше здесь был плоский LazyVerticalGrid(GridCells.Fixed(3)) — карточки
@@ -36,19 +41,24 @@ import com.platinum.ott.presentation.screens.home.HomeViewModel
  * держит свою декларативную ширину, ряд просто скроллится горизонтально,
  * переполнение исчезает само по себе, без обрезки контента.
  *
- * Заодно этот экран никогда не получал ни группировку по жанрам, ни
- * дозагрузку следующих страниц — HomeScreen.kt (TV) получил оба фикса
- * раньше в этой же сессии, PhoneHomeScreen.kt тогда пропустили.
+ * PROMPT_HOME_FEED_REDESIGN.md — те же пять решений, что и на TV (см.
+ * HomeScreen.kt): hero-баннер, "Продолжить просмотр", персонализация по
+ * жанрам, маркер "Мой плейлист", вкладки-фильтры + переписанный триггер
+ * пагинации с учётом новых элементов в начале списка.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
+    var selectedFilter by remember { mutableStateOf(HomeContentFilter.ALL) }
 
     Scaffold(
         // Раньше на телефоне вообще не было верхней панели — единственная
         // ссылка на поиск существовала снаружи приложения (системный поиск
-        // TV). Значок лупы здесь ведёт на PhoneSearchScreen.kt.
+        // TV). Значок лупы здесь ведёт на PhoneSearchScreen.kt. "Сериалы"
+        // остаётся здесь как отдельный экран browse-всех-сериалов — вкладка-
+        // фильтр ниже фильтрует именно ленту, это не замена этому значку.
         topBar = {
             TopAppBar(
                 title = { Text("ZENITH", color = MaterialTheme.colorScheme.primary) },
@@ -73,37 +83,92 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                     }
                 }
                 is HomeUiState.Success -> {
-                    val grouped = remember(state.movies) {
-                        state.movies.groupBy { it.genre.ifBlank { "Каталог" } }
-                    }
-                    val listState = rememberLazyListState()
-
-                    LaunchedEffect(listState, grouped.size) {
-                        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-                            .collect { lastVisibleIndex ->
-                                if (lastVisibleIndex != null && lastVisibleIndex >= grouped.size - 2) {
-                                    viewModel.loadMore()
-                                }
-                            }
-                    }
-
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM), contentPadding = PaddingValues(top = ZenithDimens.paddingM, bottom = ZenithDimens.paddingM)) {
-                        grouped.forEach { (genre, movies) ->
-                            item(key = genre) {
-                                PhoneCatalogRow(
-                                    title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") },
-                                    resolvedPosters = viewModel.resolvedPosters,
-                                    onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
-                                )
+                    Column(Modifier.fillMaxSize()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
+                            modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+                        ) {
+                            HomeContentFilter.values().forEach { filter ->
+                                FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(filter.label) })
                             }
                         }
-                        if (state.isLoadingMore) {
-                            item(key = "loading_more") {
-                                Box(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), Alignment.Center) { CircularProgressIndicator() }
+
+                        val filteredMovies = remember(state.movies, selectedFilter) {
+                            state.movies.filter { it.matchesFilter(selectedFilter) }
+                        }
+                        val grouped = remember(filteredMovies, viewModel.genrePriority) {
+                            filteredMovies.groupBy { it.genre.ifBlank { "Каталог" } }
+                                .entries.sortedByDescending { viewModel.genrePriority[it.key] ?: 0 }
+                        }
+                        val heroMovies = state.heroMovies
+                        val listState = rememberLazyListState()
+
+                        val headerOffset = (if (heroMovies.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
+                        val totalItems = headerOffset + grouped.size
+
+                        LaunchedEffect(listState, totalItems) {
+                            snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                                .collect { lastVisibleIndex ->
+                                    if (lastVisibleIndex != null && lastVisibleIndex >= totalItems - 2) {
+                                        viewModel.loadMore()
+                                    }
+                                }
+                        }
+
+                        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM), contentPadding = PaddingValues(top = ZenithDimens.paddingS, bottom = ZenithDimens.paddingM)) {
+                            if (heroMovies.isNotEmpty()) {
+                                item(key = "hero") {
+                                    PhoneHeroBanner(
+                                        movies = heroMovies, onMovieClick = { navController.navigate("detail/$it") },
+                                        resolvedPosters = viewModel.resolvedPosters,
+                                        onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
+                                    )
+                                }
+                            }
+                            if (continueWatching.isNotEmpty()) {
+                                item(key = "continue_watching") {
+                                    PhoneContinueWatchingRow(entries = continueWatching, onClick = { navController.navigate("detail/$it") })
+                                }
+                            }
+                            grouped.forEach { (genre, movies) ->
+                                item(key = genre) {
+                                    PhoneCatalogRow(
+                                        title = genre, movies = movies, onMovieClick = { navController.navigate("detail/$it") },
+                                        resolvedPosters = viewModel.resolvedPosters,
+                                        onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) },
+                                        isPlaylistRow = movies.firstOrNull()?.isPlaylistSourced == true
+                                    )
+                                }
+                            }
+                            if (state.isLoadingMore) {
+                                item(key = "loading_more") {
+                                    Box(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), Alignment.Center) { CircularProgressIndicator() }
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (String) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = "Продолжить просмотр",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+        )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = ZenithDimens.paddingM),
+            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+        ) {
+            items(entries, key = { it.contentId }) { entry ->
+                MovieCard(title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) })
             }
         }
     }

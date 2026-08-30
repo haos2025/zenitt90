@@ -8,8 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,14 +34,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.screens.player.PlaybackMenuTab
 import com.platinum.ott.presentation.screens.player.TrackOption
+import com.platinum.ott.ui.theme.ZenithSecondary
 import com.platinum.ott.ui.theme.ZenithSurface
-import kotlinx.coroutines.launch
 
 // Третий раунд редизайна: убраны кнопки ±10с (были рабочими, но
 // дублировали жест свайпа по экрану — см. PhonePlayerScreen.kt,
@@ -66,10 +63,30 @@ import kotlinx.coroutines.launch
 // портрете, и в landscape/fullscreen — специально не заводили вторую,
 // параллельную раскладку под ориентацию.
 //
-// Прогресс-бар — свой кастомный скраббер вместо стандартного Material3
-// Slider (см. ScrubberBar ниже): растёт с 4dp до 10dp на касание/драг,
-// 150ms ease-out, тот же принцип, что и на TV (там — по удержанию D-pad,
-// см. PlayerController.kt). Время слито в один ряд со скраббером вместо
+// Прогресс-бар (ScrubberBar ниже) — раньше был полностью самописный
+// pointerInput с ДВУМЯ параллельно запущенными детекторами
+// (detectTapGestures + detectDragGestures на одном и том же потоке
+// событий). На тапе это было безобидно, но на драге (то есть на самом
+// частом сценарии — перетаскивании) оба детектора реагировали на одно и
+// то же отпускание пальца: onSeekTo мог быть вызван дважды с РАЗНЫМИ
+// значениями (гонка, кто из двух корутин отработает последним), а
+// возврат tryAwaitRelease() нигде не проверялся — если драг успевал
+// consume() событие раньше, tap-ветка всё равно безусловно продолжала
+// свой tryAwaitRelease→onSeekTo(стартовая_позиция), из-за чего прямо
+// посреди активного перетаскивания трек мог на кадр схлопнуться обратно
+// (isScrubbing=false) и превью времени дёрнуться назад к текущей позиции
+// воспроизведения. Переписано на стандартный Material3 Slider
+// (value/onValueChange/onValueChangeFinished) — жест теперь обрабатывает
+// один-единственный, давно обкатанный код библиотеки, а не два
+// конкурирующих между собой. Растущий трек (4dp→10dp, 150ms ease-out,
+// тот же принцип, что и на TV — там по удержанию D-pad, см.
+// PlayerController.kt) и минималистичный вид без видимого "ползунка"
+// сохранены через кастомные track/thumb-слоты Slider (появились в
+// material3 ещё до версии из текущего BOM — 1.3.0, доступны без
+// дополнительных зависимостей, только @OptIn(ExperimentalMaterial3Api)).
+// Заодно на баре появилась индикация буферизации (ExoPlayer.bufferedPosition
+// был доступен и раньше, но нигде не читался) и градиент вместо сплошной
+// заливки пройденной части. Время слито в один ряд со скраббером вместо
 // отдельной строки под ним — экономит высоту капсулы.
 @Composable
 fun PhonePlayerController(
@@ -78,6 +95,12 @@ fun PhonePlayerController(
     title: String,
     currentPositionMs: Long,
     durationMs: Long,
+    // ExoPlayer.bufferedPosition — существовал в проекте с самого начала,
+    // но ScrubberBar о нём не знал: на баре было только "просмотрено/не
+    // просмотрено", без промежуточного состояния "уже загружено вперёд".
+    // Дефолт 0L — вызовы, которые ещё не прокинули значение явно (если
+    // такие останутся), просто не покажут индикатор буферизации, не упадут.
+    bufferedPositionMs: Long = 0L,
     variants: List<StreamVariant>,
     currentVariant: StreamVariant?,
     audioTracks: List<TrackOption>,
@@ -145,6 +168,7 @@ fun PhonePlayerController(
                         ScrubberBar(
                             positionMs = currentPositionMs,
                             durationMs = durationMs,
+                            bufferedPositionMs = bufferedPositionMs,
                             onPreview = { previewPositionMs = it },
                             onSeekTo = { onSeekTo(it); previewPositionMs = null },
                             modifier = Modifier.weight(1f)
@@ -349,94 +373,102 @@ private fun SmallMenuIconButton(
 }
 
 /**
- * Кастомный скраббер вместо стандартного Material3 Slider — единственный
- * способ получить растущий трек (4dp в покое → 10dp во время касания/
- * драга, 150ms ease-out): у Slider нет готового параметра под анимацию
- * толщины трека по interaction-состоянию в используемой здесь версии
- * material3, а собственный pointerInput даёт полный контроль и не
- * тянет зависимость от конкретной версии API компонента.
+ * Раньше — самописный pointerInput с ДВУМЯ параллельно запущенными
+ * жест-детекторами (см. комментарий вверху файла про гонку tap/drag).
+ * Теперь — стандартный Material3 Slider: жест обрабатывает библиотечный
+ * код (drag-anywhere-on-track из коробки, без отдельного "ползунка" —
+ * thumb намеренно пустой, чтобы визуально ничего не изменилось), а
+ * растущий трек/буферизация/градиент рисуются в кастомном track-слоте.
  *
- * onPreview вызывается на каждое движение пальца (для обновления текста
- * текущего времени вживую, как во время перетаскивания у YouTube/
- * большинства видеоплееров) — сам onSeekTo вызывается только один раз,
- * по отпусканию/завершению жеста.
+ * onPreview вызывается на каждое движение пальца через onValueChange (для
+ * обновления текста текущего времени вживую, как во время перетаскивания
+ * у YouTube/большинства видеоплееров) — сам onSeekTo вызывается только
+ * один раз, через onValueChangeFinished, ровно по отпусканию/завершению
+ * жеста (гарантия самой библиотеки, не наша).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ScrubberBar(
     positionMs: Long,
     durationMs: Long,
+    bufferedPositionMs: Long,
     onPreview: (Long?) -> Unit,
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isScrubbing by remember { mutableStateOf(false) }
-    var scrubTargetMs by remember { mutableStateOf<Long?>(null) }
-    val displayedMs = scrubTargetMs ?: positionMs
-    val progress = if (durationMs > 0L) (displayedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    // dragValue != null, пока палец на баре — обновляется на каждое
+    // движение через onValueChange. Играет ту же роль, что
+    // isScrubbing/scrubTargetMs в прежней реализации, только источник
+    // истины теперь один (сам Slider), а не два гоняющихся детектора.
+    var dragValue by remember { mutableStateOf<Float?>(null) }
+    val safeDuration = durationMs.coerceAtLeast(1L)
+    val playedFraction = dragValue ?: (positionMs.toFloat() / safeDuration).coerceIn(0f, 1f)
+    val bufferedFraction = (bufferedPositionMs.toFloat() / safeDuration).coerceIn(0f, 1f)
+    val isDragging = dragValue != null
 
     val trackHeight by animateDpAsState(
-        targetValue = if (isScrubbing) 10.dp else 4.dp,
+        targetValue = if (isDragging) 10.dp else 4.dp,
         animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
         label = "phoneScrubberHeight"
     )
 
-    fun positionFromX(x: Float, widthPx: Int): Long =
-        ((x / widthPx) * durationMs).toLong().coerceIn(0L, durationMs.coerceAtLeast(0L))
+    Slider(
+        value = playedFraction,
+        onValueChange = { fraction ->
+            dragValue = fraction
+            onPreview((fraction * safeDuration).toLong())
+        },
+        onValueChangeFinished = {
+            val target = ((dragValue ?: playedFraction) * safeDuration).toLong().coerceIn(0L, durationMs.coerceAtLeast(0L))
+            onSeekTo(target)
+            dragValue = null
+            onPreview(null)
+        },
+        modifier = modifier,
+        thumb = {}, // без видимого "ползунка" — тот же минималистичный вид, что был у самописного бара
+        track = { sliderState ->
+            ScrubberTrack(
+                playedFraction = sliderState.value,
+                bufferedFraction = bufferedFraction,
+                height = trackHeight,
+                isDragging = isDragging
+            )
+        }
+    )
+}
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(24.dp) // тач-зона заметно больше видимого трека — трек тонкий, палец мимо не промахивается
-            .pointerInput(durationMs) {
-                kotlinx.coroutines.coroutineScope {
-                    launch {
-                        detectTapGestures(
-                            onPress = { offset ->
-                                isScrubbing = true
-                                val target = positionFromX(offset.x, size.width)
-                                scrubTargetMs = target
-                                onPreview(target)
-                                tryAwaitRelease()
-                                onSeekTo(target)
-                                scrubTargetMs = null
-                                onPreview(null)
-                                isScrubbing = false
-                            }
-                        )
-                    }
-                    launch {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                isScrubbing = true
-                                val target = positionFromX(offset.x, size.width)
-                                scrubTargetMs = target
-                                onPreview(target)
-                            },
-                            onDragEnd = {
-                                scrubTargetMs?.let { onSeekTo(it) }
-                                scrubTargetMs = null
-                                onPreview(null)
-                                isScrubbing = false
-                            },
-                            onDragCancel = {
-                                scrubTargetMs = null
-                                onPreview(null)
-                                isScrubbing = false
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val target = positionFromX(change.position.x, size.width)
-                                scrubTargetMs = target
-                                onPreview(target)
-                            }
-                        )
-                    }
-                }
-            },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Box(Modifier.fillMaxWidth().height(trackHeight).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f)))
-        Box(Modifier.fillMaxWidth(progress).height(trackHeight).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary))
+/**
+ * Три слоя вместо одного (было: только фон + пройденная часть):
+ * фон → буферизация (ExoPlayer.bufferedPosition, был доступен и раньше,
+ * но нигде не читался) → пройденная часть градиентом вместо сплошной
+ * заливки. Плюс мягкое свечение у переднего края во время перетаскивания
+ * (тот же приём, что и рост толщины, только не толщина, а пятно света).
+ * BoxWithConstraints — чтобы получить реальную ширину трека в Dp и
+ * поставить свечение точно на границу пройденной части, а не гадать
+ * через выравнивание.
+ */
+@Composable
+private fun ScrubberTrack(playedFraction: Float, bufferedFraction: Float, height: Dp, isDragging: Boolean) {
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+        val trackWidth = maxWidth
+        Box(Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.2f)))
+        if (bufferedFraction > playedFraction) {
+            Box(Modifier.width(trackWidth * bufferedFraction).height(height).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.4f)))
+        }
+        Box(
+            Modifier.width(trackWidth * playedFraction).height(height).clip(RoundedCornerShape(50))
+                .background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, ZenithSecondary)))
+        )
+        if (isDragging) {
+            val glowSize = height * 3f
+            Box(
+                Modifier
+                    .offset(x = trackWidth * playedFraction - glowSize / 2)
+                    .size(glowSize)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(ZenithSecondary.copy(alpha = 0.5f), Color.Transparent)))
+            )
+        }
     }
 }
 
