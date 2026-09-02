@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +47,10 @@ class SessionGraph @Inject constructor(
     lateinit var authRepository: AuthRepository; private set
     lateinit var movieRepository: MovieRepository; private set
     lateinit var playlistRepository: PlaylistRepository; private set
+    // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) — CRUD источников,
+    // отдельно от playlistRepository, который теперь только агрегирует.
+    // Будет использован SourcesViewModel в подзадаче 4/5.
+    lateinit var playlistSourceRepository: PlaylistSourceRepository; private set
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
@@ -84,7 +89,16 @@ class SessionGraph @Inject constructor(
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
         authRepository = AuthRepositoryImpl(authPreferences, okHttpClient)
-        playlistRepository = PlaylistRepository(authPreferences, database.playlistMovieDao(), okHttpClient)
+        playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient)
+        // Синхронно (runBlocking) и до создания playlistRepository — иначе
+        // самый первый getCatalog() после обновления приложения (например,
+        // из HomeViewModel сразу при старте) мог бы прочитать пустой список
+        // включённых источников и на мгновение показать пустую ленту, пока
+        // fire-and-forget миграция ещё не успела отработать. Сам запрос —
+        // это одна дешёвая проверка COUNT(*) (не сетевой вызов), поэтому
+        // блокировка потока здесь пренебрежимо короткая.
+        runBlocking(Dispatchers.IO) { playlistSourceRepository.migrateLegacySourceIfNeeded() }
+        playlistRepository = PlaylistRepository(database.playlistSourceDao(), database.playlistMovieDao(), playlistSourceRepository)
         movieRepository = MovieRepositoryImpl(api, database.movieDao(), playlistRepository)
         val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor(), timeoutSeconds = timeoutSeconds)
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)

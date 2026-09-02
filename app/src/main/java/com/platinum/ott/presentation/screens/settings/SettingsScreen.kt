@@ -27,7 +27,7 @@ import com.platinum.ott.ui.theme.*
 // плагины, синхронизация, подключение источника) не трогаем.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onLogoutClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onConnectSourceClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     Row(Modifier.fillMaxSize()) {
@@ -163,22 +163,23 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 Button(onClick = onPluginsClick) { Text("Плагины") }
             }
-            // Раньше здесь всегда было захардкожено "Подключён" — не имело
-            // значения, введён ли вообще источник, текст был одинаковым что
-            // до, что после логина. Теперь этот экран достижим и БЕЗ
-            // настроенного источника (см. SetupScreen.kt), поэтому статус
-            // должен отражать реальность, а не врать по умолчанию.
-            val isConnected = remember { viewModel.isConnected() }
-            SettingsSection("Аккаунт") { SettingsItem("Источник", if (isConnected) "Подключён" else "Не подключён") }
+            // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) заменила прежний
+            // единственный источник (AuthPreferences) на список PlaylistSource —
+            // бинарного "подключён/не подключён" (isConnected(), читал старый
+            // AuthPreferences.type) больше не существует как понятия: источников
+            // может быть 0, 1 или много, у каждого свой статус. Вместо секции
+            // "Аккаунт" с раздельными "Подключить источник"/"Сменить аккаунт" —
+            // один переход на полноценный список источников (SourcesScreen.kt),
+            // где статус/добавление/удаление каждого показаны по отдельности.
+            SettingsSection("Источники") { SettingsItem("Плейлисты и панели", "M3U / Xtream") }
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                if (!isConnected) Button(onClick = onConnectSourceClick) { Text("Подключить источник") }
+                Button(onClick = onSourcesClick) { Text("Источники") }
                 Button(onClick = onSyncClick) { Text("Синхронизация устройств") }
             }
             Spacer(Modifier.height(ZenithDimens.paddingXL))
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 Button(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }) { Text("Обновить парсеры") }
                 OutlinedButton(onClick = onCacheManagementClick) { Text("Управление кэшем") }
-                OutlinedButton(onClick = { viewModel.logout(); onLogoutClick() }) { Text("Сменить аккаунт") }
             }
         }
     }

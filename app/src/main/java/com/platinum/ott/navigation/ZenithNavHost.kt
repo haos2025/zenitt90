@@ -13,7 +13,8 @@ import androidx.navigation.navArgument
 import com.platinum.ott.presentation.screens.home.HomeScreen
 import com.platinum.ott.presentation.screens.detail.DetailScreen
 import com.platinum.ott.presentation.screens.player.PlayerScreen
-import com.platinum.ott.presentation.screens.setup.SetupScreen
+import com.platinum.ott.presentation.screens.sources.SourcesScreen
+import com.platinum.ott.presentation.screens.sources.AddSourceScreen
 import com.platinum.ott.presentation.screens.favorites.FavoritesScreen
 import com.platinum.ott.presentation.screens.history.HistoryScreen
 import com.platinum.ott.presentation.screens.settings.SettingsScreen
@@ -35,17 +36,24 @@ import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSeriesListScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSeriesEpisodesScreen
 import com.platinum.ott.presentation.phone.screens.PhoneCacheManagementScreen
+import com.platinum.ott.presentation.phone.screens.PhoneSourcesScreen
+import com.platinum.ott.presentation.phone.screens.PhoneAddSourceScreen
 
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
-        composable("setup") {
-            if (isTV) SetupScreen(
-                onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
-                onSettingsClick = { navController.navigateToTab("settings") },
-                onHistoryClick = { navController.navigateToTab("history") },
-                onFavoritesClick = { navController.navigateToTab("favorites") }
-            ) else PhoneSetupRoute(navController)
+        // Заменяет прежний "setup" (одноразовая настройка одного источника,
+        // тупиковый route без нормальной навигации) — PROMPT_SOURCES_SCREEN.md.
+        // "sources" достижим из Настроек в любой момент, не только при
+        // первом запуске (startDestination всегда "home", см. MainActivity.kt
+        // и комментарий у "home" ниже про NAVIGATION_SIDEBAR).
+        composable("sources") {
+            if (isTV) SourcesScreen(onBackPressed = { navController.popBackStack() }, onAddSourceClick = { navController.navigate("add_source") })
+            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
+        }
+        composable("add_source") {
+            if (isTV) AddSourceScreen(onDone = { navController.popBackStack() })
+            else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() })
         }
         // PROMPT_NAVIGATION_SIDEBAR.md — HomeScreen (TV) больше не получает
         // отдельные onSettingsClick/onFavoritesClick/onHistoryClick/
@@ -88,7 +96,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val variantUrl = entry.arguments?.getString("variantUrl")?.ifBlank { null }
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl)
         }
-        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onLogoutClick = { navController.navigate("setup") { popUpTo(0) } }, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onConnectSourceClick = { navController.navigate("setup") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
@@ -125,14 +133,4 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) PluginDetailScreen(pluginId = id, onBackPressed = { navController.popBackStack() }) else PhonePluginDetailScreen(id, navController)
         }
     }
-}
-
-@Composable
-private fun PhoneSetupRoute(navController: NavHostController) {
-    com.platinum.ott.presentation.phone.screens.PhoneSetupScreen(
-        onSetupComplete = { navController.navigate("home") { popUpTo(0) } },
-        onSettingsClick = { navController.navigateToTab("settings") },
-        onHistoryClick = { navController.navigateToTab("history") },
-        onFavoritesClick = { navController.navigateToTab("favorites") }
-    )
 }

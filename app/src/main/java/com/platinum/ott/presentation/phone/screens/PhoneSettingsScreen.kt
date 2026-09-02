@@ -46,28 +46,25 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 Text("Каталог и управление плагинами", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
-        // Раньше подзаголовок был статичным текстом всегда одинаковым,
-        // независимо от того, подключён ли реально источник — та же
-        // правка, что уже сделана на TV (SettingsScreen.kt), перенесена сюда.
-        val isConnected = remember { viewModel.isConnected() }
+        // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) заменила единственный
+        // источник (AuthPreferences, бинарное isConnected()) на список
+        // PlaylistSource — карточка "Аккаунт" стала карточкой "Источники",
+        // ведёт на полноценный список (SourcesScreen.kt) безусловно, без
+        // отдельной ветки на sync_pairing (та развязка ниже — отдельная
+        // карточка "Синхронизация устройств", независима от источников).
         Card(
-            onClick = { navController.navigate(if (isConnected) "sync_pairing" else "setup") },
+            onClick = { navController.navigate("sources") },
             modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)
         ) {
             Column(Modifier.padding(ZenithDimens.paddingM)) {
-                Text("Аккаунт", style = MaterialTheme.typography.titleMedium)
-                Text(if (isConnected) "Источник подключён · синхронизация между устройствами" else "Источник не подключён · нажмите, чтобы подключить", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text("Источники", style = MaterialTheme.typography.titleMedium)
+                Text("Плейлисты и панели M3U/Xtream", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
         }
-        // Раньше единственный путь к экрану синхронизации шёл через карточку
-        // "Аккаунт" и был завязан на isConnected (= есть M3U/Xtream). Но
-        // синхронизация — независимая система (пара по 6-значному коду,
-        // AuthPreferences.getOrCreateSyncToken()), M3U/Xtream ей не нужен —
-        // это та же путаница двух разных проверок, что была в MainActivity.
-        // Без источника карточка "Аккаунт" всегда вела на "setup" (ввод M3U),
-        // и попасть на sync_pairing было нельзя вообще. На TV
-        // (SettingsScreen.kt) это уже две отдельные кнопки — здесь та же
-        // развязка, просто перенесённая на телефон.
+        // Синхронизация — независимая система (пара по 6-значному коду,
+        // AuthPreferences.getOrCreateSyncToken()), от источников не зависит,
+        // всегда доступна отдельной карточкой (та же развязка, что и на TV
+        // в SettingsScreen.kt).
         Card(
             onClick = { navController.navigate("sync_pairing") },
             modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)

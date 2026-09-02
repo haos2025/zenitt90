@@ -20,4 +20,25 @@ interface PlaylistMovieDao {
     // средствами, показываем количество записей.
     @Query("SELECT COUNT(*) FROM playlist_movies")
     suspend fun getCount(): Int
+
+    // Ниже — добавлено задачей "Источники" (PROMPT_SOURCES_SCREEN.md).
+
+    @Query("SELECT * FROM playlist_movies WHERE sourceId IN (:sourceIds) ORDER BY title ASC")
+    suspend fun getAllForSources(sourceIds: List<String>): List<PlaylistMovieEntity>
+
+    @Query("DELETE FROM playlist_movies WHERE sourceId = :sourceId")
+    suspend fun deleteBySource(sourceId: String)
+
+    @Query("SELECT COUNT(*) FROM playlist_movies WHERE sourceId = :sourceId")
+    suspend fun getCountBySource(sourceId: String): Int
+
+    @Query("SELECT MAX(cachedAt) FROM playlist_movies WHERE sourceId = :sourceId")
+    suspend fun getLatestCacheTimeForSource(sourceId: String): Long?
+
+    // Используется один раз — миграцией существующего пользователя
+    // (PlaylistSourceRepository.migrateLegacySourceIfNeeded()), чтобы
+    // проставить sourceId уже закэшированным строкам от старого
+    // единственного источника задним числом, не перекачивая их заново.
+    @Query("UPDATE playlist_movies SET sourceId = :sourceId WHERE sourceId IS NULL")
+    suspend fun assignSourceIdWhereNull(sourceId: String)
 }

@@ -1,6 +1,7 @@
 package com.platinum.ott.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -16,7 +17,7 @@ import androidx.room.PrimaryKey
  * (GetPlayableUrlUseCase → /stream/{id}), у M3U/Xtream прямая ссылка уже
  * известна сразу из плейлиста/API, второй поход в сеть не нужен.
  */
-@Entity(tableName = "playlist_movies")
+@Entity(tableName = "playlist_movies", indices = [Index(value = ["sourceId"])])
 data class PlaylistMovieEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -37,5 +38,17 @@ data class PlaylistMovieEntity(
     val seriesTitle: String? = null,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
+    // Добавлено задачей "Источники" (PROMPT_SOURCES_SCREEN.md) — раньше
+    // вся таблица считалась одним источником (единственный, из
+    // AuthPreferences), refresh() чистил и перезаливал её целиком.
+    // При нескольких источниках нужно знать, какой строке какой источник
+    // принадлежит — иначе нельзя обновить/удалить/выключить один источник,
+    // не тронув остальные. Nullable без DEFAULT — тот же безопасный паттерн
+    // ALTER TABLE, что и во всех предыдущих миграциях этого файла;
+    // существующие строки (от единственного старого источника) получат
+    // NULL и будут переприписаны конкретному sourceId при следующем
+    // refresh() после миграции AuthPreferences → первая запись PlaylistSource
+    // (отдельная подзадача).
+    val sourceId: String? = null,
     val cachedAt: Long = System.currentTimeMillis()
 )

@@ -22,13 +22,14 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState
 
     fun runOtaUpdate() { viewModelScope.launch { _uiState.value = SettingsUiState.Loading; sessionGraph.otaUpdateUseCase.execute().onSuccess { _uiState.value = SettingsUiState.Success(it) }.onFailure { _uiState.value = SettingsUiState.Error(it.message ?: "Ошибка") } } }
-    // Раньше здесь была одна общая кнопка "Очистить кэш" (только MovieDao +
-    // ScriptProvider). Заменена экраном управления кэшем (CacheManagementScreen) —
-    // размер по категориям + отдельная кнопка очистки на каждую, см.
-    // CacheManagementViewModel. Эта кнопка теперь просто переход на тот экран.
-    fun logout() { sessionGraph.logoutUseCase.execute() }
-
-    fun isConnected(): Boolean = sessionGraph.checkAuthUseCase.execute()
+    // logout()/isConnected() удалены вместе с кнопкой "Сменить аккаунт" и
+    // секцией "Аккаунт" (см. SettingsScreen.kt) — задача "Источники"
+    // (PROMPT_SOURCES_SCREEN.md) заменила единственный источник на список
+    // PlaylistSource, понятия "залогинен/не залогинен" на один аккаунт
+    // больше нет. sessionGraph.checkAuthUseCase/logoutUseCase остаются
+    // объявлены в SessionGraph (используют старый AuthPreferences) — не
+    // удалены вместе с этим методом, т.к. это отдельная правка с более
+    // широким аудитом, не в рамках этой сессии.
 
     // Раньше здесь был временный двойной вызов ServiceLocator.reinitWithAuth()
     // + sessionGraph.reinitWithAuth() — тот же мост, что и в SetupViewModel.

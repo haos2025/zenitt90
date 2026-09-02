@@ -13,9 +13,9 @@ import com.platinum.ott.data.local.entity.*
     entities = [
         MovieEntity::class, FavoriteEntity::class, FolderEntity::class,
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
-        PluginEntity::class, PlaylistMovieEntity::class
+        PluginEntity::class, PlaylistMovieEntity::class, PlaylistSourceEntity::class
     ],
-    version = 12, exportSchema = true
+    version = 13, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -25,6 +25,7 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun seriesScheduleDao(): SeriesScheduleDao
     abstract fun pluginDao(): PluginDao
     abstract fun playlistMovieDao(): PlaylistMovieDao
+    abstract fun playlistSourceDao(): PlaylistSourceDao
 
     companion object {
         // Раньше версия схемы никогда не поднималась после первого релиза,
@@ -121,10 +122,35 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) — раньше был один
+        // источник, конфиг которого целиком жил в AuthPreferences. Новая
+        // таблица playlist_sources хранит список источников (M3U/Xtream)
+        // со своим приоритетом/статусом. playlist_movies получает nullable
+        // sourceId (тот же безопасный ALTER TABLE-паттерн, что и во всех
+        // предыдущих миграциях этого файла) плюс индекс по нему — без
+        // индекса запросы "все фильмы источника X" (нужны для
+        // refresh(sourceId)/удаления одного источника, следующая подзадача)
+        // требовали бы полного скана таблицы при каждом обращении.
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `playlist_sources` (" +
+                        "`id` TEXT NOT NULL, `type` TEXT NOT NULL, `label` TEXT NOT NULL, " +
+                        "`url` TEXT, `host` TEXT, `username` TEXT, `password` TEXT, " +
+                        "`enabled` INTEGER NOT NULL, `priority` INTEGER NOT NULL, " +
+                        "`lastRefreshedAt` INTEGER, `lastRefreshStatus` TEXT, " +
+                        "`legacyIds` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `sourceId` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_playlist_movies_sourceId` ON `playlist_movies` (`sourceId`)")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }
