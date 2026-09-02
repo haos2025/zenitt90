@@ -26,10 +26,10 @@ class SettingsViewModel @Inject constructor(
     // секцией "Аккаунт" (см. SettingsScreen.kt) — задача "Источники"
     // (PROMPT_SOURCES_SCREEN.md) заменила единственный источник на список
     // PlaylistSource, понятия "залогинен/не залогинен" на один аккаунт
-    // больше нет. sessionGraph.checkAuthUseCase/logoutUseCase остаются
-    // объявлены в SessionGraph (используют старый AuthPreferences) — не
-    // удалены вместе с этим методом, т.к. это отдельная правка с более
-    // широким аудитом, не в рамках этой сессии.
+    // больше нет. sessionGraph.checkAuthUseCase/loginM3UUseCase/
+    // loginXtreamUseCase/logoutUseCase и весь AuthRepository — удалены
+    // отдельным аудитом позже (PROMPT_REVISION.md), после подтверждения,
+    // что ничего в проекте их больше не вызывает.
 
     // Раньше здесь был временный двойной вызов ServiceLocator.reinitWithAuth()
     // + sessionGraph.reinitWithAuth() — тот же мост, что и в SetupViewModel.

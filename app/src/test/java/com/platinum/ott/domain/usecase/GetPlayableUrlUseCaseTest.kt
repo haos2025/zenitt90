@@ -8,7 +8,6 @@ import com.platinum.ott.data.remote.dto.StreamVariantDto
 import com.platinum.ott.data.repository.PlaylistRepository
 import com.platinum.ott.data.repository.PlaylistStreamInfo
 import com.platinum.ott.domain.model.Movie
-import com.platinum.ott.domain.repository.AuthRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -25,7 +24,6 @@ class GetPlayableUrlUseCaseTest {
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var pluginManager: PluginManager
     private lateinit var getMovie: GetMovieByIdUseCase
-    private lateinit var authRepo: AuthRepository
     private lateinit var useCase: GetPlayableUrlUseCase
 
     @Before
@@ -35,8 +33,7 @@ class GetPlayableUrlUseCaseTest {
         playlistRepository = mockk(relaxed = true)
         pluginManager = mockk(relaxed = true)
         getMovie = mockk(relaxed = true)
-        authRepo = mockk(relaxed = true)
-        useCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovie, authRepo)
+        useCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovie)
 
         // По умолчанию — ни один плагин не включён, гонка вырождается в
         // "только backend". Отдельные тесты переопределяют это явно.

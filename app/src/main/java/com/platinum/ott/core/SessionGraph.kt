@@ -24,17 +24,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Переезд ServiceLocator → Hilt (см. NEXT_STEPS.md / REFACTOR_PROMPT.md).
- * database/preferences сюда больше НЕ создаются сами — их даёт Hilt
- * (DatabaseModule/PreferencesModule), потому что они не зависят от логина
- * и не участвуют в reinitWithAuth(). Всё остальное ниже — дословно то, что
- * раньше делал ServiceLocator.initAuth()/reinitWithAuth(), без изменений
+ * Переезд ServiceLocator → Hilt завершён (см. NEXT_STEPS.md / REFACTOR_PROMPT.md,
+ * задача закрыта). database/preferences сюда больше НЕ создаются сами — их
+ * даёт Hilt (DatabaseModule/PreferencesModule), потому что они не зависят от
+ * логина и не участвуют в reinitWithAuth(). Всё остальное ниже — дословно то,
+ * что раньше делал ServiceLocator.initAuth()/reinitWithAuth(), без изменений
  * поведения.
  *
- * ВАЖНО: этот класс пока НИКЕМ не используется — ServiceLocator.kt
- * продолжает обслуживать все текущие обращения сам по себе. Подключение
- * (инжект в ZenithApplication/ViewModel'и и постепенный перенос вызовов)
- * — предмет следующих шагов, по одному месту за раз.
+ * ServiceLocator.kt удалён из проекта. Этот класс — единственный граф
+ * зависимостей, инжектится через Hilt во всех ViewModel'ях/ZenithApplication.
  */
 @Singleton
 class SessionGraph @Inject constructor(
@@ -44,7 +42,6 @@ class SessionGraph @Inject constructor(
     private val networkPreferences: NetworkPreferences,
     private val notificationPreferences: NotificationPreferences
 ) {
-    lateinit var authRepository: AuthRepository; private set
     lateinit var movieRepository: MovieRepository; private set
     lateinit var playlistRepository: PlaylistRepository; private set
     // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) — CRUD источников,
@@ -54,10 +51,6 @@ class SessionGraph @Inject constructor(
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
-    lateinit var checkAuthUseCase: CheckAuthUseCase; private set
-    lateinit var loginM3UUseCase: LoginM3UUseCase; private set
-    lateinit var loginXtreamUseCase: LoginXtreamUseCase; private set
-    lateinit var logoutUseCase: LogoutUseCase; private set
     lateinit var getCatalogUseCase: GetCatalogUseCase; private set
     lateinit var getPlaylistCatalogUseCase: GetPlaylistCatalogUseCase; private set
     lateinit var getMovieByIdUseCase: GetMovieByIdUseCase; private set
@@ -88,7 +81,6 @@ class SessionGraph @Inject constructor(
         val timeoutSeconds = networkPreferences.getTimeoutSeconds().toLong()
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
-        authRepository = AuthRepositoryImpl(authPreferences, okHttpClient)
         playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient)
         // Синхронно (runBlocking) и до создания playlistRepository — иначе
         // самый первый getCatalog() после обновления приложения (например,
@@ -104,17 +96,13 @@ class SessionGraph @Inject constructor(
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)
         tmdbRepository = TmdbRepositoryImpl(tmdbApi, database.metadataDao())
         syncRepository = SyncRepositoryImpl(api, database.favoritesDao(), database.watchHistoryDao(), authPreferences)
-        checkAuthUseCase = CheckAuthUseCase(authRepository)
-        loginM3UUseCase = LoginM3UUseCase(authRepository)
-        loginXtreamUseCase = LoginXtreamUseCase(authRepository)
-        logoutUseCase = LogoutUseCase(authRepository)
         getCatalogUseCase = GetCatalogUseCase(movieRepository)
         getPlaylistCatalogUseCase = GetPlaylistCatalogUseCase(playlistRepository)
         getMovieByIdUseCase = GetMovieByIdUseCase(movieRepository)
         pluginManager = PluginManager(appContext, database.pluginDao(), pluginApi)
         pluginRepository = PluginRepository(database.pluginDao(), pluginManager, pluginApi)
         appScope.launch { pluginManager.loadAllEnabled() }
-        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, authRepository)
+        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         cacheManagementUseCase = CacheManagementUseCase(appContext, database.movieDao(), database.playlistMovieDao(), database.metadataDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, api)

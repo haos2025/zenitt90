@@ -34,7 +34,4 @@ class AuthPreferences(context: Context) {
         syncToken = generated
         return generated
     }
-
-    fun clear() { prefs.edit().clear().apply() }
-    fun isLoggedIn(): Boolean = type != null && (m3uUrl != null || (host != null && username != null))
 }

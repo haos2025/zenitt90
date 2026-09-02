@@ -7,7 +7,6 @@ import com.platinum.ott.data.remote.ZenithApiService
 import com.platinum.ott.data.remote.dto.StreamVariantDto
 import com.platinum.ott.data.repository.PlaylistRepository
 import com.platinum.ott.domain.model.StreamVariant
-import com.platinum.ott.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -43,8 +42,7 @@ class GetPlayableUrlUseCase(
     private val api: ZenithApiService,
     private val playlistRepository: PlaylistRepository,
     private val pluginManager: PluginManager,
-    private val getMovie: GetMovieByIdUseCase,
-    private val authRepo: AuthRepository
+    private val getMovie: GetMovieByIdUseCase
 ) {
     companion object {
         private val ZENITH_BACKEND_PREFIXES = setOf("yt", "ia")
