@@ -21,24 +21,75 @@ class SyncRepositoryImpl(
 ) : SyncRepository {
     override suspend fun sync(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Раньше запросы вообще не передавали, кто их шлёт — backend не
-            // мог бы отличить одно устройство от другого. getOrCreateSyncToken()
-            // генерирует и переиспользует стабильный id при первом вызове.
             val deviceId = prefs.getOrCreateSyncToken()
             val since = prefs.lastSyncTimestamp
 
             // Pull changes from server
             val response = api.getSyncData(deviceId, since)
             response.favorites.forEach { dto ->
-                favDao.insertFavorite(FavoriteEntity(contentId = dto.contentId, contentType = dto.contentType, title = dto.title, poster = dto.poster, updatedAt = dto.updatedAt))
+                // Диагностика "источники/избранное синхронизируются плохо":
+                // FavoriteEntity.id — autoGenerate PK, НЕ contentId. insertFavorite()
+                // с OnConflictStrategy.REPLACE конфликтует только по PK (id
+                // всегда 0 у новой записи → Room всегда создаёт новую строку,
+                // никогда не считает это конфликтом). Раньше это означало, что
+                // КАЖДЫЙ sync ДУБЛИРОВАЛ все избранное, пришедшее с другого
+                // устройства, вместо обновления существующей записи по
+                // contentId — список избранного пух с каждым нажатием
+                // "Синхронизировать". Убираем старую запись по contentId перед
+                // вставкой, чтобы insert реально вёл себя как upsert.
+                favDao.deleteByContentId(dto.contentId)
+                favDao.insertFavorite(
+                    FavoriteEntity(
+                        contentId = dto.contentId, contentType = dto.contentType,
+                        title = dto.title, poster = dto.poster,
+                        // Раньше addedAt пулленной записи всегда становился
+                        // "сейчас" (значение по умолчанию в конструкторе,
+                        // вычисляется на момент вызова) — избранное с другого
+                        // устройства всегда прыгало в начало списка ("недавно
+                        // добавленное" сверху, сортировка по addedAt DESC),
+                        // независимо от реальной даты добавления, и порядок
+                        // списка визуально ломался при каждой синхронизации.
+                        addedAt = if (dto.updatedAt > 0) dto.updatedAt else System.currentTimeMillis(),
+                        updatedAt = dto.updatedAt
+                    )
+                )
             }
             response.watchHistory.forEach { dto ->
-                histDao.upsert(WatchHistoryEntity(contentId = dto.contentId, title = dto.title, poster = dto.poster, positionMs = dto.positionMs, durationMs = dto.durationMs, completed = dto.completed))
+                histDao.upsert(
+                    WatchHistoryEntity(
+                        contentId = dto.contentId, title = dto.title, poster = dto.poster,
+                        positionMs = dto.positionMs, durationMs = dto.durationMs,
+                        // Та же ошибка, что и у избранного: watchedAt пулленной
+                        // записи тоже всегда становился "сейчас". Это ломало
+                        // и порядок "Продолжить просмотр" (сортировка по
+                        // watchedAt DESC — только что просмотренное на ДРУГОМ
+                        // устройстве несколько дней назад выглядело так, будто
+                        // его посмотрели только что), И следующий push этого
+                        // устройства: только что подтянутая запись сразу
+                        // попадала под getSince(since) как будто это свежее
+                        // ЛОКАЛЬНОЕ изменение и уходила обратно на сервер тем
+                        // же циклом синхронизации — бесполезный трафик, а на
+                        // практике часть записей могла вообще не доходить,
+                        // если бэкенд отбрасывает/схлопывает такие "эхо"-записи
+                        // по contentId без более свежего реального изменения.
+                        watchedAt = if (dto.updatedAt > 0) dto.updatedAt else System.currentTimeMillis(),
+                        completed = dto.completed
+                        // seriesId сюда сознательно не попадает — WatchHistoryDto
+                        // (SyncDtos.kt) вообще не содержит этого поля, бэкенд
+                        // про него не знает. Это отдельная задача, требующая
+                        // изменения и на бэкенде (недоступен для правки
+                        // отсюда — отдельный репозиторий zenith-backend), и
+                        // здесь. Практическое следствие прямо сейчас: любая
+                        // синхронизированная серия теряет группировку в
+                        // "Продолжить просмотр" (WatchHistoryUseCase.getRecentDeduped
+                        // схлопывает по seriesId) и показывается отдельной
+                        // строкой на устройстве-получателе, пока оно само не
+                        // досмотрит эту серию заново.
+                    )
+                )
             }
 
-            // Push local changes — раньше pushData собирался с пустыми
-            // favorites/watchHistory: localFavs считывался, но никуда не
-            // передавался, поэтому push реально ничего не отправлял.
+            // Push local changes
             val localFavs = favDao.getAllFavorites().first()
             val localHistory = histDao.getSince(since)
             val pushData = SyncPushDto(
@@ -77,11 +128,6 @@ class SyncRepositoryImpl(
             val deviceId = prefs.getOrCreateSyncToken()
             val response = api.redeemPairingCode(deviceId, com.platinum.ott.data.remote.dto.PairingRedeemDto(code))
             if (response.isSuccessful) {
-                // Успешное сопряжение делает старую историю sync неактуальной —
-                // после него сервер отдаёт данные ГРУППЫ, а не только этого
-                // устройства, поэтому сбрасываем lastSyncTimestamp в 0, чтобы
-                // ближайший sync() подтянул вообще всё, а не только то, что
-                // "изменилось" относительно старой, чисто персональной точки отсчёта.
                 prefs.lastSyncTimestamp = 0
                 Result.success(Unit)
             } else {
