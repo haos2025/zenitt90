@@ -11,6 +11,7 @@ import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.domain.model.Movie
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -102,9 +103,23 @@ class HomeViewModel @Inject constructor(
             // backend-каталога) — мешать две разные схемы пагинации в одном
             // курсоре было бы источником багов, плейлисты и не поддерживают
             // постраничность в общем случае.
-            cachedPlaylistMovies = try { getPlaylistCatalog.execute() } catch (_: Exception) { emptyList() }
+            //
+            // Раньше плейлист (быстрый, свой сервер) и backend-каталог
+            // (zenith-backend на Render free tier — может "спать" по 15-60с)
+            // запускались ПОСЛЕДОВАТЕЛЬНО: await плейлиста, потом await
+            // backend'а. Даже если плейлист отвечал мгновенно, экран всё
+            // равно ждал ответа backend'а (до полного таймаута из Настроек,
+            // ×2 на readTimeout) прежде чем показать хоть что-то — отсюда
+            // ощущение "приложение без бэкенда не работает", хотя формально
+            // свой источник загружался нормально. Теперь оба запроса идут
+            // параллельно через async{} — общее время ожидания равно
+            // МЕДЛЕННЕЙШЕМУ из двух, а не их сумме.
+            val playlistDeferred = async { try { getPlaylistCatalog.execute() } catch (_: Exception) { emptyList() } }
+            val catalogDeferred = async { getCatalog.execute(page) }
 
-            getCatalog.execute(page).onSuccess {
+            cachedPlaylistMovies = playlistDeferred.await()
+
+            catalogDeferred.await().onSuccess {
                 val allMovies = cachedPlaylistMovies + it.movies
                 _uiState.value = HomeUiState.Success(
                     movies = allMovies,
