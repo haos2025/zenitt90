@@ -32,15 +32,24 @@ import kotlinx.coroutines.delay
 /**
  * Раньше useController=false и пустая ветка Ready (\"/* Quality button,
  * controls */\") — видео проигрывалось совсем без управления. Теперь:
- *  - PlayerController (пауза/прогресс-бар) — показывается по
- *    любому нажатию на пульте, автоскрытие через 3с бездействия.
- *  - PlaybackMenuOverlay (качество/аудио/субтитры/скорость) — по кнопке Menu; пока открыт, ключевые события
- *    Up/Down/Center НЕ перехватываются здесь, чтобы его собственный
- *    LazyColumn нормально работал через встроенную фокус-навигацию Compose.
+ *  - PlayerController (пауза/прогресс-бар/иконки настроек) — виден
+ *    постоянно, пока экран в состоянии Ready (см. четвёртый раунд ниже —
+ *    автоскрытие через 3с убрано).
+ *  - PlaybackMenuOverlay (качество/аудио/субтитры/скорость) — открывается
+ *    фокусируемыми иконками самой капсулы (MenuIconButton в
+ *    PlayerController.kt, реальный tv-material3 Surface) или клавишей
+ *    Menu на пультах/клавиатурах, где она есть; пока открыт, ключевые
+ *    события Up/Down/Center НЕ перехватываются здесь, чтобы его
+ *    собственный LazyColumn нормально работал через встроенную
+ *    фокус-навигацию Compose.
  *  - D-pad Center/OK и системная Play/Pause с пульта — пауза/воспроизведение.
  *  - Left/Right — перемотка на 10 секунд (или переключение серии, если
  *    сериал) — сопровождается короткой надписью по центру экрана
  *    (seekToast), которая ненадолго появляется и гаснет.
+ *  - Up/Down — НЕ перехватываются здесь (см. четвёртый раунд ниже),
+ *    штатная фокус-навигация Compose сама переводит фокус на реальные
+ *    фокусируемые элементы капсулы (иконки субтитров/аудио/качества/
+ *    скорости внизу, иконка "Подключить телефон" наверху).
  *  - Back — если открыто меню качества, сначала закрывает его; иначе
  *    вызывает onBackPressed.
  *
@@ -52,7 +61,32 @@ import kotlinx.coroutines.delay
  * DirectionLeft/DirectionRight (Android сам шлёт повторные KeyDown при
  * удержании клавиши на пульте) — включается сразу, гаснет через 400ms
  * после последнего такого события, тем же паттерном debounce, что уже
- * используется для seekToast/showControls ниже.
+ * использовался для seekToast/showControls (авто-скрытие которого убрано
+ * в четвёртом раунде, см. ниже).
+ *
+ * Четвёртый раунд (обратная связь с реального теста на пульте):
+ *  - DirectionUp/DirectionDown раньше жёстко перехватывались здесь на
+ *    "открыть меню оверлея"/"открыть телефон-компаньон" — это КОНФЛИКТОВАЛО
+ *    с обычной фокус-навигацией Compose: MenuIconButton-иконки внизу
+ *    капсулы и так были реальными tv-material3 Surface (задумывались
+ *    фокусируемыми — см. комментарий в PlayerController.kt), но фокус на
+ *    них в принципе не мог попасть с пульта, т.к. Up/Down ни разу не
+ *    доходили до штатного focus-move — их всегда съедал этот обработчик
+ *    первым. Both branches убраны; Up/Down больше не возвращают true
+ *    здесь, событие проваливается в стандартную обработку Compose,
+ *    которая сама переводит фокус на ближайший фокусируемый элемент в
+ *    нужном направлении (вниз — к иконкам субтитров/аудио/качества/
+ *    скорости, вверх — к "Подключить телефон", см. PlayerController.kt).
+ *    Key.Menu оставлен как есть — это отдельная физическая клавиша, не
+ *    D-pad, у пультов/клавиатур, где она есть, ничего не меняется.
+ *  - Автоскрытие капсулы через 3с бездействия убрано целиком (было:
+ *    LaunchedEffect(lastInteraction, showPlaybackMenu) { delay(3000);
+ *    showControls = false }) — реальный репорт с теста: во время
+ *    удержания перемотки (DirectionLeft/Right) капсула всё равно иногда
+ *    гасла, обрывая обратную связь по прогресс-бару прямо в процессе.
+ *    Капсула теперь видна постоянно, пока PlayerUiState.Ready — весь
+ *    showControls/lastInteraction как отдельное состояние с этим убран,
+ *    PlayerController получает isVisible = true константой.
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -61,8 +95,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
 
-    var showControls by remember { mutableStateOf(true) }
-    var lastInteraction by remember { mutableStateOf(0L) }
     var currentPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
 
@@ -70,7 +102,8 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
     // PlayerController.kt: не получают фокус пульта напрямую, реальное
     // действие идёт через DirectionLeft/DirectionRight ниже). Короткая
     // полупрозрачная надпись по центру экрана ("10 сек" / название серии),
-    // тот же паттерн автоскрытия, что уже используется для showControls.
+    // сама гаснет через 700ms — независимо от капсулы снизу, которая
+    // (с четвёртого раунда) больше не автоскрывается вообще.
     var seekToast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(seekToast) {
         if (seekToast != null) {
@@ -127,16 +160,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
         onDispose { server?.stop() }
     }
 
-    val readyState = uiState as? PlayerUiState.Ready
-
-    // Автоскрытие контроллера через 3с бездействия, но не пока открыто меню
-    LaunchedEffect(lastInteraction, readyState?.showPlaybackMenu) {
-        if (showControls && readyState?.showPlaybackMenu != true) {
-            delay(3000)
-            showControls = false
-        }
-    }
-
     // У ExoPlayer нет готового Flow под текущую позицию — опрашиваем, пока экран Ready
     LaunchedEffect(uiState) {
         while (uiState is PlayerUiState.Ready) {
@@ -171,8 +194,6 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     }
                 }
 
-                lastInteraction = System.currentTimeMillis()
-                showControls = true
                 when (event.key) {
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { viewModel.togglePlayPause(); true }
                     // Раньше Left/Right всегда были перемоткой ±10с. При
@@ -200,17 +221,25 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         }
                         true
                     }
-                    // Key.Menu оставлен для пультов/клавиатур, где он есть, но
-                    // у многих современных TV-пультов (например, штатный пульт
-                    // Xiaomi TV Stick 4K) физической кнопки Menu нет вообще —
-                    // без альтернативы панель качества/аудио/субтитров была
-                    // недостижима. DirectionUp во время обычного воспроизведения
-                    // ничем не занят — свободная клавиша.
-                    Key.Menu, Key.DirectionUp -> { viewModel.togglePlaybackMenu(); true }
-                    // "Подключить телефон" — DirectionDown, как и
-                    // DirectionUp выше, ничем не занят во время обычного
-                    // воспроизведения.
-                    Key.DirectionDown -> { showCompanionQr = true; true }
+                    // Key.Menu оставлен для пультов/клавиатур, где он есть —
+                    // отдельная физическая клавиша, не D-pad, её ничего не
+                    // конфликтует. Раньше сюда же был добавлен DirectionUp как
+                    // подстраховка для пультов без физической Menu (например,
+                    // штатный пульт Xiaomi TV Stick 4K) — и DirectionDown на
+                    // "Подключить телефон" по той же логике. Оба перехвата
+                    // убраны в четвёртом раунде: они жёстко съедали Up/Down
+                    // ещё до того, как событие могло дойти до штатной
+                    // фокус-навигации Compose, из-за чего реальные
+                    // фокусируемые иконки капсулы (MenuIconButton — субтитры/
+                    // аудио/качество/скорость внизу, "Подключить телефон"
+                    // наверху, см. PlayerController.kt) были физически
+                    // недостижимы с пульта. Теперь Up/Down здесь не
+                    // обрабатываются (falls through в `else -> false` ниже) —
+                    // и то и другое открывается штатным способом: фокус
+                    // переводится на нужную иконку, OK/Center на ней вызывает
+                    // её собственный onClick (Surface сама консьюмит событие,
+                    // до togglePlayPause ниже оно не доходит).
+                    Key.Menu -> { viewModel.togglePlaybackMenu(); true }
                     Key.Back -> { onBackPressed(); true }
                     else -> false // любая другая кнопка — контроллер уже показан выше
                 }
@@ -241,7 +270,10 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
             }
             is PlayerUiState.Ready -> {
                 PlayerController(
-                    isVisible = showControls,
+                    // Раньше — showControls, гасший через 3с бездействия
+                    // (см. комментарий вверху файла, четвёртый раунд). Теперь
+                    // капсула видна постоянно, пока экран в Ready.
+                    isVisible = true,
                     isPlaying = isPlaying,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),

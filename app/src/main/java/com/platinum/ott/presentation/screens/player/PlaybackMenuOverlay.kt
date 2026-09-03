@@ -12,9 +12,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
@@ -30,6 +34,18 @@ import com.platinum.ott.ui.theme.*
 // клавиши), но с закруглённой карточкой, отступом от края экрана (не
 // впритык), сегментированными вкладками-пилюлями и строками с чек-иконкой
 // вместо текстового "✓".
+//
+// Аудит пульта (по запросу после правок в PlayerScreen.kt): панель
+// открывается поверх уже отрисованного PlayerController — тот никуда не
+// девается из композиции (он просто визуально перекрыт), поэтому без
+// явного запроса фокуса Compose продолжал бы считать "в фокусе" ту
+// иконку капсулы, с которой панель открыли. С пульта в таком состоянии
+// докрутить до вкладок/строк самой панели можно было не всегда — зависело
+// от взаимного расположения элементов на экране, не гарантированно.
+// menuFocusRequester ниже переносит фокус на активную вкладку сразу при
+// появлении панели, независимо от того, что было в фокусе до открытия
+// (клик по иконке капсулы или клавиша Menu — не важно). Тот же приём в
+// QrScanScreen.kt (общая причина).
 //
 // Второй раунд редизайна (PROMPT_PLAYER_OVERLAY_REDESIGN.md): вкладка
 // "Субт." раньше показывала только "Выключены" + встроенные дорожки —
@@ -62,6 +78,10 @@ fun PlaybackMenuOverlay(
     modifier: Modifier = Modifier
 ) {
     val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+    // Переносится на MenuTabButton текущей активной вкладки — см. Row с
+    // четырьмя MenuTabButton ниже и комментарий в шапке файла.
+    val activeTabFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { activeTabFocusRequester.requestFocus() }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
 
@@ -98,10 +118,10 @@ fun PlaybackMenuOverlay(
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.QUALITY) }
-                MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.AUDIO) }
-                MenuTabButton("Субт.", tab == PlaybackMenuTab.SUBTITLES, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SUBTITLES) }
-                MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SPEED) }
+                MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.QUALITY) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.QUALITY) }
+                MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.AUDIO) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.AUDIO) }
+                MenuTabButton("Субт.", tab == PlaybackMenuTab.SUBTITLES, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.SUBTITLES) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.SUBTITLES) }
+                MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.SPEED) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.SPEED) }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
 

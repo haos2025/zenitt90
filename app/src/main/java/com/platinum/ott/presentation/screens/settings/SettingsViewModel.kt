@@ -2,6 +2,7 @@ package com.platinum.ott.presentation.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.platinum.ott.core.AuthPreferences
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.di.ThemeManager
 import com.platinum.ott.domain.usecase.OtaUpdateUseCase
@@ -16,7 +17,12 @@ sealed interface SettingsUiState { object Idle : SettingsUiState; object Loading
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val sessionGraph: SessionGraph,
-    private val themeManager: ThemeManager
+    private val themeManager: ThemeManager,
+    // authPreferences не завязан на логин/реавторизацию (см. PreferencesModule.kt,
+    // тот же аргумент, что уже был в SyncPairingViewModel) — берём его напрямую
+    // Hilt-синглтоном, а не через sessionGraph, только чтобы прочитать
+    // lastSyncTimestamp для статуса строки "Синхронизация" (см. ниже).
+    private val authPreferences: AuthPreferences
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Idle)
     val uiState: StateFlow<SettingsUiState> = _uiState
@@ -39,4 +45,33 @@ class SettingsViewModel @Inject constructor(
     val darkThemeFlow: StateFlow<Boolean> = themeManager.darkThemeFlow
 
     fun setDarkTheme(enabled: Boolean) { themeManager.setDarkTheme(enabled) }
+
+    // PROMPT_SETTINGS_UPGRADE.md п.5 — секции "Источники"/"Синхронизация"
+    // стали навигационными строками со статусом вместо голого заголовка.
+    // Источников уже может быть 0/1/много (PlaylistSource, не бинарный
+    // AuthPreferences) — считаем реально сохранённые записи, не читаем
+    // ничего из удалённого AuthRepository.
+    private val _sourcesCount = MutableStateFlow(0)
+    val sourcesCount: StateFlow<Int> = _sourcesCount
+
+    // lastSyncTimestamp пишется в SyncRepositoryImpl при каждом успешном
+    // sync() (тот же источник данных, что уже читает SyncPairingViewModel
+    // для своей строки "Последняя синхронизация: ...") — здесь просто
+    // всплывает то же значение на экран Настроек, отдельного стейта в
+    // SyncRepositoryImpl под это заводить не нужно.
+    private val _lastSyncedAtMs = MutableStateFlow(authPreferences.lastSyncTimestamp)
+    val lastSyncedAtMs: StateFlow<Long> = _lastSyncedAtMs
+
+    init { refreshStatusRows() }
+
+    // Экран Настроек — отдельный composable() в NavHost, а не сохранённая
+    // вкладка с restoreState, поэтому при возврате с "Источники"/
+    // "Синхронизация" он пересоздаётся заново и это вызывается снова —
+    // см. LaunchedEffect(Unit) в SettingsScreen.kt/PhoneSettingsScreen.kt.
+    fun refreshStatusRows() {
+        viewModelScope.launch {
+            _sourcesCount.value = sessionGraph.playlistSourceRepository.getAll().size
+            _lastSyncedAtMs.value = authPreferences.lastSyncTimestamp
+        }
+    }
 }

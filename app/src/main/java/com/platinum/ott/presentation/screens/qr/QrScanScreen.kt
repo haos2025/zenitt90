@@ -6,9 +6,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
@@ -24,13 +27,24 @@ import com.platinum.ott.core.platform.ZenithDimens
 // ни один экран сюда не вёл (nav-route "qr_scan" на TV рисовал пустой Box).
 // PROMPT_PHONE_COMPANION.md прямо просил переиспользовать именно этот файл
 // под реальную задачу (ROADMAP.md п.6). Переписан в общий composable
-// "показать QR с текстом": единственный вызывающий сейчас — PlayerScreen.kt
-// (внешние субтитры), но сигнатура не завязана на субтитры специально —
-// второе применение того же канала (поиск текстом, см. промт) сможет
-// переиспользовать этот же composable без изменений.
+// "показать QR с текстом": вызывающих сейчас четыре — PlayerScreen.kt
+// (внешние субтитры), SearchScreen.kt/AddSourceScreen.kt/PluginCatalogScreen.kt
+// (ввод текста/URL по QR) — сигнатура не завязана на субтитры специально.
+//
+// Аудит пульта (по запросу после правок в плеере): все четыре места
+// открывают этот экран как обычный Box поверх уже отрисованного контента
+// (не Dialog/Popup — те получают отдельное окно и Android сам переносит
+// туда фокус). Раз фон никуда не девается из композиции, ранее
+// сфокусированная под ним кнопка ("По QR с телефона" и т.п.) технически
+// оставалась "в фокусе" у Compose и дальше — с пульта докрутить до
+// "Отмена" здесь можно было не всегда, зависело от взаимного расположения
+// на экране, не гарантированно. Явный FocusRequester ниже — тот же приём,
+// что и в PlaybackMenuOverlay.kt (общая причина, две похожие правки).
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun QrScanScreen(content: String?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val cancelFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { cancelFocusRequester.requestFocus() }
     Box(modifier.background(Color.Black.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Телефон-компаньон", style = MaterialTheme.typography.displaySmall, color = Color.White)
@@ -54,7 +68,7 @@ fun QrScanScreen(content: String?, onDismiss: () -> Unit, modifier: Modifier = M
                 Text("Не удалось определить локальный IP-адрес.\nПроверьте, что TV подключён к сети.", color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(ZenithDimens.paddingL))
-            OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancelFocusRequester)) { Text("Отмена") }
         }
     }
 }

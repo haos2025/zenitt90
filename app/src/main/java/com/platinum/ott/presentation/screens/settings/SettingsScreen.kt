@@ -1,15 +1,38 @@
 package com.platinum.ott.presentation.screens.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Source
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.CircularProgressIndicator
+// Явный импорт Icon/HorizontalDivider поверх звёздочного
+// `androidx.tv.material3.*` ниже — тот же приём, что уже применён в
+// NavSidebar.kt для Icon: явный импорт побеждает звёздочный, оба
+// компонента из обычного material3 работают поверх tv-material3 экрана
+// без конфликтов (Icon — проверено там же; HorizontalDivider — тот же
+// принцип, что и androidx.compose.material3.CircularProgressIndicator
+// выше, уже используемый на других TV-экранах проекта).
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -29,7 +52,16 @@ import com.platinum.ott.ui.theme.*
 @Composable
 fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
+    val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Экран — обычный composable() в NavHost, не сохранённая вкладка, так
+    // что при возврате сюда с "Источники"/"Синхронизация" он пересоздаётся
+    // заново и это отрабатывает снова — статус в карточках не залипает на
+    // значении, снятом при первом входе (см. SettingsViewModel.refreshStatusRows()).
+    LaunchedEffect(Unit) { viewModel.refreshStatusRows() }
+
     Row(Modifier.fillMaxSize()) {
         NavSidebar(navController)
         // Раньше Column был fillMaxSize() без verticalScroll() — тот же баг,
@@ -50,8 +82,8 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
         ) {
             Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
             Spacer(Modifier.height(ZenithDimens.paddingXL))
-            // Sections: Playback, Notifications, Network, Interface, Account, About
-            SettingsSection("Воспроизведение") {
+            // Sections: Playback, Notifications, Network, Interface, Plugins, Sources
+            SettingsGroup("Воспроизведение", Icons.Outlined.PlayCircle) {
                 // Раньше "Качество по умолчанию"/"Автовоспроизведение"/"Субтитры"
                 // были тремя захардкоженными строками подряд, и для двух из них
                 // не было НИКАКОЙ реализации (ни "следующего эпизода", ни
@@ -72,6 +104,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
                     selectedQuality = next
                 }
+                SettingsDivider()
                 // Раньше настройки внешних субтитров не было нигде, кроме самого
                 // плеера (ссылка на .srt вводилась заново на каждое видео) — это
                 // единственная ЧАСТЬ субтитров, которая действительно глобальна
@@ -85,7 +118,8 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     subtitlePrefs.setShowByDefault(showSubsByDefault)
                 }
             }
-            SettingsSection("Уведомления") {
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            SettingsGroup("Уведомления", Icons.Outlined.Notifications) {
                 // Раньше все три строки ("Новые серии: Вкл", "Новый контент: Вкл",
                 // "Тихий режим: 23:00-08:00") были захардкожены и ни на что не
                 // влияли. Теперь "Новые серии"/"Тихий режим" реально управляют
@@ -100,7 +134,9 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     newEpisodesEnabled = !newEpisodesEnabled
                     notifPrefs.setNewEpisodesEnabled(newEpisodesEnabled)
                 }
+                SettingsDivider()
                 SettingsItem("Новый контент", "Скоро")
+                SettingsDivider()
                 var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
                 var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
                 var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
@@ -109,7 +145,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     notifPrefs.setQuietHoursEnabled(quietEnabled)
                 }
                 if (quietEnabled) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                         Text("Диапазон", color = Color.Gray, modifier = Modifier.weight(1f))
                         OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
                         Spacer(Modifier.width(ZenithDimens.paddingS))
@@ -117,17 +153,18 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     }
                 }
             }
-            SettingsSection("Сеть") {
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            SettingsGroup("Сеть", Icons.Outlined.Wifi) {
                 // Раньше "Таймаут: 15 сек" и "Макс. качество на моб.: 720p" были
                 // захардкожены. Таймаут теперь реально идёт в RetrofitFactory
-                // через ServiceLocator (нужен reinitWithAuth(), чтобы применился
-                // без перезапуска приложения — клиент пересобирается один раз
-                // при инициализации). Ограничение качества на мобильных данных
+                // через sessionGraph.reinitWithAuth(), чтобы применился без
+                // перезапуска приложения — клиент пересобирается один раз при
+                // инициализации. Ограничение качества на мобильных данных
                 // читает QualityPreferences.getMaxQualityOnMobile() — само поле
                 // существовало в коде с самого начала, просто не использовалось
                 // нигде, включая этот экран.
                 val networkPrefs = remember { NetworkPreferences(context) }
-                val qualityPrefs = remember { QualityPreferences(context) }
+                val qualityPrefsNet = remember { QualityPreferences(context) }
                 val timeoutOptions = listOf(10, 15, 20, 30)
                 var timeoutSeconds by remember { mutableStateOf(networkPrefs.getTimeoutSeconds()) }
                 CycleSetting("Таймаут запроса", "$timeoutSeconds сек") {
@@ -135,21 +172,23 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     networkPrefs.setTimeoutSeconds(timeoutSeconds)
                     viewModel.applyNetworkTimeoutChange()
                 }
+                SettingsDivider()
                 val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
-                var maxMobileQuality by remember { mutableStateOf(qualityPrefs.getMaxQualityOnMobile()) }
+                var maxMobileQuality by remember { mutableStateOf(qualityPrefsNet.getMaxQualityOnMobile()) }
                 CycleSetting("Макс. качество на моб. данных", maxMobileQuality) {
                     val next = mobileQualityOptions[(mobileQualityOptions.indexOf(maxMobileQuality).let { if (it == -1) 0 else it } + 1) % mobileQualityOptions.size]
-                    qualityPrefs.setMaxQualityOnMobile(next)
+                    qualityPrefsNet.setMaxQualityOnMobile(next)
                     maxMobileQuality = next
                 }
             }
-            SettingsSection("Интерфейс") {
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            SettingsGroup("Интерфейс", Icons.Outlined.Palette) {
                 // Раньше "Тема: Тёмная" и "Язык: Русский" были захардкоженными
                 // строками, ни к чему не привязанными. Тема теперь реально
                 // переключает ZenithTheme (см. MainActivity.kt) через
-                // ServiceLocator.darkThemeFlow. Не использую androidx.tv.material3.Switch
+                // ThemeManager.darkThemeFlow. Не использую androidx.tv.material3.Switch
                 // — не смог достоверно подтвердить, что такой компонент вообще
-                // есть в этой версии библиотеки, Button безопаснее (уже
+                // есть в этой версии библиотеки, CycleSetting безопаснее (уже
                 // используется в этом же файле). Язык оставлен видимым, но
                 // намеренно не нажимается: реальный переключатель потребовал бы
                 // вынести весь текст интерфейса в string-ресурсы (сейчас 0
@@ -157,12 +196,14 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 // большая задача, не в этом заходе.
                 val darkTheme by viewModel.darkThemeFlow.collectAsState()
                 CycleSetting("Тема", if (darkTheme) "Тёмная" else "Светлая") { viewModel.setDarkTheme(!darkTheme) }
+                SettingsDivider()
                 SettingsItem("Язык", "Скоро")
             }
-            SettingsSection("Плагины") { SettingsItem("Управление плагинами", "Каталог и настройки") }
-            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                Button(onClick = onPluginsClick) { Text("Плагины") }
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            SettingsGroup("Плагины", Icons.Outlined.Extension) {
+                NavRow("Управление плагинами", "Каталог и настройки", onClick = onPluginsClick)
             }
+            Spacer(Modifier.height(ZenithDimens.paddingL))
             // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) заменила прежний
             // единственный источник (AuthPreferences) на список PlaylistSource —
             // бинарного "подключён/не подключён" (isConnected(), читал старый
@@ -171,25 +212,122 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             // "Аккаунт" с раздельными "Подключить источник"/"Сменить аккаунт" —
             // один переход на полноценный список источников (SourcesScreen.kt),
             // где статус/добавление/удаление каждого показаны по отдельности.
-            SettingsSection("Источники") { SettingsItem("Плейлисты и панели", "M3U / Xtream") }
-            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                Button(onClick = onSourcesClick) { Text("Источники") }
-                Button(onClick = onSyncClick) { Text("Синхронизация устройств") }
+            // "Синхронизация" — независимый механизм (пара по 6-значному коду),
+            // но живёт в той же карточке, т.к. обе строки — про подключение
+            // к внешнему состоянию, а не про поведение самого приложения.
+            SettingsGroup("Источники", Icons.Outlined.Source) {
+                NavRow("Источники", if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено", onClick = onSourcesClick)
+                SettingsDivider()
+                NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
             }
             Spacer(Modifier.height(ZenithDimens.paddingXL))
-            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                Button(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }) { Text("Обновить парсеры") }
+            // Технические действия — сознательно вне карточек-секций выше и
+            // визуально приглушены (серая обводка/подпись вместо цветной), чтобы
+            // читаться как второстепенные инструменты, а не как настройки.
+            // "Сменить аккаунт"/"Очистить кэш" отсюда убраны не по недосмотру:
+            // логин на один аккаунт удалён вместе с AuthRepository
+            // (PROMPT_REVISION.md), а полноценная очистка по категориям — уже
+            // отдельный экран (onCacheManagementClick, см. CacheManagementScreen.kt),
+            // эта кнопка теперь просто ведёт туда, а не чистит сама.
+            Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = Color.Gray, letterSpacing = 1.5.sp)
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }, enabled = uiState !is SettingsUiState.Loading) {
+                    if (uiState is SettingsUiState.Loading) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.Gray)
+                        Spacer(Modifier.width(ZenithDimens.paddingXS))
+                    }
+                    Text("Обновить парсеры")
+                }
                 OutlinedButton(onClick = onCacheManagementClick) { Text("Управление кэшем") }
+            }
+            // Раньше uiState (Loading/Success/Error) велось во ViewModel, но
+            // нигде на экране не отображалось — единственным признаком того,
+            // что "Обновить парсеры" вообще что-то сделало, было отсутствие
+            // краша. Теперь исход виден явно под кнопками.
+            when (val state = uiState) {
+                is SettingsUiState.Success -> {
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
+                    Text("Готово: обновлено ${state.result.updated}, пропущено ${state.result.skipped}, ошибок ${state.result.failed}", color = ZenithSuccess, style = MaterialTheme.typography.bodySmall)
+                }
+                is SettingsUiState.Error -> {
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
+                    Text("Ошибка: ${state.message}", color = ZenithError, style = MaterialTheme.typography.bodySmall)
+                }
+                else -> {}
             }
         }
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.padding(bottom = ZenithDimens.paddingM)) { Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(ZenithDimens.paddingS)); content() }
+// "N мин/ч/дн назад" — та же приблизительная точность, что и остальные
+// текстовые значения на этом экране ("15 сек", "720p"), не претендует на
+// грамматически верное согласование числительных для всех N.
+private fun formatLastSynced(ms: Long): String {
+    if (ms <= 0L) return "никогда"
+    val diffMin = (System.currentTimeMillis() - ms) / 60000
+    return when {
+        diffMin < 1 -> "только что"
+        diffMin < 60 -> "$diffMin мин назад"
+        diffMin < 60 * 24 -> "${diffMin / 60} ч назад"
+        else -> "${diffMin / (60 * 24)} дн назад"
+    }
+}
+
+// Иконка + подпись капсом над карточкой секции — раньше это был просто
+// Text(title, titleMedium), не читалось как визуальная группа с рядами
+// ниже. Сама карточка — со скруглением и лёгким фоном/обводкой, ряды
+// внутри разделены SettingsDivider(), не голый список без обрамления.
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsGroup(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = ZenithDimens.paddingXS, bottom = ZenithDimens.paddingS)) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(ZenithDimens.paddingXS))
+            Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.5.sp)
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(ZenithSurfaceVariant.copy(alpha = 0.5f))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                .padding(vertical = ZenithDimens.paddingXS, horizontal = ZenithDimens.paddingS),
+            content = content
+        )
+    }
+}
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsDivider() {
+    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 }
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsItem(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
+}
+// Строка-переход (было: отдельная Button вне секции — SettingsSection(...)
+// рисовала только заголовок, а кнопка "Плагины"/"Источники"/"Синхронизация"
+// шла отдельным Row ПОСЛЕ, визуально не читаясь как часть той же карточки).
+// Теперь это ряд ВНУТРИ карточки, со статусом и стрелкой, тот же паттерн
+// фокусируемой строки целиком, что и у CycleSetting.
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+        ),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(label, color = Color.White)
+                Text(status, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray)
+        }
+    }
 }
 // Раньше это была Row с Text + маленькой Button, прижатой к правому краю —
 // с пульта фокус-цель получалась узкой (только сама кнопка), а строки шли

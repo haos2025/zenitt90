@@ -57,6 +57,16 @@ import com.platinum.ott.ui.theme.*
  * полноэкранное, эта кнопка тут не появляется (она только на телефоне,
  * см. PhonePlayerController.kt).
  *
+ * Четвёртый раунд: иконка "Подключить телефон" в шапке раньше была тем же
+ * decorative IconGlyphButton, что и play/pause/skip — не получала фокус
+ * пульта, реальный доступ шёл только через хоткей DirectionDown в
+ * PlayerScreen.onKeyEvent. Хоткей убран (конфликтовал с обычной
+ * фокус-навигацией на MenuIconButton ниже — см. комментарий в
+ * PlayerScreen.kt), поэтому эта иконка теперь тоже настоящий
+ * фокусируемый tv-material3 Surface (переиспользует MenuIconButton, как
+ * и четыре иконки настроек снизу) — иначе телефон-компаньон стал бы
+ * недостижим с пульта вообще.
+ *
  * Прогресс-бар: раньше статичный 4dp без какой-либо реакции на
  * перемотку — единственная обратная связь была через всплывающий текст
  * по центру экрана ("+10 сек"/название серии). Теперь бар дополнительно
@@ -115,7 +125,7 @@ fun PlayerController(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = title, style = MaterialTheme.typography.titleLarge, color = Color.White)
-                    IconGlyphButton(icon = Icons.Default.PhoneAndroid, contentDescription = "Подключить телефон", onClick = onConnectPhone, size = 44.dp)
+                    MenuIconButton(icon = Icons.Default.PhoneAndroid, contentDescription = "Подключить телефон", isActive = false, iconSize = 28.dp, onClick = onConnectPhone)
                 }
             }
 
@@ -229,10 +239,13 @@ private fun IconGlyphButton(
 }
 
 /**
- * Четыре маленькие квадратные иконки справа (субтитры/аудио/качество/
- * скорость) — в отличие от IconGlyphButton выше, это НАСТОЯЩИЙ
- * фокусируемый TV-компонент (tv-material3 Surface), потому что клик по
- * каждой должен реально работать с пульта, не быть декоративным.
+ * Маленькие квадратные иконки (субтитры/аудио/качество/скорость внизу
+ * капсулы, "Подключить телефон" наверху) — в отличие от IconGlyphButton
+ * выше, это НАСТОЯЩИЙ фокусируемый TV-компонент (tv-material3 Surface),
+ * потому что клик по каждой должен реально работать с пульта, не быть
+ * декоративным. iconSize — из-за переиспользования для "Подключить
+ * телефон" в шапке (четвёртый раунд, см. комментарий над PlayerController
+ * выше), которая крупнее четырёх нижних иконок.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -240,6 +253,7 @@ private fun MenuIconButton(
     icon: ImageVector,
     contentDescription: String,
     isActive: Boolean,
+    iconSize: Dp = 20.dp,
     onClick: () -> Unit
 ) {
     Surface(
@@ -253,7 +267,7 @@ private fun MenuIconButton(
         Icon(
             icon, contentDescription,
             tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.padding(9.dp).size(20.dp)
+            modifier = Modifier.padding(9.dp).size(iconSize)
         )
     }
 }
