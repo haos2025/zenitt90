@@ -6,6 +6,12 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.BasicTextField
+// Единственное место в файле, где нужен именно обычный (не TV) Card — см.
+// комментарий у самого вызова ниже (UpdatesTab). Явный импорт бьёт
+// звёздочный `androidx.tv.material3.*` только для идентификатора Card,
+// остальной файл (Surface/Button/Text и т.д. из tv-material3) не
+// затрагивается.
+import androidx.compose.material3.Card
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -223,9 +229,18 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
                     // SourcesScreen.kt (см. подробный разбор там): пустой onClick
                     // делает саму карточку фокусируемой заглушкой, которая
                     // перехватывает OK/Center с пульта, не давая ему провалиться
-                    // на реальную кнопку "Обновить" внутри. Card без onClick —
-                    // не фокусируется сама, кнопка внутри получает фокус
-                    // напрямую.
+                    // на реальную кнопку "Обновить" внутри.
+                    //
+                    // ВАЖНО: в этом файле `Card` по умолчанию — это
+                    // androidx.tv.material3.Card (звёздочный импорт), а у него
+                    // онClick НЕ опциональный — сборка упала именно на этом
+                    // ("No value passed for parameter 'onClick'"), когда убрал
+                    // "onClick = {}" в прошлый раз, не заметив, что это
+                    // TV-версия Card, а не обычная material3. Обычный
+                    // androidx.compose.material3.Card (см. явный импорт
+                    // наверху файла) — то, что реально нужно: он не
+                    // фокусируется сам по себе, кнопка "Обновить" внутри
+                    // получает фокус напрямую.
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
