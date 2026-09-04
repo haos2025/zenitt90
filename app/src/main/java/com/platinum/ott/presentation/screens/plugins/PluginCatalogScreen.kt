@@ -219,7 +219,14 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
             }
             Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 uiState.updates.forEach { (installed, catalog) ->
-                    Card(onClick = {}, modifier = Modifier.fillMaxWidth()) {
+                    // Раньше это тоже был Card(onClick = {}) — тот же баг, что и в
+                    // SourcesScreen.kt (см. подробный разбор там): пустой onClick
+                    // делает саму карточку фокусируемой заглушкой, которая
+                    // перехватывает OK/Center с пульта, не давая ему провалиться
+                    // на реальную кнопку "Обновить" внутри. Card без onClick —
+                    // не фокусируется сама, кнопка внутри получает фокус
+                    // напрямую.
+                    Card(modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(installed.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
@@ -237,15 +244,30 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boolean) -> Unit) {
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().height(120.dp)) {
-        Column(Modifier.padding(ZenithDimens.paddingSM), verticalArrangement = Arrangement.SpaceBetween) {
-            Column {
+    // Раньше Switch был ВНУТРИ Surface(onClick = onClick) — в отличие от
+    // UpdatesTab/SourcesScreen.kt выше, здесь onClick настоящий (открывает
+    // детали плагина), не пустая заглушка, поэтому карточка сама по себе
+    // корректно фокусируется и работает с пульта. Но вложенный Switch —
+    // это ВТОРОЕ, независимое действие (вкл/выкл прямо из сетки, без
+    // захода в детали) на том же самом фокусируемом элементе, что и вся
+    // карточка — с пульта достать фокус конкретно до тумблера, отдельно
+    // от всей карточки, было невозможно (OK на карточке всегда открывал
+    // детали, до onToggle через фокус было не добраться). Переложен из
+    // потомка Surface в соседа по Box — Switch теперь самостоятельная
+    // фокусируемая цель рядом с карточкой, а не внутри неё.
+    Box(Modifier.fillMaxWidth().height(120.dp)) {
+        Surface(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.padding(ZenithDimens.paddingSM)) {
                 Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                 Text(plugin.pluginType, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
             }
-            Switch(checked = plugin.isEnabled, onCheckedChange = onToggle)
         }
+        Switch(
+            checked = plugin.isEnabled,
+            onCheckedChange = onToggle,
+            modifier = Modifier.align(Alignment.BottomStart).padding(ZenithDimens.paddingSM)
+        )
     }
 }
 

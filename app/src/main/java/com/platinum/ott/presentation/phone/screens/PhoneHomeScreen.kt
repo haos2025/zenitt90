@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,17 +53,17 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
     var selectedFilter by remember { mutableStateOf(HomeContentFilter.ALL) }
 
     Scaffold(
-        // Раньше на телефоне вообще не было верхней панели — единственная
-        // ссылка на поиск существовала снаружи приложения (системный поиск
-        // TV). Значок лупы здесь ведёт на PhoneSearchScreen.kt. "Сериалы"
-        // остаётся здесь как отдельный экран browse-всех-сериалов — вкладка-
-        // фильтр ниже фильтрует именно ленту, это не замена этому значку.
+        // Раньше здесь была ещё и лупа рядом с "Сериалы" — до того, как
+        // "Поиск" появился в PhoneBottomBar.kt (PROMPT_NAVIGATION_SIDEBAR.md).
+        // Теперь это дублирующий вход на тот же экран (виден на скриншоте:
+        // лупа и сверху, и в нижней панели одновременно) — убрана отсюда,
+        // "Поиск" снизу остаётся единственным входом. "Сериалы" — другой
+        // экран (browse-всех-сериалов), не дублируется больше нигде, остаётся.
         topBar = {
             TopAppBar(
                 title = { Text("ZENITH", color = MaterialTheme.colorScheme.primary) },
                 actions = {
                     IconButton(onClick = { navController.navigateToTab("series") }) { Icon(Icons.Default.Movie, "Сериалы") }
-                    IconButton(onClick = { navController.navigateToTab("search") }) { Icon(Icons.Default.Search, "Поиск") }
                 }
             )
         },

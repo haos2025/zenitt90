@@ -182,7 +182,27 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
             }
         }
     ) {
-        AndroidView(factory = { PlayerView(it).apply { player = viewModel.exoPlayer; useController = false; keepScreenOn = true } }, Modifier.fillMaxSize())
+        // PlayerView через TextureView (не SurfaceView) — тот же
+        // res/layout/player_view_texture.xml, что уже используется на TV
+        // (PlayerScreen.kt): SurfaceView композитится отдельным аппаратным
+        // слоем и на части чипов (диагностировано на TV-приставке, но
+        // причина — общая для Android, не специфична для TV) непредсказуемо
+        // перекрывает Compose-контент поверх. Раньше здесь стоял
+        // программный PlayerView(it) без AttributeSet — тот самый режим,
+        // что по умолчанию рисует через SurfaceView; на TV эта же
+        // конструкция была причиной "видна только одна из трёх кнопок".
+        // Не подтверждено логами конкретно на телефоне — это устраняет
+        // ОДИН известный класс причины ("плеер открылся, часть контента
+        // не отрисовалась"), не гарантированный фикс для всех возможных
+        // причин "не работает".
+        AndroidView(
+            factory = { ctx ->
+                android.view.LayoutInflater.from(ctx)
+                    .inflate(com.platinum.ott.R.layout.player_view_texture, null) as PlayerView
+            },
+            update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true },
+            modifier = Modifier.fillMaxSize()
+        )
         gestureIndicator?.let { GestureIndicatorOverlay(it, Modifier.align(Alignment.Center)) }
         when (val state = uiState) {
             is PlayerUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))

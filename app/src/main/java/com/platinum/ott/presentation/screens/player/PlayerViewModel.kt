@@ -219,6 +219,17 @@ class PlayerViewModel @Inject constructor(
      * текстом. HttpDataSource.InvalidResponseCodeException внутри cause-цепочки
      * содержит реальный HTTP-код ответа сервера — вытаскиваем его явно, чтобы
      * в UI было видно "HTTP 404", а не общее "ошибка воспроизведения".
+     *
+     * Раунд 2 (реальный репорт с телефона: "Source error" при попытке
+     * воспроизвести веб-архив) — если HttpDataSource.InvalidResponseCodeException
+     * НЕТ в цепочке причин, значит до сервера дело вообще не дошло (ответ
+     * не пришёл), и голое error.message ExoPlayer в таком случае обычно
+     * буквально "Source error"/"Player error" — само по себе бесполезно.
+     * PlaybackException.errorCodeName — встроенная в Media3 более
+     * конкретная диагностика именно на этот случай (например
+     * ERROR_CODE_IO_DNS_FAILED / ERROR_CODE_IO_NETWORK_CONNECTION_FAILED /
+     * ERROR_CODE_IO_CONNECTION_TIMEOUT) — показываем его вместо голого
+     * message, не теряя message как дополнение.
      */
     private fun describePlaybackError(error: PlaybackException): String {
         val httpCause = generateSequence(error as Throwable) { it.cause }
@@ -227,7 +238,7 @@ class PlayerViewModel @Inject constructor(
         return if (httpCause != null) {
             "Сервер вернул HTTP ${httpCause.responseCode} — ссылка недоступна"
         } else {
-            error.message ?: "Не удалось воспроизвести поток"
+            "Ошибка воспроизведения: ${error.errorCodeName} (${error.message ?: "нет деталей"})"
         }
     }
 

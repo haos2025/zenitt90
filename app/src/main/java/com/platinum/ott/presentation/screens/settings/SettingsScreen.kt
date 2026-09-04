@@ -307,6 +307,15 @@ private fun formatLastSynced(ms: Long): String {
 // шла отдельным Row ПОСЛЕ, визуально не читаясь как часть той же карточки).
 // Теперь это ряд ВНУТРИ карточки, со статусом и стрелкой, тот же паттерн
 // фокусируемой строки целиком, что и у CycleSetting.
+//
+// scale = ClickableSurfaceDefaults.scale(focusedScale = 1f) — по умолчанию
+// у tv-material3 Surface фокус ещё и увеличивает сам компонент (~10%,
+// стандартный TV-эффект "pop"), рассчитанный на карточки с гуттерами
+// вокруг (постеры в сетке каталога, где вокруг есть запас). Тут ряд на
+// всю ширину карточки почти впритык к её скруглённой рамке — при
+// увеличении на фокусе строка вылезала за пределы этой рамки и даже за
+// край экрана (реальный скриншот с TV: подсветка и текст обрезаны). Тот
+// же фикс — в CycleSetting ниже.
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
@@ -315,6 +324,7 @@ private fun formatLastSynced(ms: Long): String {
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
         ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
     ) {
         Row(
@@ -344,6 +354,9 @@ private fun formatLastSynced(ms: Long): String {
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
         ),
+        // См. комментарий у NavRow выше — тот же оверфлоу подсветки за край
+        // скруглённой карточки/экрана на реальном TV, тот же фикс.
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
     ) {
         Row(

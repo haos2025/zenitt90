@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -122,11 +123,28 @@ private fun SourceCard(
     onDelete: () -> Unit
 ) {
     var showMenu by remember(item.id) { mutableStateOf(false) }
-    Surface(
-        onClick = {},
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = ZenithSurface, focusedContainerColor = ZenithFocusContainerActive),
-        modifier = Modifier.fillMaxWidth()
+    // Раньше вся карточка была одним Surface(onClick = {}) — то есть САМА
+    // строка была фокусируемой (реальный tv-material3 Surface с onClick),
+    // но её onClick ничего не делает (пустая лямбда). С пульта фокус
+    // останавливался на этой внешней рамке — пульт физически не мог
+    // "провалиться" внутрь на реальные интерактивные элементы (Switch,
+    // кнопка обновления, кнопка "⋮"), потому что Surface с собственным
+    // onClick перехватывает нажатие OK/Center на себе, а не пропускает
+    // его дальше на дочерний фокусируемый элемент. Отсюда ровно репорт
+    // "источники — не управляется пультом, не обновить источник, ничего":
+    // ViewModel.refresh()/setEnabled() и т.д. всегда были рабочими (см.
+    // SourcesViewModel.kt), просто их некому было вызвать с пульта.
+    // Заменено на декоративный Box (не Surface, без onClick, не
+    // фокусируется само по себе) — теперь Switch/IconButton внутри
+    // получают фокус напрямую, каждый по отдельности, обычной
+    // фокус-навигацией Compose (тот же вывод, что и в остальном аудите
+    // пульта в этой сессии — см. PlayerScreen.kt/QrScanScreen.kt/
+    // PlaybackMenuOverlay.kt).
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(ZenithSurface)
     ) {
         Row(
             Modifier.padding(ZenithDimens.paddingM).fillMaxWidth(),
