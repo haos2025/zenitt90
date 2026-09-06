@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -215,12 +216,25 @@ private fun IconGlyphButton(
     isPrimary: Boolean = false,
     enabled: Boolean = true
 ) {
-    // Box+clickable, не Surface — D-pad уже обрабатывается глобально в
-    // PlayerScreen.onKeyEvent, эти кнопки не получают фокус напрямую и не
-    // нуждаются в отдельной focus/indication-логике.
+    // Раньше здесь стоял комментарий "clickable не получает фокус напрямую" —
+    // это было неверно и не проверено на реальном устройстве: обычный
+    // Modifier.clickable(...) в Compose ВСЕГДА добавляет фокусируемость,
+    // indication = null убирает только визуальную рябь, не фокус. На
+    // реальном пульте это означало: D-pad Down с общего фокуса плеера
+    // попадал СЮДА (play/pause — первая заметная цель по прямой), а не на
+    // настоящие фокусируемые иконки настроек (MenuIconButton ниже) — ровно
+    // репорт "работает только плей, до других кнопок не добраться". Left/
+    // Right, не будучи погашены этой кнопкой (у clickable нет обработки
+    // стрелок, только activation-клавиш), улетали дальше по дереву в
+    // глобальный обработчик PlayerScreen.onKeyEvent — отсюда "стрелки
+    // всегда только перематывают". focusProperties { canFocus = false }
+    // ниже — явный, а не предполагаемый, способ выключить фокус: D-pad
+    // Down/Up теперь проходит МИМО этой кнопки насквозь, к настоящим
+    // фокусируемым элементам капсулы.
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(size)
+            .focusProperties { canFocus = false }
             .clip(CircleShape)
             .background(
                 when {

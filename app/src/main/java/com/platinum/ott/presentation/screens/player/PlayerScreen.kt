@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
@@ -170,12 +171,32 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
+    // Раньше Center/Left/Right обрабатывались здесь безусловно — даже когда
+    // (после четвёртого раунда) фокус реально стоял на настоящей
+    // фокусируемой иконке капсулы (MenuIconButton), нажатие стрелки туда
+    // не долетало: сначала выяснилось, что декоративные кнопки
+    // (IconGlyphButton — play/pause и т.д.) на самом деле ловили фокус на
+    // себя раньше настоящих иконок (см. фикс в PlayerController.kt), а
+    // даже после того, как это исправлено, Left/Right, не поглощённые
+    // сфокусированной иконкой (у неё нет обработки стрелок, только OK),
+    // всё равно поднимались по дереву сюда и безусловно перематывали —
+    // реальный репорт с пульта: "стрелки всегда только перематывают, до
+    // других кнопок не добраться". rootHasFocus ниже — фокус именно на
+    // этом Box (не на потомке): пока он true, стрелки/OK работают как
+    // глобальные хоткеи перемотки/паузы; как только фокус ушёл на
+    // конкретную кнопку капсулы, эти клавиши здесь больше не
+    // перехватываются — событие просто не доходит досюда (сфокусированный
+    // элемент либо сам его обработал, либо это стрелка для обычной
+    // фокус-навигации Compose между иконками).
+    var rootHasFocus by remember { mutableStateOf(true) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focusRequester)
             .focusable()
+            .onFocusChanged { rootHasFocus = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val ready = uiState as? PlayerUiState.Ready ?: return@onKeyEvent false
@@ -193,6 +214,21 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         else -> false // Up/Down/Center — отдаём PlaybackMenuOverlay
                     }
                 }
+
+                // Back — стандартное TV-поведение "выйти на один уровень":
+                // если фокус сейчас на конкретной кнопке капсулы (не на
+                // видео), первый Back возвращает фокус на видео (снова
+                // включает хоткеи перемотки/паузы), а не сразу закрывает
+                // плеер — иначе не было бы способа "выйти из режима
+                // настроек капсулы", кроме как случайно нажать что-то ещё.
+                // Следующий Back (когда фокус уже на видео) выходит из
+                // плеера как раньше.
+                if (event.key == Key.Back) {
+                    if (rootHasFocus) onBackPressed() else focusRequester.requestFocus()
+                    return@onKeyEvent true
+                }
+                if (event.key == Key.Menu) { viewModel.togglePlaybackMenu(); return@onKeyEvent true }
+                if (!rootHasFocus) return@onKeyEvent false
 
                 when (event.key) {
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { viewModel.togglePlayPause(); true }
@@ -221,27 +257,11 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         }
                         true
                     }
-                    // Key.Menu оставлен для пультов/клавиатур, где он есть —
-                    // отдельная физическая клавиша, не D-pad, её ничего не
-                    // конфликтует. Раньше сюда же был добавлен DirectionUp как
-                    // подстраховка для пультов без физической Menu (например,
-                    // штатный пульт Xiaomi TV Stick 4K) — и DirectionDown на
-                    // "Подключить телефон" по той же логике. Оба перехвата
-                    // убраны в четвёртом раунде: они жёстко съедали Up/Down
-                    // ещё до того, как событие могло дойти до штатной
-                    // фокус-навигации Compose, из-за чего реальные
-                    // фокусируемые иконки капсулы (MenuIconButton — субтитры/
-                    // аудио/качество/скорость внизу, "Подключить телефон"
-                    // наверху, см. PlayerController.kt) были физически
-                    // недостижимы с пульта. Теперь Up/Down здесь не
-                    // обрабатываются (falls through в `else -> false` ниже) —
-                    // и то и другое открывается штатным способом: фокус
-                    // переводится на нужную иконку, OK/Center на ней вызывает
-                    // её собственный onClick (Surface сама консьюмит событие,
-                    // до togglePlayPause ниже оно не доходит).
-                    Key.Menu -> { viewModel.togglePlaybackMenu(); true }
-                    Key.Back -> { onBackPressed(); true }
-                    else -> false // любая другая кнопка — контроллер уже показан выше
+                    // Key.Menu и Key.Back обработаны выше безусловно (см.
+                    // комментарии там) — сюда доходят, только если
+                    // rootHasFocus, для остальных необработанных клавиш
+                    // ничего не перехватываем.
+                    else -> false
                 }
             }
     ) {

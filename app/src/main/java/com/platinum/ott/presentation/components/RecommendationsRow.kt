@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -8,9 +10,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +41,11 @@ private val posterHeight = 165.dp
  * оставлено на отдельную сессию позже, если понадобится. Вызывающая
  * сторона не рендерит компонент вовсе, если items пуст или tmdbId
  * фильма неизвестен (см. DetailScreen.kt/PhoneDetailScreen.kt).
+ *
+ * Реальный репорт с TV: тот же класс проблемы, что и в CastRow.kt (см.
+ * подробный разбор там) — без .focusable() D-pad вниз из общего
+ * verticalScroll на DetailScreen.kt не мог докрутить до этого ряда
+ * вообще, фокусу было не на чем остановиться.
  */
 @Composable
 fun RecommendationsRow(items: List<Recommendation>, modifier: Modifier = Modifier) {
@@ -53,10 +64,14 @@ fun RecommendationsRow(items: List<Recommendation>, modifier: Modifier = Modifie
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
                     }
                 }
+                var isFocused by remember { mutableStateOf(false) }
                 Column(modifier = Modifier.width(posterWidth)) {
                     Box(
                         modifier = Modifier.width(posterWidth).height(posterHeight)
                             .clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface)
+                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .onFocusChanged { isFocused = it.isFocused }
+                            .focusable()
                     ) {
                         if (request != null) {
                             AsyncImage(

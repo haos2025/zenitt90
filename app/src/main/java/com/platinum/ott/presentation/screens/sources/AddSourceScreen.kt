@@ -7,13 +7,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -183,14 +190,68 @@ private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+// Раньше это был голый BasicTextField — на пульте фокус попадает на него
+// точно так же, как на любую кнопку рядом (просто D-pad Down/Up), а
+// Compose по умолчанию показывает клавиатуру сразу, как только поле
+// получило фокус, — не когда пользователь явно нажал OK, а от одного
+// прохода фокуса стрелками мимо. С этого момента клавиатура перекрывает
+// экран и следующее нажатие Down/Up уходит в неё, а не двигает фокус на
+// кнопку ниже поля — ровно репорт "поле не обойти, а надо выбрать другую
+// кнопку ниже".
+//
+// Два режима вместо одного компонента: пока НЕ редактируешь — это обычная
+// фокусируемая tv-material3 Surface-строка (как любая другая кнопка на
+// экране), показывает текущее значение/плейсхолдер текстом, D-pad Up/Down
+// проходят мимо неё точно так же, как мимо TabButton или любой другой
+// строки — клавиатура не показывается. Явный OK/клик переключает в режим
+// редактирования — вот тогда уже реальный BasicTextField получает фокус
+// (через focusRequester, не через D-pad-навигацию) и клавиатура открывается
+// осознанно, по действию пользователя. Уход фокуса с поля (Done на
+// клавиатуре или D-pad увёл фокус в сторону) — возврат в режим показа.
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun SourceTextField(value: String, onChange: (String) -> Unit, placeholder: String, isPassword: Boolean = false) {
-    BasicTextField(
-        value = value, onValueChange = onChange, singleLine = true,
-        textStyle = TextStyle(Color.White, 16.sp),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-        modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp)).padding(16.dp, 14.dp),
-        decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(alpha = 0.3f), 16.sp)); it() }
-    )
+    var isEditing by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    if (!isEditing) {
+        Surface(
+            onClick = { isEditing = true },
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color.White.copy(alpha = 0.06f),
+                focusedContainerColor = ZenithFocusContainerActive
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val display = if (isPassword && value.isNotEmpty()) "•".repeat(value.length) else value
+            Text(
+                if (value.isEmpty()) placeholder else display,
+                color = if (value.isEmpty()) Color.White.copy(alpha = 0.3f) else Color.White,
+                style = TextStyle(fontSize = 16.sp),
+                modifier = Modifier.padding(16.dp, 14.dp)
+            )
+        }
+    } else {
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+        BasicTextField(
+            value = value, onValueChange = onChange, singleLine = true,
+            textStyle = TextStyle(Color.White, 16.sp),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { isEditing = false; keyboardController?.hide() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                .padding(16.dp, 14.dp)
+                .onFocusChanged { if (!it.isFocused) { isEditing = false; keyboardController?.hide() } },
+            decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(alpha = 0.3f), 16.sp)); it() }
+        )
+    }
 }

@@ -1,6 +1,7 @@
 package com.platinum.ott.presentation.screens.sources
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,12 +14,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -183,11 +185,11 @@ private fun SourceCard(
             if (isRefreshing) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
-                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Обновить", tint = Color.White) }
+                TvIconButton(onClick = onRefresh, contentDescription = "Обновить", icon = Icons.Default.Refresh)
             }
 
             Box {
-                IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
+                TvIconButton(onClick = { showMenu = true }, contentDescription = "Действия", icon = Icons.Default.MoreVert)
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(text = { Text("Изменить название") }, onClick = { showMenu = false; onRename() })
                     DropdownMenuItem(text = { Text("Приоритет вверх") }, onClick = { showMenu = false; onMoveUp() }, enabled = !item.isFirst)
@@ -204,4 +206,32 @@ private fun statusColor(enabled: Boolean, lastRefreshStatus: String?): Color = w
     lastRefreshStatus == null -> ZenithWarning
     lastRefreshStatus == "ok" -> ZenithSuccess
     else -> ZenithError
+}
+
+/**
+ * Раньше "Обновить"/"⋮" были обычным androidx.compose.material3.IconButton —
+ * реальный репорт с TV: даже после того, как их стало можно достать
+ * фокусом (см. комментарий у SourceCard выше), САМ факт фокуса на кнопке
+ * не был виден на экране — у обычного IconButton indication по умолчанию
+ * это едва заметная рябь (ripple), рассчитанная на прикосновение пальцем
+ * с телефона в упор, а не на то, чтобы быть видной с дивана на TV. Тот же
+ * репорт отмечает, что это старая проблема и в других местах приложения,
+ * где подсветка формально есть, но слишком блёклая, чтобы её заметить —
+ * здесь чиним конкретно эти две кнопки явным фоном при фокусе, вместо
+ * системного ripple.
+ */
+@Composable
+private fun TvIconButton(onClick: () -> Unit, contentDescription: String, icon: ImageVector) {
+    var isFocused by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(if (isFocused) ZenithFocusContainerActive else Color.Transparent)
+            .onFocusChanged { isFocused = it.isFocused }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription, tint = Color.White)
+    }
 }

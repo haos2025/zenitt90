@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -11,10 +13,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -36,6 +42,16 @@ private val photoHeight = 110.dp
  * PROMPT_DETAIL_SCREEN_UPGRADE.md, п.4. Не показывается вызывающей
  * стороной вообще, если members пуст (см. DetailScreen.kt/PhoneDetailScreen.kt) —
  * сам компонент этого не решает, чтобы не плодить "пустой заголовок секции".
+ *
+ * Реальный репорт с TV: этот ряд лежит НИЖЕ кнопок "Смотреть"/"В избранное"
+ * внутри общего verticalScroll на DetailScreen.kt — D-pad вниз до него не
+ * докручивал вообще, потому что докрутка в Compose следует за фокусом, а
+ * тут раньше не было ни одного фокусируемого элемента (общий файл с
+ * телефоном, где это и не нужно — там скролл пальцем, фокус ни при чём).
+ * .focusable() ниже — БЕЗ onClick, специально: этот компонент осознанно не
+ * ведёт никуда (обычный актёр, не карточка фильма) — фокус нужен только
+ * чтобы D-pad было куда "прицепиться" и подтянуть весь ряд в область
+ * видимости, рамка при фокусе — единственная разница с телефоном.
  */
 @Composable
 fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
@@ -54,10 +70,14 @@ fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
                     }
                 }
+                var isFocused by remember { mutableStateOf(false) }
                 Column(modifier = Modifier.width(photoWidth)) {
                     Box(
                         modifier = Modifier.width(photoWidth).height(photoHeight)
                             .clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface)
+                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .onFocusChanged { isFocused = it.isFocused }
+                            .focusable()
                     ) {
                         if (request != null) {
                             AsyncImage(

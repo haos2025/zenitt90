@@ -130,7 +130,11 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                         }) {
                             Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
                         }
-                        OutlinedButton(onClick = onBackPressed) { Text("Назад") }
+                        // Кнопка "Назад" убрана (реальный репорт с TV) —
+                        // системная клавиша Back на пульте уже вызывает
+                        // onBackPressed через штатную навигацию, дублирующая
+                        // кнопка в общем ряду только путала фокус и не несла
+                        // отдельной функции.
                     }
                     // Карусель актёров (п.4) — не рисуется вовсе, если TMDB
                     // credits не вернул ничего (старая закэшированная запись
