@@ -31,12 +31,16 @@ import com.platinum.ott.presentation.screens.detail.DetailUiState
 import com.platinum.ott.presentation.screens.detail.DetailViewModel
 import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
+import android.widget.Toast
+import kotlinx.coroutines.launch
 
 @Composable
 fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // Как и на TV: диалог выбора папки только при добавлении, снятие с
     // избранного — сразу (PROMPT_FAVORITES_REDESIGN.md, п.2).
     var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
@@ -113,7 +117,11 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                     // только в едином меню на карточке в FavoritesScreen
                     // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
                     OutlinedButton(onClick = {
-                        if (state.isFavorite) viewModel.removeFavorite(movieId) else showAddFavoriteDialog = true
+                        when {
+                            state.isFavorite -> viewModel.removeFavorite(movieId)
+                            folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
+                            else -> showAddFavoriteDialog = true
+                        }
                     }) { Text(if (state.isFavorite) "♥" else "♡") }
                 }
                 // Карусель актёров (п.4) — как на TV, не рисуется, если пусто.
@@ -124,7 +132,13 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 // "Смотрите также" (п.5) — только когда TMDB нашёл совпадение.
                 if (state.recommendations.isNotEmpty()) {
                     Spacer(Modifier.height(ZenithDimens.paddingM))
-                    RecommendationsRow(state.recommendations)
+                    RecommendationsRow(state.recommendations, onItemClick = { rec ->
+                        scope.launch {
+                            val foundId = viewModel.findInCatalog(rec)
+                            if (foundId != null) navController.navigate("detail/$foundId")
+                            else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                        }
+                    })
                 }
                 if (showAddFavoriteDialog) {
                     MoveToFolderDialog(

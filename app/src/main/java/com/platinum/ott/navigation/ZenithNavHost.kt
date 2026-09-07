@@ -72,7 +72,10 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 // Эпизод сериала — см. DetailViewModel.load()/DetailScreen.kt.
                 // popUpTo убирает саму карточку-редирект из бэкстека — иначе
                 // "Назад" с экрана сериала вернул бы на пустой промежуточный шаг.
-                onNavigateToSeries = { seriesId -> navController.navigate("series/$seriesId") { popUpTo("detail/{movieId}") { inclusive = true } } }
+                onNavigateToSeries = { seriesId -> navController.navigate("series/$seriesId") { popUpTo("detail/{movieId}") { inclusive = true } } },
+                // "Смотрите также" — переход на найденную по названию карточку
+                // (см. DetailViewModel.findInCatalog()/RecommendationsRow.kt).
+                onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") }
             ) else PhoneDetailScreen(id, navController)
         }
         composable(

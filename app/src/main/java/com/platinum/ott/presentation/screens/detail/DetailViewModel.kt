@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FavoriteEntity
+import com.platinum.ott.domain.model.Recommendation
 import com.platinum.ott.domain.model.looksLikeAnime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,12 +20,30 @@ class DetailViewModel @Inject constructor(
     private val favorites = sessionGraph.favoritesUseCase
     private val history = sessionGraph.watchHistoryUseCase
     private val tmdb = sessionGraph.tmdbRepository
+    private val searchMovies = sessionGraph.searchMoviesUseCase
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val uiState: StateFlow<DetailUiState> = _uiState
     // Для пикера папки при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md,
     // п.2) — DetailScreen/PhoneDetailScreen показывают MoveToFolderDialog
     // на основе этого списка перед вызовом addFavorite().
     val folders = sessionGraph.favoritesUseCase.getAllFolders()
+
+    // Раньше карточки в "Смотрите также" были кликабельны только визуально —
+    // нажатие ничего не делало (реальный репорт с TV). Recommendation — это
+    // запись из TMDB, необязательно присутствующая в собственном каталоге
+    // приложения (backend/плейлист) — прямого movieId у нас нет, поэтому
+    // ищем по названию через тот же SearchMoviesUseCase, что и обычный
+    // поиск (ищет по backend-каталогу — семантически верная область для
+    // сопоставления с TMDB-рекомендацией, в отличие от личного M3U/Xtream-
+    // плейлиста пользователя, где такого совпадения обычно и не может быть).
+    // Возвращает null, если совпадение не нашлось или сеть недоступна —
+    // вызывающая сторона (DetailScreen.kt/PhoneDetailScreen.kt) сама решает,
+    // как сообщить об этом пользователю.
+    suspend fun findInCatalog(recommendation: Recommendation): String? {
+        val results = searchMovies.execute(recommendation.title).getOrNull() ?: return null
+        return results.firstOrNull { it.year == recommendation.year }?.id
+            ?: results.firstOrNull()?.id
+    }
 
     fun load(movieId: String) {
         viewModelScope.launch {

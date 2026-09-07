@@ -264,7 +264,25 @@ class PlayerViewModel @Inject constructor(
             _uiState.value = PlayerUiState.Loading
             try {
                 val variants = getPlayableUrl.execute(movieId)
-                if (variants.isEmpty()) { _uiState.value = PlayerUiState.Error("Нет потоков"); return@launch }
+                if (variants.isEmpty()) {
+                    // Раньше — голое "Нет потоков", без единой зацепки, какой
+                    // из трёх независимых путей получения ссылки
+                    // (GetPlayableUrlUseCase: yt_/ia_ — Zenith backend + гонка
+                    // плагинов; m3u_/xt_ — собственный плейлист; всё
+                    // остальное — ScriptProvider-парсер) вообще сработал и
+                    // почему вернул пусто — там ТРИ разные причины пустого
+                    // списка с разной диагностикой, а сообщение не говорило,
+                    // какая именно. Префикс movieId виден уже здесь и хотя
+                    // бы сужает круг без похода в logcat.
+                    val prefix = movieId.substringBefore('_', missingDelimiterValue = "")
+                    val reason = when (prefix) {
+                        "m3u", "xt" -> "нет ссылки в собственном плейлисте (не найден элемент или пуст streamUrl — источник стоит обновить в Настройках)"
+                        "yt", "ia" -> "backend и подключённые плагины не нашли поток"
+                        else -> "источник не вернул поток"
+                    }
+                    _uiState.value = PlayerUiState.Error("Нет потоков: $reason")
+                    return@launch
+                }
 
                 // Название/постер нужны для записи в историю (WatchHistoryEntity
                 // хранит их денормализованно, как и FavoriteEntity) — раньше

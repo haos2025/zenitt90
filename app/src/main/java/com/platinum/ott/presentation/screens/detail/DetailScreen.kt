@@ -2,6 +2,8 @@ package com.platinum.ott.presentation.screens.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
@@ -15,6 +17,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
@@ -30,15 +35,18 @@ import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
+fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // Пикер папки при добавлении в избранное (PROMPT_FAVORITES_REDESIGN.md, п.2) —
     // показывается только на пути "не в избранном" -> "в избранном", снятие
     // с избранного происходит сразу, без диалога. remember(movieId) — чтобы
     // не унаследовать открытый диалог при переходе на другой фильм.
     var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
+    val buttonRowBringIntoView = remember { BringIntoViewRequester() }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -118,15 +126,42 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                         meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
                         meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+                        // Реальный репорт с TV: "вверх/вниз двигает фокус
+                        // только внутри области актёров/похожих фильмов, а
+                        // весь остальной экран не докручивается" — тот же
+                        // класс проблемы, что и в CastRow.kt/
+                        // RecommendationsRow.kt (см. подробный разбор там):
+                        // явный bringIntoView() гарантирует, что при
+                        // возврате фокуса СЮДА (снизу вверх) экран тоже
+                        // докрутится, а не полагается на то, сработает ли
+                        // это неявно.
+                        modifier = Modifier
+                            .bringIntoViewRequester(buttonRowBringIntoView)
+                            .onFocusChanged { if (it.hasFocus) scope.launch { buttonRowBringIntoView.bringIntoView() } }
+                    ) {
                         Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
                         // Добавление показывает выбор папки, снятие — сразу,
                         // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
                         // Отметка "аниме" на этом экране убрана — управление
                         // ей теперь только в едином меню на карточке в
                         // FavoritesScreen (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                        // Раньше диалог выбора папки открывался всегда, даже
+                        // когда у пользователя ещё нет ни одной папки (реальный
+                        // репорт: "зачем спрашивать про папку, если создавать
+                        // ещё нечего") — диалог в таком виде показывал только
+                        // пункт "Без папки", то есть выбора по факту не было,
+                        // просто лишний шаг. Пока папок нет — сохраняем сразу
+                        // без папки; как только хотя бы одна папка создана
+                        // (через FavoritesScreen), при следующем добавлении
+                        // снова спрашиваем, тут уже есть смысл выбирать.
                         OutlinedButton(onClick = {
-                            if (state.isFavorite) viewModel.removeFavorite(movieId) else showAddFavoriteDialog = true
+                            when {
+                                state.isFavorite -> viewModel.removeFavorite(movieId)
+                                folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
+                                else -> showAddFavoriteDialog = true
+                            }
                         }) {
                             Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
                         }
@@ -146,7 +181,20 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     // TMDB нашёл совпадение (см. DetailViewModel.load()); для
                     // собственного M3U/Xtream-плейлиста список всегда пуст.
                     if (state.recommendations.isNotEmpty()) {
-                        RecommendationsRow(state.recommendations)
+                        // Реальный репорт с TV: нажатие на карточку раньше
+                        // ничего не делало. Recommendation — запись TMDB, не
+                        // обязательно из собственного каталога — сначала
+                        // ищем совпадение (DetailViewModel.findInCatalog(),
+                        // тот же SearchMoviesUseCase, что и обычный поиск),
+                        // и либо переходим, либо явно говорим, что не нашли,
+                        // а не молчим как раньше.
+                        RecommendationsRow(state.recommendations, onItemClick = { rec ->
+                            scope.launch {
+                                val foundId = viewModel.findInCatalog(rec)
+                                if (foundId != null) onNavigateToMovie(foundId)
+                                else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                            }
+                        })
                     }
                 }
                 if (showAddFavoriteDialog) {
