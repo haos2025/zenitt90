@@ -38,7 +38,14 @@ class SeriesListViewModel @Inject constructor(
             try {
                 _uiState.value = SeriesListUiState.Success(sessionGraph.playlistRepository.getSeriesList())
             } catch (e: Exception) {
-                _uiState.value = SeriesListUiState.Error(e.message ?: "Не удалось загрузить список сериалов")
+                // Раньше — голое e.message ("HTTP 404" без единой зацепки,
+                // откуда). getSeriesList()/getEpisodesForSeries() — чистый
+                // Room-запрос, сети там физически нет, поэтому по коду не
+                // нашлось, где такое исключение вообще могло бы взяться —
+                // добавляю имя класса исключения и место, где оно
+                // выброшено (первая строка стека), прямо в текст на
+                // экране, чтобы одного скриншота хватило вместо logcat.
+                _uiState.value = SeriesListUiState.Error("${e::class.simpleName}: ${e.message ?: "нет сообщения"}\nв ${e.stackTrace.firstOrNull()}")
             }
         }
     }
@@ -132,7 +139,9 @@ class SeriesEpisodesViewModel @Inject constructor(
                     emptyMap()
                 }
             } catch (e: Exception) {
-                _uiState.value = SeriesEpisodesUiState.Error(e.message ?: "Не удалось загрузить эпизоды")
+                // См. комментарий у аналогичного catch в SeriesListViewModel
+                // выше — тот же приём диагностики прямо в UI.
+                _uiState.value = SeriesEpisodesUiState.Error("${e::class.simpleName}: ${e.message ?: "нет сообщения"}\nв ${e.stackTrace.firstOrNull()}")
             }
         }
     }

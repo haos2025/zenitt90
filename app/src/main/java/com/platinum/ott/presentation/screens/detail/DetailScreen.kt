@@ -2,10 +2,7 @@ package com.platinum.ott.presentation.screens.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.tv.foundation.lazy.list.TvLazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,7 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
-import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,7 +42,6 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
     // с избранного происходит сразу, без диалога. remember(movieId) — чтобы
     // не унаследовать открытый диалог при переходе на другой фильм.
     var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
-    val buttonRowBringIntoView = remember { BringIntoViewRequester() }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -99,102 +94,114 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background.copy(alpha = 0.75f), Color.Transparent))))
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background), startY = 300f)))
                 }
-                // verticalScroll — раньше содержимое просто обрезалось снизу
-                // без возможности докрутить (см. PROMPT_DETAIL_SCREEN_UPGRADE.md,
-                // п.2): при длинном описании кнопки "Смотреть"/"В избранное"
-                // могло вытолкнуть за нижний край экрана. Тот же паттерн, что
-                // уже проверен на TV в SettingsScreen.kt (обычный Column +
-                // verticalScroll с tv-material3 Button внутри, фокус D-pad
-                // работает) — TvLazyColumn не понадобился, тут нет своего
-                // отдельного набора фокусируемых строк, как в CycleSetting,
-                // просто текст и ряд кнопок.
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                    Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)
-                    state.metadata?.let { meta ->
-                        // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1.
-                        // Поля year/duration есть на Movie и раньше нигде не
-                        // выводились ни на TV, ни на телефоне. duration может
-                        // быть пустой строкой по умолчанию у части источников —
-                        // пропускаем пустые части, чтобы не показать "·" без
-                        // содержимого по обе стороны.
-                        val metaLine = listOfNotNull(
-                            state.movie.year.takeIf { it > 0 }?.toString(),
-                            state.movie.duration.takeIf { it.isNotBlank() },
-                            meta.genres?.takeIf { it.isNotBlank() }
-                        ).joinToString(" · ")
-                        if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
-                        meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
-                        meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
-                        // Реальный репорт с TV: "вверх/вниз двигает фокус
-                        // только внутри области актёров/похожих фильмов, а
-                        // весь остальной экран не докручивается" — тот же
-                        // класс проблемы, что и в CastRow.kt/
-                        // RecommendationsRow.kt (см. подробный разбор там):
-                        // явный bringIntoView() гарантирует, что при
-                        // возврате фокуса СЮДА (снизу вверх) экран тоже
-                        // докрутится, а не полагается на то, сработает ли
-                        // это неявно.
-                        modifier = Modifier
-                            .bringIntoViewRequester(buttonRowBringIntoView)
-                            .onFocusChanged { if (it.hasFocus) scope.launch { buttonRowBringIntoView.bringIntoView() } }
-                    ) {
-                        Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
-                        // Добавление показывает выбор папки, снятие — сразу,
-                        // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
-                        // Отметка "аниме" на этом экране убрана — управление
-                        // ей теперь только в едином меню на карточке в
-                        // FavoritesScreen (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                        // Раньше диалог выбора папки открывался всегда, даже
-                        // когда у пользователя ещё нет ни одной папки (реальный
-                        // репорт: "зачем спрашивать про папку, если создавать
-                        // ещё нечего") — диалог в таком виде показывал только
-                        // пункт "Без папки", то есть выбора по факту не было,
-                        // просто лишний шаг. Пока папок нет — сохраняем сразу
-                        // без папки; как только хотя бы одна папка создана
-                        // (через FavoritesScreen), при следующем добавлении
-                        // снова спрашиваем, тут уже есть смысл выбирать.
-                        OutlinedButton(onClick = {
-                            when {
-                                state.isFavorite -> viewModel.removeFavorite(movieId)
-                                folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
-                                else -> showAddFavoriteDialog = true
+                // Раньше это был обычный Column + verticalScroll — при
+                // коротком описании всё умещалось на экране, и вверх/вниз
+                // "работало" просто потому, что скроллить было некуда.
+                // Реальный репорт с TV: при ДЛИННОМ описании, когда контент
+                // реально не помещается и требует прокрутки — вверх/вниз
+                // переставало двигать фокус вообще. Причина: обычный
+                // Modifier.verticalScroll() (не Lazy) не имеет НАТИВНОЙ
+                // интеграции с D-pad-фокусом для докрутки к ещё невидимому
+                // элементу — BringIntoViewRequester (моя предыдущая попытка
+                // чинить это) отрабатывает уже ПОСЛЕ того, как фокус
+                // переместился, а сама стандартная направленная
+                // фокус-навигация Compose не всегда способна вообще
+                // "дотянуться" до элемента, полностью прокрученного за
+                // пределы видимой области. TvLazyColumn (androidx.tv.foundation,
+                // уже была в зависимостях проекта, просто нигде не
+                // использовалась) — специально созданный под TV аналог
+                // LazyColumn с прокруткой, нативно завязанной на
+                // D-pad-фокус именно для этого случая. BringIntoViewRequester
+                // на ряде кнопок и объекты в CastRow/RecommendationsRow
+                // (добавленные раньше) больше не нужны при переходе на
+                // TvLazyColumn — сама докрутка теперь на её стороне,
+                // оставлены только рамки при фокусе.
+                //
+                // Не проверено на реальной сборке — это первое использование
+                // TvLazyColumn во всём проекте, за импорт/API ручаться не
+                // могу так же уверенно, как за уже обкатанные компоненты
+                // tv-material3 в остальном коде.
+                TvLazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                            Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)
+                            state.metadata?.let { meta ->
+                                // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1.
+                                // Поля year/duration есть на Movie и раньше нигде не
+                                // выводились ни на TV, ни на телефоне. duration может
+                                // быть пустой строкой по умолчанию у части источников —
+                                // пропускаем пустые части, чтобы не показать "·" без
+                                // содержимого по обе стороны.
+                                val metaLine = listOfNotNull(
+                                    state.movie.year.takeIf { it > 0 }?.toString(),
+                                    state.movie.duration.takeIf { it.isNotBlank() },
+                                    meta.genres?.takeIf { it.isNotBlank() }
+                                ).joinToString(" · ")
+                                if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
+                                meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
+                                meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                             }
-                        }) {
-                            Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
                         }
-                        // Кнопка "Назад" убрана (реальный репорт с TV) —
-                        // системная клавиша Back на пульте уже вызывает
-                        // onBackPressed через штатную навигацию, дублирующая
-                        // кнопка в общем ряду только путала фокус и не несла
-                        // отдельной функции.
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
+                            Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
+                            // Добавление показывает выбор папки, снятие — сразу,
+                            // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
+                            // Отметка "аниме" на этом экране убрана — управление
+                            // ей теперь только в едином меню на карточке в
+                            // FavoritesScreen (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
+                            // Раньше диалог выбора папки открывался всегда, даже
+                            // когда у пользователя ещё нет ни одной папки (реальный
+                            // репорт: "зачем спрашивать про папку, если создавать
+                            // ещё нечего") — диалог в таком виде показывал только
+                            // пункт "Без папки", то есть выбора по факту не было,
+                            // просто лишний шаг. Пока папок нет — сохраняем сразу
+                            // без папки; как только хотя бы одна папка создана
+                            // (через FavoritesScreen), при следующем добавлении
+                            // снова спрашиваем, тут уже есть смысл выбирать.
+                            OutlinedButton(onClick = {
+                                when {
+                                    state.isFavorite -> viewModel.removeFavorite(movieId)
+                                    folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
+                                    else -> showAddFavoriteDialog = true
+                                }
+                            }) {
+                                Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
+                            }
+                            // Кнопка "Назад" убрана (реальный репорт с TV) —
+                            // системная клавиша Back на пульте уже вызывает
+                            // onBackPressed через штатную навигацию, дублирующая
+                            // кнопка в общем ряду только путала фокус и не несла
+                            // отдельной функции.
+                        }
                     }
                     // Карусель актёров (п.4) — не рисуется вовсе, если TMDB
                     // credits не вернул ничего (старая закэшированная запись
                     // без castJson, ошибка сети, или у фильма правда нет cast).
                     if (state.metadata?.cast?.isNotEmpty() == true) {
-                        CastRow(state.metadata.cast)
+                        item { CastRow(state.metadata.cast) }
                     }
                     // "Смотрите также" (п.5) — только для контента, у которого
                     // TMDB нашёл совпадение (см. DetailViewModel.load()); для
                     // собственного M3U/Xtream-плейлиста список всегда пуст.
                     if (state.recommendations.isNotEmpty()) {
-                        // Реальный репорт с TV: нажатие на карточку раньше
-                        // ничего не делало. Recommendation — запись TMDB, не
-                        // обязательно из собственного каталога — сначала
-                        // ищем совпадение (DetailViewModel.findInCatalog(),
-                        // тот же SearchMoviesUseCase, что и обычный поиск),
-                        // и либо переходим, либо явно говорим, что не нашли,
-                        // а не молчим как раньше.
-                        RecommendationsRow(state.recommendations, onItemClick = { rec ->
-                            scope.launch {
-                                val foundId = viewModel.findInCatalog(rec)
-                                if (foundId != null) onNavigateToMovie(foundId)
-                                else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
-                            }
-                        })
+                        item {
+                            // Реальный репорт с TV: нажатие на карточку раньше
+                            // ничего не делало. Recommendation — запись TMDB, не
+                            // обязательно из собственного каталога — сначала
+                            // ищем совпадение (DetailViewModel.findInCatalog(),
+                            // тот же SearchMoviesUseCase, что и обычный поиск),
+                            // и либо переходим, либо явно говорим, что не нашли,
+                            // а не молчим как раньше.
+                            RecommendationsRow(state.recommendations, onItemClick = { rec ->
+                                scope.launch {
+                                    val foundId = viewModel.findInCatalog(rec)
+                                    if (foundId != null) onNavigateToMovie(foundId)
+                                    else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                        }
                     }
                 }
                 if (showAddFavoriteDialog) {

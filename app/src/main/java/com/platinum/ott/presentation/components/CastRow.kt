@@ -6,8 +6,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -18,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +33,6 @@ import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.CastMember
-import kotlinx.coroutines.launch
 
 private val photoWidth = 84.dp
 private val photoHeight = 110.dp
@@ -54,8 +50,12 @@ private val photoHeight = 110.dp
  * телефоном, где это и не нужно — там скролл пальцем, фокус ни при чём).
  * .focusable() ниже — БЕЗ onClick, специально: этот компонент осознанно не
  * ведёт никуда (обычный актёр, не карточка фильма) — фокус нужен только
- * чтобы D-pad было куда "прицепиться" и подтянуть весь ряд в область
- * видимости, рамка при фокусе — единственная разница с телефоном.
+ * чтобы D-pad было куда "прицепиться", рамка при фокусе — единственная
+ * разница с телефоном. Докрутка ВСЕГО экрана к этому ряду (когда он
+ * изначально не виден) — на стороне DetailScreen.kt (TvLazyColumn), не
+ * здесь; более ранняя версия этого файла пыталась решить это через
+ * BringIntoViewRequester прямо тут — не помогло (см. разбор в
+ * DetailScreen.kt), убрано за ненадобностью при переходе на TvLazyColumn.
  */
 @Composable
 fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
@@ -75,36 +75,12 @@ fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
                     }
                 }
                 var isFocused by remember { mutableStateOf(false) }
-                val bringIntoViewRequester = remember { BringIntoViewRequester() }
-                val scope = rememberCoroutineScope()
                 Column(modifier = Modifier.width(photoWidth)) {
                     Box(
                         modifier = Modifier.width(photoWidth).height(photoHeight)
                             .clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface)
                             .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-                            .bringIntoViewRequester(bringIntoViewRequester)
-                            .onFocusChanged {
-                                isFocused = it.isFocused
-                                // Реальный репорт с TV: "вверх/вниз двигает
-                                // фокус только внутри области актёров/похожих
-                                // фильмов, а весь остальной экран (заголовок,
-                                // кнопки) не докручивается" — внешний
-                                // Column.verticalScroll() в DetailScreen.kt
-                                // сам по себе умеет докручивать к
-                                // сфокусированному потомку, но НЕ надёжно
-                                // сквозь вложенный горизонтальный LazyRow
-                                // (два независимых скролл-контейнера на
-                                // пересекающихся осях — известная зыбкая
-                                // зона в Compose). requestFocus сюда не
-                                // добавляет ничего нового — bringIntoView()
-                                // явно просит ВСЕ scroll-контейнеры-предки
-                                // (внешний вертикальный ряд включительно)
-                                // подвинуться так, чтобы этот конкретный Box
-                                // стал виден, не полагаясь на то, сработает
-                                // ли автоматическое поведение через границу
-                                // между двумя осями скролла.
-                                if (it.isFocused) scope.launch { bringIntoViewRequester.bringIntoView() }
-                            }
+                            .onFocusChanged { isFocused = it.isFocused }
                             .focusable()
                     ) {
                         if (request != null) {
