@@ -103,7 +103,10 @@ fun PlaybackMenuOverlay(
                 Surface(
                     onClick = onDismiss,
                     shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
-                    colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = ZenithFocusContainerActive)
+                    colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = ZenithFocusContainerActive),
+                    // См. комментарий у MenuRow ниже — тот же фикс оверфлоу
+                    // подсветки за скруглённый край узкой панели (320dp).
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
                 ) { Icon(Icons.Default.Close, "Закрыть", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(8.dp).size(18.dp)) }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
@@ -176,7 +179,15 @@ private fun MenuTabButton(label: String, selected: Boolean, modifier: Modifier =
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
             focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive
-        )
+        ),
+        // Реальный аудит пульта (тот же класс бага, что уже чинили в
+        // SettingsScreen.kt/SourcesScreen.kt): по умолчанию у tv-material3
+        // Surface фокус ещё и увеличивает сам компонент (~10%, "pop") —
+        // рассчитано на карточки с гуттерами вокруг (постеры), а не на
+        // сегментированные вкладки-пилюли впритык друг к другу и к краю
+        // узкой 320dp-панели. Отключаем масштаб, оставляем только заливку
+        // фона как индикатор — тот же фикс, что и у MenuRow ниже.
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) { Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) }
 }
 
@@ -195,7 +206,13 @@ private fun MenuRow(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,
             focusedContainerColor = ZenithFocusContainerActive
-        )
+        ),
+        // Реальный аудит пульта: строка на всю ширину узкой (320dp) панели
+        // почти впритык к её скруглённой рамке — стандартный "pop"-эффект
+        // tv-material3 Surface при фокусе (~10% увеличение) вылезал бы за
+        // эту рамку, тот же класс бага, что уже чинили в SettingsScreen.kt/
+        // SourcesScreen.kt для похожих полноширинных строк списка.
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),

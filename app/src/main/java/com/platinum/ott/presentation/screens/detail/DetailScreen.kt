@@ -2,7 +2,7 @@ package com.platinum.ott.presentation.screens.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,21 +107,20 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // переместился, а сама стандартная направленная
                 // фокус-навигация Compose не всегда способна вообще
                 // "дотянуться" до элемента, полностью прокрученного за
-                // пределы видимой области. TvLazyColumn (androidx.tv.foundation,
-                // уже была в зависимостях проекта, просто нигде не
-                // использовалась) — специально созданный под TV аналог
-                // LazyColumn с прокруткой, нативно завязанной на
-                // D-pad-фокус именно для этого случая. BringIntoViewRequester
-                // на ряде кнопок и объекты в CastRow/RecommendationsRow
-                // (добавленные раньше) больше не нужны при переходе на
-                // TvLazyColumn — сама докрутка теперь на её стороне,
-                // оставлены только рамки при фокусе.
+                // пределы видимой области.
                 //
-                // Не проверено на реальной сборке — это первое использование
-                // TvLazyColumn во всём проекте, за импорт/API ручаться не
-                // могу так же уверенно, как за уже обкатанные компоненты
-                // tv-material3 в остальном коде.
-                TvLazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                // Первая попытка чинить это была через TvLazyColumn
+                // (androidx.tv.foundation) — сборка упала: "Unresolved
+                // reference 'TvLazyColumn'". Оказалось, TvLazyColumn/TvLazyRow
+                // были ПОЛНОСТЬЮ удалены из tv-foundation ещё до стабильного
+                // релиза 1.0.0 (который как раз и стоит в проекте) —
+                // официальная миграция Google: использовать обычный
+                // LazyColumn из стандартного Compose Foundation, в него
+                // перенесли ту самую логику докрутки под D-pad-фокус, ради
+                // которой раньше существовал отдельный TV-вариант. Обычный
+                // LazyColumn ниже — это и есть официально рекомендованная
+                // замена, не временный компромисс.
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                             Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)

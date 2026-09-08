@@ -276,7 +276,13 @@ private fun MenuIconButton(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
             focusedContainerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.38f) else ZenithFocusContainerActive
-        )
+        ),
+        // Реальный аудит пульта (тот же класс бага, что в SettingsScreen.kt/
+        // SourcesScreen.kt/PlaybackMenuOverlay.kt выше): иконки стоят
+        // плотно в ряд у самого края капсулы — стандартный "pop"-эффект
+        // Surface при фокусе (~10%) может задевать скруглённую рамку
+        // капсулы или соседнюю иконку. Отключаем, оставляем только заливку.
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
         Icon(
             icon, contentDescription,
