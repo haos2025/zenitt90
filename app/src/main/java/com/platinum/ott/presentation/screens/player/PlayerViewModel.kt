@@ -274,10 +274,19 @@ class PlayerViewModel @Inject constructor(
                     // списка с разной диагностикой, а сообщение не говорило,
                     // какая именно. Префикс movieId виден уже здесь и хотя
                     // бы сужает круг без похода в logcat.
-                    val prefix = movieId.substringBefore('_', missingDelimiterValue = "")
-                    val reason = when (prefix) {
-                        "m3u", "xt" -> "нет ссылки в собственном плейлисте (не найден элемент или пуст streamUrl — источник стоит обновить в Настройках)"
-                        "yt", "ia" -> "backend и подключённые плагины не нашли поток"
+                    // См. подробный разбор в GetPlayableUrlUseCase.kt —
+                    // тот же баг с определением типа по movieId был и тут,
+                    // просто для текста, а не для маршрутизации: реальный id
+                    // — "<UUID источника>_m3u_N", а не голое "m3u_N",
+                    // substringBefore('_') возвращал весь UUID и всегда
+                    // попадал в этот else, даже когда причина была другой.
+                    val reason = when {
+                        movieId.startsWith("m3u_") || movieId.contains("_m3u_") ||
+                            movieId.startsWith("xt_") || movieId.contains("_xt_") ->
+                            "нет ссылки в собственном плейлисте (не найден элемент или пуст streamUrl — источник стоит обновить в Настройках)"
+                        movieId.startsWith("yt_") || movieId.contains("_yt_") ||
+                            movieId.startsWith("ia_") || movieId.contains("_ia_") ->
+                            "backend и подключённые плагины не нашли поток"
                         else -> "источник не вернул поток"
                     }
                     // Реальный репорт: сообщение показывало ветку "источник

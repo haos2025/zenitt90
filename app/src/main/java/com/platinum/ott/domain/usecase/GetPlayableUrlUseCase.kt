@@ -63,10 +63,27 @@ class GetPlayableUrlUseCase(
     private val gson = Gson()
 
     suspend fun execute(movieId: String): List<StreamVariant> = withContext(Dispatchers.IO) {
-        val prefix = movieId.substringBefore('_', missingDelimiterValue = "")
+        // Раньше — movieId.substringBefore('_') — работало, пока id был
+        // буквально "m3u_N"/"xt_N". PlaylistSourceRepository.kt (мульти-
+        // источники, "Источники") давно переписывает готовый id парсера в
+        // "<UUID источника>_m3u_N" — чтобы не было коллизий между
+        // несколькими M3U/Xtream-источниками одновременно. UUID сам состоит
+        // из дефисов, не подчёркиваний, поэтому substringBefore('_') на
+        // таком id возвращал ВЕСЬ UUID целиком — не совпадал ни с одним
+        // известным префиксом, и код проваливался в третью ветку
+        // (ScriptProvider-парсер), которая для собственного плейлиста
+        // всегда возвращает пусто. Реальный репорт: "Нет потоков" на
+        // каждом элементе собственного M3U/Xtream-плейлиста, каким бы
+        // рабочим он ни был на самом деле — раз GetPlayableUrlUseCase в
+        // принципе не мог дойти до playlistRepository.getStreamInfo().
+        // Ищем маркер типа как подстроку, а не только как первый сегмент —
+        // покрывает и старый голый формат (на случай ещё не мигрированных
+        // записей), и новый с UUID источника впереди.
+        val isPlaylist = PLAYLIST_PREFIXES.any { movieId.startsWith("${it}_") || movieId.contains("_${it}_") }
+        val isBackend = ZENITH_BACKEND_PREFIXES.any { movieId.startsWith("${it}_") || movieId.contains("_${it}_") }
         when {
-            prefix in ZENITH_BACKEND_PREFIXES -> executeWithPluginRace(movieId)
-            prefix in PLAYLIST_PREFIXES -> {
+            isBackend -> executeWithPluginRace(movieId)
+            isPlaylist -> {
                 val info = playlistRepository.getStreamInfo(movieId)
                 if (info != null) listOf(StreamVariant("Оригинал", info.url, source = "Мой плейлист", headers = info.headers)) else emptyList()
             }
