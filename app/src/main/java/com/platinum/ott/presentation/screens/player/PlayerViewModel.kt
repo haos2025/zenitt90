@@ -178,7 +178,14 @@ class PlayerViewModel @Inject constructor(
                     playVariant(nextVariant, 0L)
                     _uiState.value = current.copy(currentVariant = nextVariant)
                 } else {
-                    _uiState.value = PlayerUiState.Error(describePlaybackError(error))
+                    // См. комментарий у describePlaybackError — добавляю
+                    // сюда же movieId и саму пытавшуюся открыться ссылку,
+                    // чтобы одним скриншотом можно было сравнить, что
+                    // именно резолвится через разные экраны входа (лента
+                    // против "Сериалы") для формально одного и того же
+                    // контента.
+                    val urlInfo = current?.currentVariant?.url?.let { " | url: $it" } ?: ""
+                    _uiState.value = PlayerUiState.Error("${describePlaybackError(error)} (id: $currentMovieId)$urlInfo")
                 }
             }
 
