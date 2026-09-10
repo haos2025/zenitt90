@@ -80,8 +80,20 @@ class MovieRepositoryImpl(
      * плеера — ни один фикс плеера не мог сработать, до него не добирались.
      */
     override suspend fun getMovieById(id: String): Result<Movie> = withContext(Dispatchers.IO) {
-        val prefix = id.substringBefore('_', missingDelimiterValue = "")
-        if (prefix == "m3u" || prefix == "xt") {
+        // Тот же баг, что уже нашёлся и починен в GetPlayableUrlUseCase.kt:
+        // id собственного плейлиста теперь имеет вид "<UUID источника>_m3u_N"
+        // (PlaylistSourceRepository.kt, чтобы несколько источников не
+        // пересекались по id) — substringBefore('_') на UUID (там только
+        // дефисы, не подчёркивания) возвращает весь UUID целиком, не
+        // совпадает с "m3u"/"xt", и код уходил в API реального бэкенда с
+        // чужим локальным id — тот закономерно отвечает настоящим HTTP 404.
+        // Реальный репорт: открытие карточки с главной ленты (идёт через
+        // getMovieById → возможный редирект на сериал) кидало голый "HTTP 404"
+        // ещё до того, как редирект на сериал вообще успевал сработать —
+        // тогда как открытие того же сериала через кнопку "Сериалы" этот
+        // метод не вызывает вовсе (там прямой Room-запрос), поэтому работало.
+        val isPlaylist = id.startsWith("m3u_") || id.contains("_m3u_") || id.startsWith("xt_") || id.contains("_xt_")
+        if (isPlaylist) {
             val fromPlaylist = try { playlistRepository.getMovieById(id) } catch (_: Exception) { null }
             return@withContext fromPlaylist?.let { Result.success(it) }
                 ?: Result.failure(Exception("Канал не найден в плейлисте"))

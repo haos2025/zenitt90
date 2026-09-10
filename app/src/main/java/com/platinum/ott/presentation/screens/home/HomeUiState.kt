@@ -48,5 +48,11 @@ fun Movie.matchesFilter(filter: HomeContentFilter): Boolean = when (filter) {
 // разводит источники в GetPlayableUrlUseCase.PLAYLIST_PREFIXES (private там,
 // дублируем здесь по той же причине, что и tmdbEligiblePrefixes в
 // HomeViewModel — вынести в общее место при следующей структурной правке).
+//
+// Тот же баг, что уже нашёлся и починен в GetPlayableUrlUseCase.kt/
+// MovieRepositoryImpl.kt: id собственного плейлиста теперь имеет вид
+// "<UUID источника>_m3u_N" — substringBefore('_') на UUID возвращал сам
+// UUID, не совпадал с "m3u"/"xt", и плейлист-контент переставал получать
+// метку "Мой плейлист". Проверяем подстрокой, а не только первым сегментом.
 val Movie.isPlaylistSourced: Boolean
-    get() = id.substringBefore('_', missingDelimiterValue = "") in setOf("m3u", "xt")
+    get() = id.startsWith("m3u_") || id.contains("_m3u_") || id.startsWith("xt_") || id.contains("_xt_")

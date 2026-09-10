@@ -73,11 +73,14 @@ class HomeViewModel @Inject constructor(
     // Плейлист (m3u_/xt_) — собственные каналы/фильмы пользователя, TMDB-
     // поиск по их названиям (часто это имена IPTV-каналов, не фильмов) дал
     // бы случайные неверные совпадения и тратил бы запросы впустую.
-    private val tmdbEligiblePrefixes = setOf("yt", "ia")
 
     fun resolvePosterIfNeeded(movie: Movie, targetWidthPx: Int) {
-        val prefix = movie.id.substringBefore('_', missingDelimiterValue = "")
-        if (prefix !in tmdbEligiblePrefixes) return
+        // Тот же класс бага, что в GetPlayableUrlUseCase.kt/MovieRepositoryImpl.kt —
+        // здесь на практике безвреден (UUID-префикс плейлиста и так не
+        // совпадает с "yt"/"ia", проверка случайно оставалась верной), но
+        // чиню на ту же подстроку для единообразия и на будущее.
+        val isEligible = movie.id.startsWith("yt_") || movie.id.contains("_yt_") || movie.id.startsWith("ia_") || movie.id.contains("_ia_")
+        if (!isEligible) return
         if (!posterAttempted.add(movie.id)) return // уже запрашивали (успех/неудача) — не повторяем на каждую рекомпозицию
         viewModelScope.launch {
             val meta = try { tmdbRepository.getMetadata(movie.id, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
