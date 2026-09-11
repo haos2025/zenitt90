@@ -73,18 +73,16 @@ class SyncRepositoryImpl(
                         // если бэкенд отбрасывает/схлопывает такие "эхо"-записи
                         // по contentId без более свежего реального изменения.
                         watchedAt = if (dto.updatedAt > 0) dto.updatedAt else System.currentTimeMillis(),
-                        completed = dto.completed
-                        // seriesId сюда сознательно не попадает — WatchHistoryDto
-                        // (SyncDtos.kt) вообще не содержит этого поля, бэкенд
-                        // про него не знает. Это отдельная задача, требующая
-                        // изменения и на бэкенде (недоступен для правки
-                        // отсюда — отдельный репозиторий zenith-backend), и
-                        // здесь. Практическое следствие прямо сейчас: любая
-                        // синхронизированная серия теряет группировку в
-                        // "Продолжить просмотр" (WatchHistoryUseCase.getRecentDeduped
-                        // схлопывает по seriesId) и показывается отдельной
-                        // строкой на устройстве-получателе, пока оно само не
-                        // досмотрит эту серию заново.
+                        completed = dto.completed,
+                        // Раньше сюда сознательно не попадал seriesId — DTO
+                        // не содержал этого поля, и бэкенд про него не знал.
+                        // Теперь оба конца прокинуты (SyncDtos.kt +
+                        // zenith-backend/app/models/sync_schemas.py), поэтому
+                        // сериал, просмотренный на другом устройстве, сразу
+                        // схлопывается в "Продолжить [Название]" через
+                        // WatchHistoryUseCase.getRecentDeduped(), а не ждёт,
+                        // пока это устройство само досмотрит серию заново.
+                        seriesId = dto.seriesId
                     )
                 )
             }
@@ -103,7 +101,8 @@ class SyncRepositoryImpl(
                     WatchHistoryDto(
                         contentId = it.contentId, title = it.title, poster = it.poster,
                         positionMs = it.positionMs, durationMs = it.durationMs,
-                        completed = it.completed, updatedAt = it.watchedAt
+                        completed = it.completed, updatedAt = it.watchedAt,
+                        seriesId = it.seriesId
                     )
                 },
                 clientTimestamp = System.currentTimeMillis()
