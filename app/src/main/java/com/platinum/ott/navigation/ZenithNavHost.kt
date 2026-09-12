@@ -30,6 +30,7 @@ import com.platinum.ott.presentation.phone.screens.PhoneHistoryScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSettingsScreen
 import com.platinum.ott.presentation.phone.screens.PhonePlayerScreen
 import com.platinum.ott.presentation.phone.screens.PhoneQrScanScreen
+import com.platinum.ott.presentation.phone.screens.PhoneLocalSyncScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginCatalogScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
@@ -104,7 +105,16 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
         composable("cache_management") { if (isTV) CacheManagementScreen(onBackPressed = { navController.popBackStack() }) else PhoneCacheManagementScreen(navController) }
-        composable("sync_pairing") { SyncPairingScreen(onBackPressed = { navController.popBackStack() }) }
+        composable("sync_pairing") {
+            SyncPairingScreen(
+                onBackPressed = { navController.popBackStack() },
+                onOpenLocalSyncScan = { navController.navigate("local_sync_scan") }
+            )
+        }
+        // PROMPT_LOCAL_SYNC_V1.md — тот же приём, что и "qr_scan" выше: на
+        // TV эта ветка никогда не открывается (QR/код рисуются прямо внутри
+        // sync_pairing), пустой Box только чтобы у route был валидный composable.
+        composable("local_sync_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneLocalSyncScreen(navController) }
         composable("favorites") { if (isTV) FavoritesScreen(navController = navController, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }

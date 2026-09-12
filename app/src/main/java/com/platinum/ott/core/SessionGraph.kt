@@ -12,6 +12,7 @@ import com.platinum.ott.data.remote.tmdb.TmdbInterceptor
 import com.platinum.ott.data.repository.*
 import com.platinum.ott.domain.repository.*
 import com.platinum.ott.domain.usecase.*
+import com.platinum.ott.sync.LocalSyncRepository
 import com.platinum.ott.sync.SyncRepository
 import com.platinum.ott.sync.SyncRepositoryImpl
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,6 +52,9 @@ class SessionGraph @Inject constructor(
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
+    // Отдельный канал, независимый от syncRepository выше (PROMPT_LOCAL_SYNC_V1.md) —
+    // см. обоснование в LocalSyncDtos.kt/LocalSyncRepository.kt.
+    lateinit var localSyncRepository: LocalSyncRepository; private set
     lateinit var getCatalogUseCase: GetCatalogUseCase; private set
     lateinit var getPlaylistCatalogUseCase: GetPlaylistCatalogUseCase; private set
     lateinit var getMovieByIdUseCase: GetMovieByIdUseCase; private set
@@ -101,6 +105,13 @@ class SessionGraph @Inject constructor(
         getMovieByIdUseCase = GetMovieByIdUseCase(movieRepository)
         pluginManager = PluginManager(appContext, database.pluginDao(), pluginApi)
         pluginRepository = PluginRepository(database.pluginDao(), pluginManager, pluginApi)
+        // После pluginManager/pluginRepository — LocalSyncRepository зависит
+        // от обоих (перестановка плагинов при applyPayload()).
+        localSyncRepository = LocalSyncRepository(
+            appContext, database.favoritesDao(), database.watchHistoryDao(), database.playlistSourceDao(),
+            playlistSourceRepository, database.pluginDao(), pluginManager, pluginRepository,
+            networkPreferences, notificationPreferences
+        )
         appScope.launch { pluginManager.loadAllEnabled() }
         getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase)
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
@@ -114,6 +125,11 @@ class SessionGraph @Inject constructor(
 
     fun reinitWithAuth() {
         if (::pluginManager.isInitialized) pluginManager.destroy()
+        // Локальный HTTP-сервер (если открыт экран локальной синхронизации
+        // в момент реинициализации графа) не должен пережить свой
+        // LocalSyncRepository — иначе порт остаётся занят "осиротевшим"
+        // NanoHTTPD-инстансом.
+        if (::localSyncRepository.isInitialized) localSyncRepository.stopTvServer()
         initAuth()
     }
 }
