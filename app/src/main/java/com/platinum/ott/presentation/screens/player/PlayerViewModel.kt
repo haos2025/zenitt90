@@ -12,20 +12,27 @@ import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.SubtitlePreferences
+import com.platinum.ott.core.player.ArchiveOrgMirrorResolver
 import com.platinum.ott.domain.model.StreamVariant
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
@@ -95,22 +102,55 @@ class PlayerViewModel @Inject constructor(
     // без кастомного HTTP data source — MediaItem.fromUri() уходил на сервер
     // с дефолтным User-Agent'ом ExoPlayer'а. Многие IPTV-панели (M3U/Xtream —
     // ровно то, о чём сообщили как о "http 404, ни каких кнопок") отклоняют
-    // запросы без узнаваемого UA или блокируют кросс-протокольные редиректы
-    // (http→https между балансировщиком и реальным CDN) — оба этих случая
-    // теперь явно разрешены/обработаны.
-    //
-    // httpDataSourceFactory хранится ПОЛЕМ (не только внутри run{}) — раньше
-    // User-Agent был один статический на все каналы сразу. Многие M3U-каналы
-    // требуют СВОЙ заголовок (#EXTVLCOPT:http-user-agent=.../http-referrer=...
-    // из плейлиста, см. M3uPlaylistParser) — playVariant() теперь
-    // перевыставляет defaultRequestProperties под конкретный канал перед
-    // каждым воспроизведением.
+    // запросы без узнаваемого UA — теперь явно разрешено.
     private val defaultHeaders = mapOf("User-Agent" to "ZenithOTT/1.0 (Linux;Android) ExoPlayerLib/media3")
-    private val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-        .setDefaultRequestProperties(defaultHeaders)
-        .setAllowCrossProtocolRedirects(true)
+
+    // РАУНД РАЗБОРА "веб-архив не воспроизводится" (ROADMAP.md, баг
+    // ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, подтверждено на реальном
+    // устройстве, метаданные/поиск archive.org при этом работают). Раньше
+    // здесь был один общий, МУТИРУЕМЫЙ инстанс DefaultHttpDataSource.Factory
+    // (обёртка над java.net.HttpURLConnection): playVariant() перевыставлял
+    // defaultRequestProperties перед каждым показом — безопасно ровно пока
+    // воспроизводится один поток за раз, и с жёстким дефолтным таймаутом
+    // Media3 в 8 секунд на коннект/чтение, нигде в проекте не увеличенным.
+    // Два независимых недостатка этой связки, оба бьют именно по archive.org:
+    //
+    //  1. 8 секунд — мало для физических узлов archive.org (ia8xxxxx.us.archive.org):
+    //     запрос сперва идёт на archive.org/download/..., который РЕДИРЕКТИТ
+    //     на конкретный узел — сама эта цепочка плюс собственная перегрузка
+    //     таких узлов легко выходит за 8с, даже когда узел в принципе жив.
+    //  2. HttpURLConnection исторически менее надёжен OkHttp именно на
+    //     МЕЖХОСТОВЫХ редиректах (archive.org -> ia*.us.archive.org — это
+    //     ВСЕГДА смена хоста) — реальные репорты по всему интернету про
+    //     обрывы и потерю заголовков на таких редиректах у HttpURLConnection
+    //     не редкость.
+    //
+    // Переход на OkHttpDataSource — тот же HTTP-стек, что и у остального
+    // приложения (RetrofitFactory), с отдельным, куда более щедрым
+    // таймаутом. Отдельным клиентом, не переиспользующим NetworkPreferences —
+    // та настройка про обычные API-запросы к бэкенду (секунды), у потокового
+    // видео принципиально другая природа (потенциально часы).
+    private val mediaHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    // Свежая фабрика НА КАЖДЫЙ вызов playVariant() (см. ниже) — ничего не
+    // мутируется после создания, поэтому гонка заголовков (пункт 1 в
+    // комментарии выше про общий мутируемый инстанс) структурно невозможна,
+    // даже если в будущем появится второй одновременный MediaSource
+    // (предзагрузка следующей серии и т.п.). DefaultDataSource.Factory
+    // поверх OkHttp-фабрики — на случай (маловероятный, но дёшево
+    // защититься) ссылки не по http(s): транслирует file://Content:// в
+    // штатный локальный DataSource вместо падения "unsupported scheme",
+    // которое выдал бы чистый OkHttpDataSource, умеющий только http(s).
+    private fun buildDataSourceFactory(headers: Map<String, String>): DataSource.Factory {
+        val okHttpFactory = OkHttpDataSource.Factory(mediaHttpClient).setDefaultRequestProperties(headers)
+        return DefaultDataSource.Factory(getApplication<Application>(), okHttpFactory)
+    }
+
     val exoPlayer: ExoPlayer = run {
-        val mediaSourceFactory = DefaultMediaSourceFactory(application).setDataSourceFactory(httpDataSourceFactory)
         // Некоторые IPTV-каналы кодируют звук в AC-3/E-AC-3 (Dolby Digital) —
         // это лицензированный кодек, штатный MediaCodec большинства Android-
         // устройств его не поддерживает: видео идёт, звука нет, без ошибки
@@ -122,7 +162,13 @@ class PlayerViewModel @Inject constructor(
         // шагом сборки, которого в проекте пока нет.
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(application)
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        ExoPlayer.Builder(application, renderersFactory).setMediaSourceFactory(mediaSourceFactory).build()
+        // Больше не .setMediaSourceFactory(...) на Builder — playVariant()
+        // теперь всегда собирает MediaSource сам, свежей фабрикой (см. выше),
+        // и отдаёт его через setMediaSource(), а не setMediaItem()/prepare()
+        // на голом MediaItem. Фабрика на Builder имела бы смысл, только если
+        // где-то в коде остался setMediaItem()/addMediaItem() — таких мест
+        // не осталось.
+        ExoPlayer.Builder(application, renderersFactory).build()
     }
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
@@ -148,6 +194,22 @@ class PlayerViewModel @Inject constructor(
     private var currentSeriesId: String? = null
     private var historyAutosaveJob: Job? = null
 
+    // Автоматические повторы при разрыве соединения (см. onPlayerError) —
+    // раньше ЛЮБОЙ сетевой сбой (в т.ч. одиночный, преходящий) сразу
+    // показывал PlayerUiState.Error, если у фильма не было второго варианта
+    // потока — пользователю приходилось выходить и заходить в плеер заново
+    // руками, даже если реальная причина — секундный сбой сети, а не
+    // "ссылка не работает". Счётчики сбрасываются в loadMovie() — попытки
+    // не должны накапливаться и переноситься на следующий открытый фильм.
+    private var archiveMirrorAttempts = 0
+    private var genericRetryAttempts = 0
+    private val triedArchiveHosts = mutableSetOf<String>()
+    private companion object {
+        const val MAX_ARCHIVE_MIRROR_ATTEMPTS = 2
+        const val MAX_GENERIC_RETRY_ATTEMPTS = 1
+        const val GENERIC_RETRY_DELAY_MS = 1500L
+    }
+
     init {
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -170,22 +232,68 @@ class PlayerViewModel @Inject constructor(
                 val current = _uiState.value as? PlayerUiState.Ready
                 val currentIndex = current?.variants?.indexOf(current.currentVariant) ?: -1
                 val nextVariant = current?.variants?.getOrNull(currentIndex + 1)
-                if (current != null && nextVariant != null) {
-                    // Текущий источник не проигрался — пробуем следующий по
-                    // списку автоматически (гибридная гонка backend/плагины
-                    // уже может дать несколько вариантов на один фильм),
-                    // прежде чем сдаваться и показывать ошибку целиком.
-                    playVariant(nextVariant, 0L)
-                    _uiState.value = current.copy(currentVariant = nextVariant)
-                } else {
-                    // См. комментарий у describePlaybackError — добавляю
-                    // сюда же movieId и саму пытавшуюся открыться ссылку,
-                    // чтобы одним скриншотом можно было сравнить, что
-                    // именно резолвится через разные экраны входа (лента
-                    // против "Сериалы") для формально одного и того же
-                    // контента.
-                    val urlInfo = current?.currentVariant?.url?.let { " | url: $it" } ?: ""
-                    _uiState.value = PlayerUiState.Error("${describePlaybackError(error)} (id: $currentMovieId)$urlInfo")
+                val triedUrl = current?.currentVariant?.url
+                // ERROR_CODE_IO_* целиком (не только один конкретный код) —
+                // таймаут/обрыв соединения/DNS/неспецифичная IO-ошибка все
+                // одинаково стоит хотя бы попробовать пережить повтором,
+                // прежде чем показывать пользователю окончательную ошибку.
+                // HTTP-коды (403/404 — ERROR_CODE_IO_BAD_HTTP_STATUS) сюда
+                // НЕ входят: тот случай — не "сеть моргнула", а "сервер
+                // прямо ответил, что тут ничего нет", повтор того же URL
+                // ничего не изменит.
+                val isTransientNetworkError = error.errorCodeName.startsWith("ERROR_CODE_IO_") &&
+                    error.errorCodeName != "ERROR_CODE_IO_BAD_HTTP_STATUS"
+
+                when {
+                    current != null && nextVariant != null -> {
+                        // Текущий источник не проигрался — пробуем следующий по
+                        // списку автоматически (гибридная гонка backend/плагины
+                        // уже может дать несколько вариантов на один фильм),
+                        // прежде чем сдаваться и показывать ошибку целиком.
+                        playVariant(nextVariant, 0L)
+                        _uiState.value = current.copy(currentVariant = nextVariant)
+                    }
+                    // Веб-архив (см. комментарий у mediaHttpClient) — второй,
+                    // более прицельный уровень восстановления ПОСЛЕ того, как
+                    // альтернативных вариантов потока (ветка выше) больше нет:
+                    // archive.org хранит каждый файл на 1-2 физических серверах
+                    // (поля d1/d2 публичного /metadata/ API) именно на случай,
+                    // если один из них недоступен — пробуем второй НАПРЯМУЮ, не
+                    // через редиректящий /download/, который может заново
+                    // отправить на тот же неисправный узел.
+                    current != null && triedUrl != null && isTransientNetworkError &&
+                        triedUrl.contains("archive.org", ignoreCase = true) &&
+                        archiveMirrorAttempts < MAX_ARCHIVE_MIRROR_ATTEMPTS -> {
+                        archiveMirrorAttempts++
+                        val failedHost = runCatching { java.net.URI(triedUrl).host }.getOrNull()
+                        if (failedHost != null) triedArchiveHosts += failedHost
+                        val resumePosition = exoPlayer.currentPosition
+                        viewModelScope.launch {
+                            val alternate = withContext(Dispatchers.IO) {
+                                runCatching { ArchiveOrgMirrorResolver.resolveAlternate(triedUrl, triedArchiveHosts) }.getOrNull()
+                            }
+                            if (alternate != null) {
+                                triedArchiveHosts += alternate.server
+                                playVariant(current.currentVariant.copy(url = alternate.url), resumePosition)
+                            } else {
+                                // Ни архивный зеркальный узел не нашёлся, ни его
+                                // не удалось запросить (сам /metadata/ тоже мог
+                                // упереться в ту же сетевую проблему) — переходим
+                                // к обычному финальному повтору того же URL ниже,
+                                // не сдаёмся сразу на первом провале резолвера.
+                                retryOrShowError(error, current, resumePosition)
+                            }
+                        }
+                    }
+                    // Общий повтор для ЛЮБОГО источника (не только archive.org) —
+                    // раньше единичный сетевой сбой без альтернативного варианта
+                    // сразу становился окончательной ошибкой на экране, даже
+                    // если реальная причина — секундная просадка сети.
+                    current != null && triedUrl != null && isTransientNetworkError &&
+                        genericRetryAttempts < MAX_GENERIC_RETRY_ATTEMPTS -> {
+                        retryOrShowError(error, current, exoPlayer.currentPosition)
+                    }
+                    else -> showFinalError(error, currentMovieId, triedUrl)
                 }
             }
 
@@ -249,6 +357,33 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    // Финальный повтор ТОГО ЖЕ URL с небольшой задержкой — на случай, если
+    // сбой был секундным (сеть моргнула, а не действительно недоступна).
+    // Один раз, не больше (MAX_GENERIC_RETRY_ATTEMPTS) — иначе при реально
+    // недоступном источнике пользователь просто ждал бы дольше того же
+    // результата, вместо того чтобы сразу увидеть ошибку.
+    private fun retryOrShowError(error: PlaybackException, current: PlayerUiState.Ready, resumePosition: Long) {
+        if (genericRetryAttempts < MAX_GENERIC_RETRY_ATTEMPTS) {
+            genericRetryAttempts++
+            viewModelScope.launch {
+                delay(GENERIC_RETRY_DELAY_MS)
+                playVariant(current.currentVariant, resumePosition)
+            }
+        } else {
+            showFinalError(error, currentMovieId, current.currentVariant.url)
+        }
+    }
+
+    private fun showFinalError(error: PlaybackException, movieId: String, url: String?) {
+        // См. комментарий у describePlaybackError выше — добавляю сюда же
+        // movieId и саму пытавшуюся открыться ссылку, чтобы одним
+        // скриншотом можно было сравнить, что именно резолвится через
+        // разные экраны входа (лента против "Сериалы") для формально
+        // одного и того же контента.
+        val urlInfo = url?.let { " | url: $it" } ?: ""
+        _uiState.value = PlayerUiState.Error("${describePlaybackError(error)} (id: $movieId)$urlInfo")
+    }
+
     fun togglePlayPause() { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }
     fun seekForward() {
         val target = exoPlayer.currentPosition + 10_000
@@ -266,6 +401,11 @@ class PlayerViewModel @Inject constructor(
     fun loadMovie(movieId: String, preferredVariantUrl: String? = null) {
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
+        // Новый фильм — попытки восстановления с предыдущего не должны
+        // "донашиваться" сюда (см. поля объявления выше).
+        archiveMirrorAttempts = 0
+        genericRetryAttempts = 0
+        triedArchiveHosts.clear()
         exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
         viewModelScope.launch {
             _uiState.value = PlayerUiState.Loading
@@ -517,7 +657,6 @@ class PlayerViewModel @Inject constructor(
         if (v.url.contains("archive.org", ignoreCase = true)) {
             effectiveHeaders = effectiveHeaders + ("Referer" to "https://archive.org/")
         }
-        httpDataSourceFactory.setDefaultRequestProperties(effectiveHeaders)
         val mediaItemBuilder = MediaItem.Builder().setUri(v.url)
         // ВТОРАЯ гипотеза той же природы: ExoPlayer определяет контейнер по
         // расширению в URL (Util.inferContentType) — рабочие М3У/Xtream-
@@ -541,7 +680,16 @@ class PlayerViewModel @Inject constructor(
                     .build()
             ))
         }
-        exoPlayer.setMediaItem(mediaItemBuilder.build())
+        // Свежая фабрика с уже запечёнными заголовками (см. buildDataSourceFactory
+        // и комментарий у mediaHttpClient) — не setMediaItem()+prepare() на
+        // общем плеерном MediaSourceFactory, а собственный MediaSource на
+        // каждый вызов через setMediaSource(). Структурно исключает гонку
+        // заголовков между разными потоками на одном ExoPlayer.
+        val dataSourceFactory = buildDataSourceFactory(effectiveHeaders)
+        val mediaSource = DefaultMediaSourceFactory(getApplication<Application>())
+            .setDataSourceFactory(dataSourceFactory)
+            .createMediaSource(mediaItemBuilder.build())
+        exoPlayer.setMediaSource(mediaSource)
         exoPlayer.prepare()
         if (seekTo > 0) exoPlayer.seekTo(seekTo)
         exoPlayer.play()
