@@ -13,10 +13,10 @@ import com.platinum.ott.core.companion.LocalSyncPairingCode
 import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.core.plugin.PluginRepository
 import com.platinum.ott.data.local.dao.FavoritesDao
+import com.platinum.ott.data.local.dao.PlaylistSourceDao
 import com.platinum.ott.data.local.dao.PluginDao
 import com.platinum.ott.data.local.dao.WatchHistoryDao
 import com.platinum.ott.data.local.entity.FavoriteEntity
-import com.platinum.ott.data.local.entity.PlaylistSourceDao
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.data.remote.dto.FavoriteDto
