@@ -25,6 +25,7 @@ import androidx.media3.ui.PlayerView
 import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.ui.theme.ZenithSurface
 import androidx.tv.material3.*
@@ -95,6 +96,9 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    // PROMPT_SUBTITLES.md, подзадача 8.
+    val autoSubtitleState by viewModel.autoSubtitleState.collectAsStateWithLifecycle()
+    val autoSubtitleCues by viewModel.autoSubtitleCues.collectAsStateWithLifecycle()
 
     var currentPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
@@ -324,6 +328,11 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
                         onDisableSubtitles = { viewModel.disableSubtitles() },
                         onRequestExternalSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
+                        autoSubtitleState = autoSubtitleState,
+                        onToggleAutoSubtitles = {
+                            if (autoSubtitleState == AutoSubtitleState.Off) viewModel.enableAutoSubtitles()
+                            else viewModel.disableAutoSubtitles()
+                        },
                         playbackSpeed = state.playbackSpeed,
                         onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
                         onDismiss = { viewModel.dismissPlaybackMenu() },
@@ -337,6 +346,37 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+            }
+        }
+
+        // PROMPT_SUBTITLES.md, подзадача 8 — AI-сгенерированные реплики
+        // (оркестратор, подзадача 6) рендерятся отдельным текстовым слоем,
+        // НЕ через ExoPlayer/SubtitleView: тот показывает только статичную
+        // дорожку, известную заранее (встроенную или загруженную целиком
+        // через loadExternalSubtitle — в т.ч. найденную OpenSubtitles, см.
+        // подзадачу 1) — AI-путь копит реплики прогрессивно, список
+        // растёт по ходу просмотра, готового файла для ExoPlayer нет.
+        // Пока используется OpenSubtitles (autoSubtitleCues пуст всегда в
+        // этом случае — оркестратор туда ничего не пишет), это условие
+        // просто не сработает — двойного рендера с родной дорожкой не будет.
+        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs) {
+            autoSubtitleCues.firstOrNull { currentPositionMs in it.startMs..it.endMs }?.text
+        }
+        if (activeAutoSubtitleText != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = ZenithDimens.paddingXL, vertical = 120.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+            ) {
+                Text(
+                    text = activeAutoSubtitleText,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
 

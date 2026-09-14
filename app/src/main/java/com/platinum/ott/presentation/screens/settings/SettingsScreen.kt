@@ -117,6 +117,16 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     showSubsByDefault = !showSubsByDefault
                     subtitlePrefs.setShowByDefault(showSubsByDefault)
                 }
+                // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/
+                // точность... для тех, кому точность важнее скорости
+                // (сценарий нарушений слуха), должен быть выбор". Влияет
+                // только на локальный Whisper-фолбэк автосубтитров
+                // (подзадача 5/6) — облачный путь эту настройку не читает.
+                var preferAccuracy by remember { mutableStateOf(subtitlePrefs.getPreferLocalAccuracy()) }
+                CycleSetting("Автосубтитры (офлайн)", if (preferAccuracy) "Точность" else "Скорость") {
+                    preferAccuracy = !preferAccuracy
+                    subtitlePrefs.setPreferLocalAccuracy(preferAccuracy)
+                }
             }
             Spacer(Modifier.height(ZenithDimens.paddingL))
             SettingsGroup("Уведомления", Icons.Outlined.Notifications) {

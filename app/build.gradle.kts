@@ -30,8 +30,24 @@ android {
 
         buildConfigField("String", "GIT_COMMIT", "\"${gitCommitHashProvider.get()}\"")
         buildConfigField("String", "TMDB_API_KEY", "\"${providers.environmentVariable("TMDB_API_KEY").getOrElse("")}\"")
-        
+
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+        // PROMPT_SUBTITLES.md, подзадача 5 — локальный Whisper (whisper.cpp
+        // через NDK/JNI). Только arm64-v8a/armeabi-v7a — x86/x86_64 не
+        // нужны, целевые устройства проекта TV-приставки и телефоны на ARM
+        // (тестовое устройство — Xiaomi TV Stick 4K, README.md).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+        externalNativeBuild {
+            cmake {
+                // whisper.cpp сам форсирует C++17 в своём CMakeLists.txt —
+                // ANDROID_STL=c++_shared обязателен, статический c++_static
+                // конфликтует при линковке нескольких .so с рантаймом STL.
+                arguments += listOf("-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     signingConfigs {
@@ -93,6 +109,20 @@ android {
         checkReleaseBuilds = true
         disable += setOf("MissingTranslation", "ExtraTranslation")
     }
+
+    // PROMPT_SUBTITLES.md, подзадача 5 — первое использование NDK/CMake в
+    // проекте (до этого весь код был чистый Kotlin/JVM). version — CMake,
+    // который умеет FetchContent пинить по git-тегу без ручной установки
+    // зависимостей; 3.22.1 бандлится с современным Android SDK cmake-пакетом
+    // на GitHub Actions раннерах (ubuntu-latest + actions/setup-android или
+    // предустановленный SDK) — НЕ проверено на реальном раннере этого
+    // проекта, если версия там другая, потребуется поправить здесь же.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
 }
 
 detekt {
@@ -129,6 +159,8 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.androidx.media3.transformer)
+    implementation(libs.onnxruntime.android)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.quickjs.android)
     implementation(libs.retrofit.core)

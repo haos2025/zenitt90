@@ -21,4 +21,14 @@ class SubtitlePreferences(context: Context) {
     // привычный дефолт Android, а не навязываем свой.
     fun getShowByDefault(): Boolean = prefs.getBoolean("show_by_default", false)
     fun setShowByDefault(enabled: Boolean) = prefs.edit().putBoolean("show_by_default", enabled).apply()
+
+    // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/точность...
+    // для тех, кому точность важнее скорости (сценарий нарушений слуха),
+    // должен быть выбор, не один компромисс на всех". Влияет только на
+    // локальный Whisper-фолбэк (подзадача 5/6) — облачный путь всегда
+    // использует то, что настроено на backend, выбор модели там не имеет
+    // смысла. По умолчанию — скорость (false): большинству пользователей
+    // это удобнее на слабых TV-чипах, точность — осознанный выбор, не дефолт.
+    fun getPreferLocalAccuracy(): Boolean = prefs.getBoolean("prefer_local_accuracy", false)
+    fun setPreferLocalAccuracy(preferAccuracy: Boolean) = prefs.edit().putBoolean("prefer_local_accuracy", preferAccuracy).apply()
 }

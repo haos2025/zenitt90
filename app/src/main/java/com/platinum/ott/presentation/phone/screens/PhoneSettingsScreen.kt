@@ -166,6 +166,24 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     subtitlePrefs.setShowByDefault(it)
                 })
             }
+            CardDivider()
+            // PROMPT_SUBTITLES.md, подзадача 9 — влияет только на локальный
+            // Whisper-фолбэк автосубтитров (подзадача 5/6), не на облачный путь.
+            var preferAccuracy by remember { mutableStateOf(subtitlePrefs.getPreferLocalAccuracy()) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Автосубтитры (офлайн)", color = Color.White)
+                    Text(
+                        if (preferAccuracy) "Точность" else "Скорость",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Switch(checked = preferAccuracy, onCheckedChange = {
+                    preferAccuracy = it
+                    subtitlePrefs.setPreferLocalAccuracy(it)
+                })
+            }
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
 

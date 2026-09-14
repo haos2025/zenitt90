@@ -23,6 +23,9 @@ import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.core.player.ArchiveOrgMirrorResolver
 import com.platinum.ott.domain.model.StreamVariant
+import com.platinum.ott.core.subtitles.AutoSubtitleState
+import com.platinum.ott.core.subtitles.SubtitleCue
+import com.platinum.ott.domain.model.SubtitleFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -92,6 +95,12 @@ class PlayerViewModel @Inject constructor(
     // seasonNumber/episodeNumber), отдельного use case заводить не стали
     // ради одного вызова.
     private val playlistRepository = sessionGraph.playlistRepository
+    // PROMPT_SUBTITLES.md, подзадача 6 — оркестратор сам решает
+    // OpenSubtitles/облако/локальный Whisper по приоритету; PlayerViewModel
+    // только даёт ему контекст (URL/заголовки/позицию) и слушает состояние.
+    // Прямой searchOpenSubtitlesUseCase (был здесь в подзадаче 1) больше не
+    // нужен — оркестратор владеет им сам.
+    private val subtitleOrchestrator = sessionGraph.subtitleOrchestrator
     private val qualityPrefs = QualityPreferences(application)
     // "Показывать субтитры по умолчанию" (см. loadMovie()) — раньше эта
     // настройка была убрана из SettingsScreen.kt как выдуманная под
@@ -181,12 +190,21 @@ class PlayerViewModel @Inject constructor(
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
+    // PROMPT_SUBTITLES.md, подзадача 6 — состояние и накопленные AI-подписи
+    // приходят напрямую из оркестратора, PlayerViewModel их не хранит сам.
+    val autoSubtitleState: StateFlow<AutoSubtitleState> = subtitleOrchestrator.state
+    val autoSubtitleCues: StateFlow<List<SubtitleCue>> = subtitleOrchestrator.cues
+
     // WatchHistoryUseCase.saveProgress() существовал с самого начала, но
     // PlayerViewModel ни разу его не вызывал — история просмотра никогда
     // не записывалась, экран "История" всегда был пуст не из-за бага чтения,
     // а потому что писать было некому.
     private var currentMovieId: String = ""
     private var currentTitle: String = ""
+    // PROMPT_SUBTITLES.md, подзадача 1 — год нужен только для поиска по
+    // OpenSubtitles (title+year, см. searchAndApplyOpenSubtitles()), больше
+    // нигде в PlayerViewModel не использовался.
+    private var currentYear: Int = 0
     private var currentPoster: String? = null
     // Группировка серий одного сериала в истории (PROMPT_HISTORY_UPGRADE.md) —
     // тот же movie?.seriesId, что уже используется чуть ниже в loadMovie()
@@ -451,8 +469,12 @@ class PlayerViewModel @Inject constructor(
                 // PlayerViewModel вообще не знал название фильма, только id.
                 val movie = getMovie.execute(movieId).getOrNull()
                 currentTitle = movie?.title ?: ""
+                currentYear = movie?.year ?: 0
                 currentPoster = movie?.poster
                 currentSeriesId = movie?.seriesId
+                // Новый показ — предыдущий результат/процесс автосубтитров
+                // (если был) относился к другому фильму/серии.
+                subtitleOrchestrator.stop()
 
                 // "Продолжить N%" на DetailScreen показывал прогресс из истории,
                 // но кнопка "Смотреть"/"Продолжить" вела в плеер без передачи
@@ -628,15 +650,67 @@ class PlayerViewModel @Inject constructor(
     }
 
     private var externalSubtitleUrl: String? = null
-    // Внешние SRT по ссылке — раньше субтитры могли быть только те, что
+    // Раньше единственный источник внешних субтитров был ручной ввод .srt-
+    // ссылки на телефоне (всегда русский SRT — отсюда старые хардкоды).
+    // OpenSubtitles (подзадача 1) может отдать и VTT, и другой язык, поэтому
+    // язык/MIME теперь хранятся отдельно, с теми же дефолтами, что были
+    // раньше — существующий вызов loadExternalSubtitle(url) не меняет
+    // поведение.
+    private var externalSubtitleLanguage: String = "ru"
+    private var externalSubtitleMimeType: String = MimeTypes.APPLICATION_SUBRIP
+    // Внешние субтитры по ссылке — раньше субтитры могли быть только те, что
     // зашиты в сам поток/контейнер. SubtitleConfiguration можно приложить
     // только при сборке MediaItem, а не добавить "на лету" в уже играющий
     // поток — поэтому пересобираем текущий вариант через playVariant(),
     // сохраняя позицию воспроизведения.
-    fun loadExternalSubtitle(url: String) {
+    fun loadExternalSubtitle(url: String, language: String = "ru", format: SubtitleFormat = SubtitleFormat.SRT) {
         externalSubtitleUrl = url
+        externalSubtitleLanguage = language
+        externalSubtitleMimeType = if (format == SubtitleFormat.VTT) MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
         val current = _uiState.value as? PlayerUiState.Ready ?: return
         playVariant(current.currentVariant, exoPlayer.currentPosition)
+    }
+
+    // PROMPT_SUBTITLES.md, подзадача 6 — ручной переключатель "Субтитры"
+    // (сама UI-кнопка — подзадача 8) вызывает это при включении. Вся логика
+    // приоритета (OpenSubtitles → облако → локальный Whisper) — в
+    // SubtitleOrchestrator; здесь только даём ему контекст текущего
+    // воспроизведения. Для живых каналов (seriesId==null не помогает
+    // отличить) это пока не сработает осмысленно — оркестратор сам это
+    // не проверяет (открытый вопрос ещё с подзадачи 2), поэтому вызывать
+    // эту функцию для каналов преждевременно, до появления отдельного
+    // пути для live.
+    fun enableAutoSubtitles() {
+        if (currentTitle.isBlank()) return
+        val current = _uiState.value as? PlayerUiState.Ready ?: return
+        val durationMs = exoPlayer.duration
+        if (durationMs <= 0) return // C.TIME_UNSET или ещё не готово — рано запускать оркестратор
+        // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/точность"
+        // читается прямо здесь (SharedPreferences, тот же паттерн, что
+        // остальные *Preferences-классы проекта), не хранится отдельным
+        // полем ViewModel — выбор в Settings мог измениться между сессиями
+        // плеера, читать его на каждое включение надёжнее, чем кэшировать.
+        val preferAccuracy = com.platinum.ott.core.SubtitlePreferences(getApplication()).getPreferLocalAccuracy()
+        val whisperVariant = if (preferAccuracy) {
+            com.platinum.ott.core.subtitles.whisper.WhisperModelVariant.BASE
+        } else {
+            com.platinum.ott.core.subtitles.whisper.WhisperModelVariant.TINY
+        }
+        subtitleOrchestrator.start(
+            scope = viewModelScope,
+            title = currentTitle,
+            year = currentYear,
+            streamUrl = current.currentVariant.url,
+            headers = current.currentVariant.headers,
+            contentDurationMs = durationMs,
+            currentPositionMsProvider = { exoPlayer.currentPosition },
+            whisperVariant = whisperVariant,
+            onOpenSubtitlesFound = { url, language, format -> loadExternalSubtitle(url, language, format) },
+        )
+    }
+
+    fun disableAutoSubtitles() {
+        subtitleOrchestrator.stop()
     }
     private fun playVariant(v: StreamVariant, seekTo: Long = 0L) {
         // Свои заголовки канала (#EXTVLCOPT) поверх общего дефолта — если
@@ -674,8 +748,8 @@ class PlayerViewModel @Inject constructor(
         externalSubtitleUrl?.let { subUrl ->
             mediaItemBuilder.setSubtitleConfigurations(listOf(
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl))
-                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                    .setLanguage("ru")
+                    .setMimeType(externalSubtitleMimeType)
+                    .setLanguage(externalSubtitleLanguage)
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                     .build()
             ))
@@ -703,6 +777,14 @@ class PlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         historyAutosaveJob?.cancel()
+        // PROMPT_SUBTITLES.md, подзадача 6 — subtitleOrchestrator живёт в
+        // SessionGraph (на весь процесс, переиспользуется между экранами
+        // плеера), а не создаётся заново на каждый PlayerViewModel — явно
+        // останавливаем его фоновую задачу здесь, не полагаясь только на
+        // отмену viewModelScope (job внутри оркестратора запущен именно в
+        // нём, но _state/_cues без явного stop() остались бы в "зависшем"
+        // состоянии до следующего loadMovie()).
+        subtitleOrchestrator.stop()
         exoPlayer.release()
     }
 }

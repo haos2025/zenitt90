@@ -18,6 +18,10 @@ okhttp = "4.12.0"
 gson = "2.11.0"
 room = "2.7.1"
 coroutines = "1.8.1"
+# PROMPT_SUBTITLES.md, подзадача 4 — Silero VAD запускается через ONNX
+# Runtime Mobile, не через отдельный NDK-модуль под сам whisper.cpp
+# (тот — отдельная подзадача 5, другой движок).
+onnxruntime = "1.27.0"
 coil = "2.7.0"
 securityCrypto = "1.1.0-alpha06"
 junit = "4.13.2"
@@ -68,6 +72,13 @@ androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.re
 # OkHttp-стек, что уже используется остальным приложением. Тот же media3,
 # отдельного version.ref не требует.
 androidx-media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasource-okhttp", version.ref = "media3" }
+# PROMPT_SUBTITLES.md, подзадача 2 — извлечение аудиодорожки из потока
+# отдельно от воспроизведения (Transformer.Builder + ExoPlayerAssetLoader,
+# см. StreamAudioExtractor.kt), не связано с основным плеером ExoPlayer.
+androidx-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+# PROMPT_SUBTITLES.md, подзадача 4 (VAD) — инференс Silero VAD (.onnx,
+# бандлится в assets, см. SileroVadSegmenter.kt) на устройстве.
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 quickjs-android = { group = "app.cash.quickjs", name = "quickjs-android", version.ref = "quickjs" }
 retrofit-core = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }

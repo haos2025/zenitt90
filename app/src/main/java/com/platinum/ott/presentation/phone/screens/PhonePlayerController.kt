@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.subtitles.AiSource
+import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.screens.player.PlaybackMenuTab
 import com.platinum.ott.presentation.screens.player.TrackOption
@@ -114,6 +116,10 @@ fun PhonePlayerController(
     onSelectSubtitle: (TrackOption) -> Unit,
     onDisableSubtitles: () -> Unit,
     onLoadExternalSubtitle: (String) -> Unit,
+    // PROMPT_SUBTITLES.md, подзадача 8 — отдельная сущность от
+    // subtitlesEnabled выше (тот про уже существующие встроенные/внешние дорожки).
+    autoSubtitleState: AutoSubtitleState,
+    onToggleAutoSubtitles: () -> Unit,
     playbackSpeed: Float,
     onSelectSpeed: (Float) -> Unit,
     onBackPressed: () -> Unit,
@@ -215,7 +221,7 @@ fun PhonePlayerController(
                         Spacer(Modifier.weight(1f))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                            SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled) { menuTab = PlaybackMenuTab.SUBTITLES }
+                            SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled || autoSubtitleState != AutoSubtitleState.Off) { menuTab = PlaybackMenuTab.SUBTITLES }
                             SmallMenuIconButton(icon = Icons.Default.MoreVert, contentDescription = "Ещё настройки", isActive = false) { moreSheetOpen = true; moreSheetCategory = null }
                             SmallMenuIconButton(icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "На весь экран", isActive = isFullscreen) { onToggleFullscreen() }
                         }
@@ -230,6 +236,11 @@ fun PhonePlayerController(
             var externalUrl by remember { mutableStateOf("") }
             var showExternalField by remember { mutableStateOf(false) }
             PlaybackOptionDialog("Субтитры", onDismiss = { menuTab = null }) {
+                DialogRow(
+                    label = "Автосубтитры",
+                    subLabel = autoSubtitleStatusLabel(autoSubtitleState),
+                    isSelected = autoSubtitleState != AutoSubtitleState.Off
+                ) { onToggleAutoSubtitles() }
                 DialogRow("Выключены", !subtitlesEnabled) { onDisableSubtitles(); menuTab = null }
                 DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
                 if (showExternalField) {
@@ -484,13 +495,31 @@ private fun PlaybackOptionDialog(title: String, onDismiss: () -> Unit, content: 
 }
 
 @Composable
-private fun DialogRow(label: String, isSelected: Boolean = false, onClick: () -> Unit) {
+private fun DialogRow(label: String, isSelected: Boolean = false, subLabel: String? = null, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+            Column {
+                Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                subLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.6f)) }
+            }
             if (isSelected) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
     }
+}
+
+// PROMPT_SUBTITLES.md, подзадача 8 — та же логика, что и
+// PlaybackMenuOverlay.kt::autoSubtitleStatusLabel на TV (не общий файл —
+// единственное пересечение двух иначе полностью раздельных UI-иерархий,
+// заводить общий модуль ради одной функции избыточно).
+private fun autoSubtitleStatusLabel(state: AutoSubtitleState): String? = when (state) {
+    AutoSubtitleState.Off -> null
+    AutoSubtitleState.SearchingOpenSubtitles -> "Ищем готовые субтитры…"
+    is AutoSubtitleState.UsingOpenSubtitles -> "OpenSubtitles (${state.language})"
+    is AutoSubtitleState.GeneratingAi -> when (state.source) {
+        AiSource.CLOUD -> "Распознаём (облако)…"
+        AiSource.LOCAL -> "Распознаём (локально, может отставать)…"
+    }
+    is AutoSubtitleState.Error -> "Ошибка: ${state.message}"
 }
 
 private fun formatMs(ms: Long): String {

@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.subtitles.AiSource
+import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.ui.theme.*
 
@@ -72,6 +74,11 @@ fun PlaybackMenuOverlay(
     onSelectSubtitle: (TrackOption) -> Unit,
     onDisableSubtitles: () -> Unit,
     onRequestExternalSubtitleQr: () -> Unit,
+    // PROMPT_SUBTITLES.md, подзадача 8 — ручной переключатель "Субтитры"
+    // (распознавание речи), отдельная сущность от subtitlesEnabled выше
+    // (тот про уже существующие встроенные/внешние дорожки).
+    autoSubtitleState: AutoSubtitleState,
+    onToggleAutoSubtitles: () -> Unit,
     playbackSpeed: Float,
     onSelectSpeed: (Float) -> Unit,
     onDismiss: () -> Unit,
@@ -138,6 +145,20 @@ fun PlaybackMenuOverlay(
                         items(audioTracks) { t -> MenuRow(t.label, null, t.isSelected) { onSelectAudio(t) } }
                     }
                     PlaybackMenuTab.SUBTITLES -> {
+                        // PROMPT_SUBTITLES.md, подзадача 8 — первая строка,
+                        // над "Выключены"/списком дорожек: включает не
+                        // конкретную дорожку, а весь механизм автосубтитров
+                        // (оркестратор, подзадача 6). subLabel показывает,
+                        // на каком шаге приоритета источников он сейчас
+                        // находится — минимальная версия "явного индикатора"
+                        // из промта, полноценный вариант — подзадача 9.
+                        item {
+                            MenuRow(
+                                label = "Автосубтитры",
+                                subLabel = autoSubtitleStatusLabel(autoSubtitleState),
+                                isSelected = autoSubtitleState != AutoSubtitleState.Off
+                            ) { onToggleAutoSubtitles() }
+                        }
                         item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
                         // Равноправный пункт списка, не поле ввода снизу —
                         // единственный способ получить субтитры-ПЕРЕВОД на
@@ -163,6 +184,22 @@ fun PlaybackMenuOverlay(
             }
         }
     }
+}
+
+// PROMPT_SUBTITLES.md, подзадача 8 — то же самое сопоставление статуса в
+// текст нужно и на TV (здесь), и на телефоне (PhonePlayerController.kt) —
+// не общий файл, т.к. это единственное пересечение между двумя иначе
+// полностью раздельными UI-иерархиями (TV Compose vs обычный Compose
+// Material3), заводить общий модуль ради одной строчки избыточно.
+private fun autoSubtitleStatusLabel(state: AutoSubtitleState): String? = when (state) {
+    AutoSubtitleState.Off -> null
+    AutoSubtitleState.SearchingOpenSubtitles -> "Ищем готовые субтитры…"
+    is AutoSubtitleState.UsingOpenSubtitles -> "OpenSubtitles (${state.language})"
+    is AutoSubtitleState.GeneratingAi -> when (state.source) {
+        AiSource.CLOUD -> "Распознаём (облако)…"
+        AiSource.LOCAL -> "Распознаём (локально, может отставать)…"
+    }
+    is AutoSubtitleState.Error -> "Ошибка: ${state.message}"
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable

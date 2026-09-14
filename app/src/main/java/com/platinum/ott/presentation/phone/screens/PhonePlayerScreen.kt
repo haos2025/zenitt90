@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.subtitles.AutoSubtitleState
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -45,6 +46,9 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    // PROMPT_SUBTITLES.md, подзадача 8.
+    val autoSubtitleState by viewModel.autoSubtitleState.collectAsStateWithLifecycle()
+    val autoSubtitleCues by viewModel.autoSubtitleCues.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableStateOf(0L) }
@@ -204,6 +208,33 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
             modifier = Modifier.fillMaxSize()
         )
         gestureIndicator?.let { GestureIndicatorOverlay(it, Modifier.align(Alignment.Center)) }
+
+        // PROMPT_SUBTITLES.md, подзадача 8 — см. развёрнутый комментарий в
+        // PlayerScreen.kt (TV-версия): AI-сгенерированные реплики не через
+        // ExoPlayer/SubtitleView, т.к. список растёт прогрессивно, готового
+        // файла нет. Пока используется OpenSubtitles, autoSubtitleCues
+        // всегда пуст — двойного рендера с родной дорожкой не будет.
+        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs) {
+            autoSubtitleCues.firstOrNull { currentPositionMs in it.startMs..it.endMs }?.text
+        }
+        if (activeAutoSubtitleText != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = ZenithDimens.paddingL, vertical = 100.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+            ) {
+                Text(
+                    text = activeAutoSubtitleText,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+
         when (val state = uiState) {
             is PlayerUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
             is PlayerUiState.Error -> Column(Modifier.align(Alignment.Center)) {
@@ -239,6 +270,12 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
                     onSelectSubtitle = { viewModel.selectSubtitleTrack(it); lastInteraction = System.currentTimeMillis() },
                     onDisableSubtitles = { viewModel.disableSubtitles(); lastInteraction = System.currentTimeMillis() },
                     onLoadExternalSubtitle = { viewModel.loadExternalSubtitle(it); lastInteraction = System.currentTimeMillis() },
+                    autoSubtitleState = autoSubtitleState,
+                    onToggleAutoSubtitles = {
+                        if (autoSubtitleState == AutoSubtitleState.Off) viewModel.enableAutoSubtitles()
+                        else viewModel.disableAutoSubtitles()
+                        lastInteraction = System.currentTimeMillis()
+                    },
                     playbackSpeed = state.playbackSpeed,
                     onSelectSpeed = { viewModel.setPlaybackSpeed(it); lastInteraction = System.currentTimeMillis() },
                     onBackPressed = { navController.popBackStack() },
