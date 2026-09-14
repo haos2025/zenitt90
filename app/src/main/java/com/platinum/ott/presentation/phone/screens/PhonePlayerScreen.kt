@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.subtitles.AutoSubtitleState
 import androidx.compose.ui.viewinterop.AndroidView

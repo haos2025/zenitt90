@@ -135,19 +135,28 @@ class SubtitleOrchestrator(
                 continue
             }
 
-            val chunk = audioExtractor.extract(
+            // Kotlin 2.1.20 (проект ещё не на 2.2) не разрешает non-local
+            // continue внутри инлайн-лямбды (getOrElse{}) — раньше здесь
+            // было .getOrElse { ...; continue }, пришлось развернуть в
+            // явную проверку Result, чтобы continue относился напрямую к
+            // this while, а не к лямбде.
+            val chunkResult = audioExtractor.extract(
                 AudioExtractionRequest(streamUrl, headers, windowStart, windowDuration)
-            ).getOrElse {
-                _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${it.message}")
+            )
+            if (chunkResult.isFailure) {
+                _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${chunkResult.exceptionOrNull()?.message}")
                 coveredUpToMs = windowEnd // не зацикливаемся вечно на одном и том же неудачном окне
                 continue
             }
+            val chunk = chunkResult.getOrThrow()
 
-            val segments = vadSegmenter.detectSpeechSegments(chunk).getOrElse {
+            val segmentsResult = vadSegmenter.detectSpeechSegments(chunk)
+            if (segmentsResult.isFailure) {
                 File(chunk.filePath).delete()
                 coveredUpToMs = windowEnd
                 continue
             }
+            val segments = segmentsResult.getOrThrow()
 
             transcribeChunk(chunk, segments, language, whisperVariant)
             File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен

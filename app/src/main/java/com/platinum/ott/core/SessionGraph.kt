@@ -88,7 +88,7 @@ class SessionGraph @Inject constructor(
     val pluginApi: PluginApi by lazy { PluginApi(appContext) }
     // PROMPT_SUBTITLES.md, подзадача 2 — не зависит от auth/логина, как и
     // scriptProvider/pluginApi выше, живёт независимо от reinitWithAuth().
-    @UnstableApi
+    @get:UnstableApi
     val audioExtractor: StreamAudioExtractor by lazy { StreamAudioExtractor(appContext) }
     // PROMPT_SUBTITLES.md, подзадача 4 — тот же принцип, что и
     // audioExtractor выше: не зависит от auth, живёт на весь процесс.

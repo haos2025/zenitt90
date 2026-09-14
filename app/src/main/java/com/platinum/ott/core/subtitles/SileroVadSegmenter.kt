@@ -21,27 +21,35 @@ import java.nio.LongBuffer
  * однопоточный инференс такого размера не проблема даже на слабом TV-чипе
  * согласно самому промту.
  *
- * ЧТО НЕ ПРОВЕРЕНО и требует ручной проверки на реальном устройстве/CI
- * (тот же принцип, что в COMPATIBILITY.md — есть вещи, которые нельзя
- * проверить без реальной среды сборки):
- * 1. Точная форма/имена входов-выходов ONNX-графа ("input"/"state"/"sr" на
- *    входе, "output"/"stateN" на выходе, состояние [2,1,128]) —
- *    задокументированы по официальному экспорту Silero VAD v6.x
- *    (snakers4/silero-vad), но без реального запуска ORT здесь это
- *    невозможно перепроверить; более старые версии модели (v3/v4) имели
- *    другую сигнатуру ("h0"/"c0" раздельно, [2,1,64]) — если бандлится
- *    старая версия модели, потребуется другой код инференса.
- * 2. Как именно `OnnxTensor.value` мапится на вложенные Kotlin-массивы для
- *    выходов — предположение основано на типовом поведении Java API ORT
- *    (форма тензора → вложенные примитивные массивы той же размерности).
+ * ПРОВЕРЕНО реальным файлом модели (Shadow прислал официальный релиз
+ * snakers4/silero-vad v6.2.1 целиком, не только .onnx) — форма входов-
+ * выходов подтверждена ДВУМЯ независимыми источниками одновременно:
+ * (1) официальный `examples/java-example/SlieroVadOnnxModel.java` из того
+ * же релиза и (2) реальный запуск модели через `onnxruntime` (Python) в
+ * этой сессии на синтетическом сигнале. Оба сошлись на одном контракте,
+ * ниже — он же:
+ * - `input`: НЕ голых 512 сэмплов, как было в предыдущей версии этого
+ *   файла (реальная, но МОЛЧАЛИВАЯ ошибка — ORT её не отклоняет, инференс
+ *   просто идёт без учёта контекста предыдущего фрейма и даёт другое
+ *   число: проверено эмпирически, 0.0069 с контекстом против 0.0248 без
+ *   на одном и том же тестовом сигнале). Правильно — 64 сэмпла "хвоста"
+ *   предыдущего фрейма (при первом фрейме — нули) + 512 новых = 576,
+ *   контекст обновляется после каждого фрейма (последние 64 сэмпла
+ *   только что поданного окна становятся контекстом для следующего).
+ * - `state`: `[2, 1, 128]`, как и предполагалось раньше — тут ничего не
+ *   изменилось.
+ * - `sr`: реальный граф объявляет ранг 0 (скаляр), но официальный Java-
+ *   пример передаёт его как 1-элементный массив (форма `[1]`) — оба
+ *   варианта реально проверены здесь через onnxruntime и дают идентичный
+ *   результат, оставлено `[1]` вслед за официальным примером.
+ * - Выходы читаются ПО ПОЗИЦИИ (`results[0]`/`results[1]`), не по имени
+ *   (`results.get("output")`) — так делает официальный пример, и это
+ *   надёжнее: не зависит от того, как конкретно экспортёр назвал выходы
+ *   в конкретной версии модели. `output` — `[1,1]`, `stateN` — `[2,1,128]`.
  *
- * ТРЕБУЕТСЯ РУКАМИ (бинарный артефакт, не может быть сгенерирован в этой
- * сессии — нет доступа к GitHub-релизам с бинарными файлами из этого
- * окружения): положить официальный экспорт модели
- * (github.com/snakers4/silero-vad, файл src/silero_vad/data/silero_vad.onnx,
- * ~2МБ) в `app/src/main/assets/models/silero_vad.onnx` до того, как этот
- * код будет реально запущен — до тех пор ensureSession() упадёт с
- * FileNotFoundException при первом вызове (не ошибка компиляции).
+ * ТРЕБУЕТСЯ РУКАМИ (бинарный артефакт, не в этом репозитории): положить
+ * `silero_vad.onnx` из присланного релиза в
+ * `app/src/main/assets/models/silero_vad.onnx`.
  */
 @Suppress("UNCHECKED_CAST")
 class SileroVadSegmenter(private val context: Context) {
@@ -50,6 +58,9 @@ class SileroVadSegmenter(private val context: Context) {
         const val MODEL_ASSET_PATH = "models/silero_vad.onnx"
         const val SAMPLE_RATE = 16_000L
         const val FRAME_SIZE = 512 // 32мс @ 16кГц — фиксировано архитектурой модели
+        // Официальный контракт модели (см. докстринг класса выше) — "хвост"
+        // предыдущего фрейма, подклеивается ПЕРЕД новыми 512 сэмплами.
+        const val CONTEXT_SIZE = 64
         const val STATE_SIZE = 128
     }
 
@@ -92,26 +103,36 @@ class SileroVadSegmenter(private val context: Context) {
         // (небольшая потеря точности на первых ~десятках мс чанка, не
         // критично при окне в несколько минут).
         val state = FloatArray(2 * 1 * STATE_SIZE)
+        // "Хвост" предыдущего фрейма — на первом фрейме нули (см. докстринг
+        // класса выше и официальный SlieroVadOnnxModel.resetStates()).
+        var contextTail = FloatArray(CONTEXT_SIZE)
 
         for (i in 0 until frameCount) {
-            val frame = FloatArray(FRAME_SIZE)
+            val inputWithContext = FloatArray(CONTEXT_SIZE + FRAME_SIZE)
+            System.arraycopy(contextTail, 0, inputWithContext, 0, CONTEXT_SIZE)
             for (j in 0 until FRAME_SIZE) {
                 // int16 -> [-1, 1], стандартная нормализация для входа Silero VAD.
-                frame[j] = pcm[i * FRAME_SIZE + j] / 32768f
+                inputWithContext[CONTEXT_SIZE + j] = pcm[i * FRAME_SIZE + j] / 32768f
             }
-            OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(frame), longArrayOf(1, FRAME_SIZE.toLong())).use { input ->
+
+            OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(inputWithContext), longArrayOf(1, (CONTEXT_SIZE + FRAME_SIZE).toLong())).use { input ->
                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(state), longArrayOf(2, 1, STATE_SIZE.toLong())).use { st ->
-                    OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArrayOf(SAMPLE_RATE)), longArrayOf()).use { sr ->
+                    OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArrayOf(SAMPLE_RATE)), longArrayOf(1)).use { sr ->
                         ortSession.run(mapOf("input" to input, "state" to st, "sr" to sr)).use { results ->
-                            val outputProb = (results.get("output").get().value as Array<FloatArray>)[0][0]
+                            // По позиции, не по имени — см. докстринг класса.
+                            val outputProb = (results.get(0).value as Array<FloatArray>)[0][0]
                             probabilities[i] = outputProb
-                            val newState = results.get("stateN").get().value as Array<Array<FloatArray>>
+                            val newState = results.get(1).value as Array<Array<FloatArray>>
                             var idx = 0
                             for (a in newState) for (b in a) for (v in b) state[idx++] = v
                         }
                     }
                 }
             }
+
+            // Последние 64 сэмпла ТОЛЬКО ЧТО поданного окна (не включая
+            // старый контекст) — контекст для следующего фрейма.
+            contextTail = inputWithContext.copyOfRange(inputWithContext.size - CONTEXT_SIZE, inputWithContext.size)
         }
         return probabilities
     }
