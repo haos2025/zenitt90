@@ -25,13 +25,13 @@ class AddSourceViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<AddSourceUiState>(AddSourceUiState.Idle)
     val uiState: StateFlow<AddSourceUiState> = _uiState.asStateFlow()
 
-    fun addM3uUrl(label: String, url: String, onSuccess: () -> Unit) {
+    fun addM3uUrl(label: String, url: String, isLiveChannels: Boolean, onSuccess: () -> Unit) {
         if (url.isBlank()) { _uiState.value = AddSourceUiState.Error("Введите ссылку"); return }
         viewModelScope.launch {
             _uiState.value = AddSourceUiState.Loading
             repository.validateM3uUrl(url)
                 .onSuccess {
-                    repository.addM3uUrlSource(label.ifBlank { "Плейлист" }, url)
+                    repository.addM3uUrlSource(label.ifBlank { "Плейлист" }, url, isLiveChannels)
                     _uiState.value = AddSourceUiState.Idle
                     onSuccess()
                 }
@@ -43,11 +43,11 @@ class AddSourceViewModel @Inject constructor(
     // требует Context, которого у ViewModel по договорённости в проекте нет
     // напрямую, см. остальные *ViewModel-классы). Валидация здесь та же
     // проверка на "#EXTINF", что и для ссылки, просто без сетевого запроса.
-    fun addM3uFile(label: String, fileContent: String, onSuccess: () -> Unit) {
+    fun addM3uFile(label: String, fileContent: String, isLiveChannels: Boolean, onSuccess: () -> Unit) {
         if (!fileContent.contains("#EXTINF")) { _uiState.value = AddSourceUiState.Error("Не M3U-плейлист"); return }
         viewModelScope.launch {
             _uiState.value = AddSourceUiState.Loading
-            repository.addM3uFileSource(label.ifBlank { "Локальный файл" }, fileContent)
+            repository.addM3uFileSource(label.ifBlank { "Локальный файл" }, fileContent, isLiveChannels)
             _uiState.value = AddSourceUiState.Idle
             onSuccess()
         }

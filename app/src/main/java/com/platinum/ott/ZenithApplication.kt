@@ -12,6 +12,7 @@ import coil.memory.MemoryCache
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.platinum.ott.worker.SeriesUpdateWorker
+import com.platinum.ott.worker.ChannelHealthCheckWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import java.io.File
@@ -50,6 +51,7 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         // мёртвым кодом, вызывавшимся из НИГДЕ.
         createNotificationChannel()
         SeriesUpdateWorker.enqueue(this)
+        ChannelHealthCheckWorker.enqueue(this)
     }
 
     private fun createNotificationChannel() {

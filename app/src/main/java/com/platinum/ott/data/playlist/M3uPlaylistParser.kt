@@ -18,10 +18,16 @@ import com.platinum.ott.data.local.entity.PlaylistMovieEntity
  * без ЭТОГО заголовка отдаёт 404/403 от источника, общий User-Agent на все
  * каналы сразу это не покрывает. Раньше эти строки просто пропускались
  * как обычные комментарии — теперь читаются и сохраняются на канал.
+ *
+ * ДОБАВЛЕНО (PROMPT_IPTV_FOUNDATION.md): tvg-id тоже раньше не читался,
+ * хотя это стандартный M3U-атрибут именно для различения одинаковых по
+ * названию каналов разных регионов или, наоборот, надёжного опознания
+ * одного и того же канала у разных провайдеров — без него дедуп каналов
+ * между несколькими источниками по одному лишь названию небезопасен.
  */
 object M3uPlaylistParser {
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
-    private val ATTR_REGEX = Regex("(tvg-logo|group-title)=\"([^\"]*)\"")
+    private val ATTR_REGEX = Regex("(tvg-id|tvg-logo|group-title)=\"([^\"]*)\"")
     private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
     // У M3U, в отличие от Xtream, нет структурированного API сериалов —
     // единственный источник "это серия N сезона M" — сам текст названия.
@@ -81,7 +87,8 @@ object M3uPlaylistParser {
                             seriesId = seriesId,
                             seriesTitle = seriesTitle,
                             seasonNumber = seasonNumber,
-                            episodeNumber = episodeNumber
+                            episodeNumber = episodeNumber,
+                            tvgId = attrs["tvg-id"]?.ifBlank { null }
                         )
                     )
                     index++

@@ -50,9 +50,10 @@ import com.platinum.ott.ui.theme.*
 // плагины, синхронизация, подключение источника) не трогаем.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onChannelsClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
+    val channelsCount by viewModel.channelsCount.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -227,6 +228,13 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             // к внешнему состоянию, а не про поведение самого приложения.
             SettingsGroup("Источники", Icons.Outlined.Source) {
                 NavRow("Источники", if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено", onClick = onSourcesClick)
+                SettingsDivider()
+                // PROMPT_IPTV_FOUNDATION.md — отдельная строка, не подпункт
+                // "Источников": каналы агрегируются из ВСЕХ live-источников
+                // сразу (Channel/ChannelStream объединяет их по tvg-id), это
+                // не настройка одного конкретного источника. channelsCount —
+                // подписанные каналы, см. SettingsViewModel.channelsCount.
+                NavRow("Каналы", if (channelsCount == 0) "Нет подписок" else "$channelsCount в списке", onClick = onChannelsClick)
                 SettingsDivider()
                 NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
             }

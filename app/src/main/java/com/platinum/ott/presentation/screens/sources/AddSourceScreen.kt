@@ -68,6 +68,7 @@ fun AddSourceScreen(
     var xtHost by remember { mutableStateOf("") }
     var xtUser by remember { mutableStateOf("") }
     var xtPass by remember { mutableStateOf("") }
+    var isLiveChannels by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -137,6 +138,21 @@ fun AddSourceScreen(
                             if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = Color.White.copy(alpha = 0.5f))
                         }
                     }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
+                        modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS)
+                    ) {
+                        Switch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
+                        Column {
+                            Text("Это плейлист живых каналов", color = Color.White)
+                            Text(
+                                "Каналы попадут в раздел «Каналы», а не в общий каталог фильмов",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
                 }
                 SourceType.XTREAM -> {
                     SourceTextField(xtHost, { xtHost = it }, "http://example.com:8080")
@@ -155,8 +171,8 @@ fun AddSourceScreen(
                     onClick = {
                         when (sourceType) {
                             SourceType.M3U -> when (m3uMethod) {
-                                M3uMethod.URL, M3uMethod.QR -> viewModel.addM3uUrl(label, m3uUrl, onDone)
-                                M3uMethod.FILE -> fileContent?.let { viewModel.addM3uFile(label, it, onDone) }
+                                M3uMethod.URL, M3uMethod.QR -> viewModel.addM3uUrl(label, m3uUrl, isLiveChannels, onDone)
+                                M3uMethod.FILE -> fileContent?.let { viewModel.addM3uFile(label, it, isLiveChannels, onDone) }
                             }
                             SourceType.XTREAM -> viewModel.addXtream(label, xtHost, xtUser, xtPass, onDone)
                         }

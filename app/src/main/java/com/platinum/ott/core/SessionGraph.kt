@@ -54,6 +54,18 @@ class SessionGraph @Inject constructor(
     // отдельно от playlistRepository, который теперь только агрегирует.
     // Будет использован SourcesViewModel в подзадаче 4/5.
     lateinit var playlistSourceRepository: PlaylistSourceRepository; private set
+    // IPTV-фундамент (PROMPT_IPTV_FOUNDATION.md) — дедуп/сопоставление
+    // каналов между источниками по tvg-id, используется изнутри
+    // playlistSourceRepository.refresh() и будет нужен напрямую следующим
+    // подзадачам (UI слияния каналов, health-check).
+    lateinit var channelMatchingRepository: ChannelMatchingRepository; private set
+    // Читающая/управляющая сторона того же слоя (список каналов для UI,
+    // подписка/переименование/слияние) — см. заголовок ChannelRepository.kt.
+    lateinit var channelRepository: ChannelRepository; private set
+    // Health-check подписанных каналов (PROMPT_IPTV_FOUNDATION.md) —
+    // используется и ChannelHealthCheckWorker (по расписанию), и
+    // ChannelsViewModel ("Проверить сейчас").
+    lateinit var channelHealthChecker: ChannelHealthChecker; private set
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
@@ -110,7 +122,10 @@ class SessionGraph @Inject constructor(
         val timeoutSeconds = networkPreferences.getTimeoutSeconds().toLong()
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
-        playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient)
+        channelMatchingRepository = ChannelMatchingRepository(database.channelDao(), database.channelStreamDao())
+        channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao())
+        channelHealthChecker = ChannelHealthChecker(database.channelDao(), database.channelStreamDao())
+        playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient, channelMatchingRepository)
         // Синхронно (runBlocking) и до создания playlistRepository — иначе
         // самый первый getCatalog() после обновления приложения (например,
         // из HomeViewModel сразу при старте) мог бы прочитать пустой список
@@ -138,7 +153,7 @@ class SessionGraph @Inject constructor(
             networkPreferences, notificationPreferences
         )
         appScope.launch { pluginManager.loadAllEnabled() }
-        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase)
+        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, database.channelDao(), database.channelStreamDao())
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         cacheManagementUseCase = CacheManagementUseCase(appContext, database.movieDao(), database.playlistMovieDao(), database.metadataDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, api)

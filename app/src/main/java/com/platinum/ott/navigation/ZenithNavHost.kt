@@ -23,6 +23,8 @@ import com.platinum.ott.presentation.screens.sync.SyncPairingScreen
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
 import com.platinum.ott.presentation.screens.plugins.PluginDetailScreen
+import com.platinum.ott.presentation.screens.channels.ChannelsScreen
+import com.platinum.ott.presentation.phone.screens.PhoneChannelsScreen
 import com.platinum.ott.presentation.phone.screens.PhoneHomeScreen
 import com.platinum.ott.presentation.phone.screens.PhoneDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneFavoritesScreen
@@ -55,6 +57,15 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("add_source") {
             if (isTV) AddSourceScreen(onDone = { navController.popBackStack() })
             else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() })
+        }
+        // PROMPT_IPTV_FOUNDATION.md, подзадача "UI слияния каналов" — тот
+        // же уровень вложенности, что и "add_source" выше: достижим из
+        // Настроек (см. SettingsScreen.kt), не из NavSidebar/PhoneBottomBar
+        // (те же соображения, что и у "sources" — нишевая функция, не
+        // основная навигация).
+        composable("channels") {
+            if (isTV) ChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") })
+            else PhoneChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") })
         }
         // PROMPT_NAVIGATION_SIDEBAR.md — HomeScreen (TV) больше не получает
         // отдельные onSettingsClick/onFavoritesClick/onHistoryClick/
@@ -100,7 +111,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val variantUrl = entry.arguments?.getString("variantUrl")?.ifBlank { null }
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl)
         }
-        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onChannelsClick = { navController.navigate("channels") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.

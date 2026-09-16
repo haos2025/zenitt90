@@ -1,0 +1,132 @@
+package com.platinum.ott.data.repository
+
+import com.platinum.ott.data.local.dao.ChannelDao
+import com.platinum.ott.data.local.dao.ChannelStreamDao
+import com.platinum.ott.data.local.entity.ChannelEntity
+import com.platinum.ott.data.local.entity.ChannelStreamEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Единая сырая форма канала независимо от протокола-источника (M3U-запись
+ * с tvg-id или Xtream XtreamLiveStreamInfo с epg_channel_id) — сам
+ * ChannelMatchingRepository не знает и не должен знать, откуда пришли эти
+ * данные, только как их свести в Channel/ChannelStream.
+ */
+data class RawChannelCandidate(
+    val tvgId: String?,
+    val name: String,
+    val logo: String?,
+    val category: String?,
+    val streamUrl: String,
+    val userAgent: String? = null,
+    val referrer: String? = null
+)
+
+/**
+ * PROMPT_IPTV_FOUNDATION.md, подзадача "Сопоставление каналов между
+ * источниками" — продуктовое решение: НЕ по тексту названия (риск
+ * склеить разные часовые пояса/регионы), а по tvg-id, если он есть и
+ * совпал с уже существующим каналом. Если tvg-id нет или не совпал ни с
+ * чем — новый Channel с isSubscribed = false, слияние с существующим
+ * каналом — только вручную через UI (следующая подзадача), никогда не
+ * автоматической эвристикой по имени.
+ */
+class ChannelMatchingRepository(
+    private val channelDao: ChannelDao,
+    private val channelStreamDao: ChannelStreamDao
+) {
+    /**
+     * Обрабатывает полный список каналов ОДНОГО источника за один refresh().
+     * Тот же принцип "не чистим кэш, пока не убедились", что и в
+     * PlaylistSourceRepository.refresh() для playlist_movies — пустой
+     * список ничего не удаляет (транзиентная ошибка сети/парсинга не
+     * должна стирать уже накопленные каналы этого источника).
+     */
+    suspend fun matchAndStore(sourceId: String, candidates: List<RawChannelCandidate>) {
+        if (candidates.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            // Health-check данные (lastCheckedAt/lastCheckStatus) и ручной
+            // priority конкретного стрима нужно перенести на новые записи —
+            // иначе каждый refresh() обнулял бы результат health-check
+            // (следующая подзадача этой темы) обратно в "unknown".
+            val previousStreams = channelStreamDao.getBySourceId(sourceId).associateBy { it.id }
+
+            val newStreams = candidates.map { candidate ->
+                val channelId = resolveChannelId(sourceId, candidate)
+                val streamId = "cs_${sourceId}_$channelId"
+                val previous = previousStreams[streamId]
+                ChannelStreamEntity(
+                    id = streamId,
+                    channelId = channelId,
+                    sourceId = sourceId,
+                    streamUrl = candidate.streamUrl,
+                    rawTitle = candidate.name,
+                    userAgent = candidate.userAgent,
+                    referrer = candidate.referrer,
+                    lastCheckedAt = previous?.lastCheckedAt,
+                    lastCheckStatus = previous?.lastCheckStatus ?: "unknown",
+                    consecutiveFailures = previous?.consecutiveFailures ?: 0,
+                    priority = previous?.priority ?: 0
+                )
+            }
+
+            channelStreamDao.deleteBySourceId(sourceId)
+            channelStreamDao.upsertAll(newStreams)
+        }
+    }
+
+    /**
+     * Возвращает id канонического Channel для этого сырого кандидата,
+     * создавая его при первом появлении. Схема id намеренно детерминирована
+     * (не UUID), чтобы повторный refresh() того же источника переиспользовал
+     * ТУ ЖЕ запись, а не плодил дубли при каждом обновлении:
+     *
+     * - есть tvg-id → id стабилен ГЛОБАЛЬНО ("ch_tvg_<tvgId>"), это и есть
+     *   механизм сопоставления между разными источниками — второй источник
+     *   с тем же tvg-id попадёт на тот же Channel автоматически.
+     * - нет tvg-id → id стабилен только В РАМКАХ этого источника
+     *   ("ch_unmatched_<sourceId>_<slug>") — сознательно не пытаемся угадать
+     *   совпадение с каналом другого источника по названию, это должен
+     *   подтвердить пользователь через UI слияния (следующая подзадача).
+     */
+    private suspend fun resolveChannelId(sourceId: String, candidate: RawChannelCandidate): String {
+        val channelId = if (candidate.tvgId != null) {
+            "ch_tvg_${candidate.tvgId}"
+        } else {
+            "ch_unmatched_${sourceId}_${slug(candidate.name)}"
+        }
+
+        val existing = channelDao.getById(channelId)
+        if (existing == null) {
+            channelDao.upsert(
+                ChannelEntity(
+                    id = channelId,
+                    canonicalName = candidate.name,
+                    tvgId = candidate.tvgId,
+                    logo = candidate.logo,
+                    category = candidate.category,
+                    isSubscribed = false
+                )
+            )
+        } else {
+            // canonicalName/regionHint/isSubscribed/sortOrder — пользователь
+            // мог поменять их вручную (переименование, подписка, слияние).
+            // Обновляем только то, что реально приходит заново от источника
+            // при каждом refresh(), не трогая выбор пользователя.
+            channelDao.upsert(
+                existing.copy(
+                    logo = candidate.logo ?: existing.logo,
+                    category = candidate.category ?: existing.category
+                )
+            )
+        }
+        return channelId
+    }
+
+    private fun slug(name: String): String =
+        name.trim().lowercase()
+            .replace(Regex("[^a-zа-яё0-9]+"), "_")
+            .trim('_')
+            .ifBlank { "unnamed" }
+}

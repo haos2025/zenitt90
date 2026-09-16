@@ -3,6 +3,9 @@ package com.platinum.ott.domain.usecase
 import com.google.gson.Gson
 import com.platinum.ott.core.js.ScriptProvider
 import com.platinum.ott.core.plugin.PluginManager
+import com.platinum.ott.data.local.dao.ChannelDao
+import com.platinum.ott.data.local.dao.ChannelStreamDao
+import com.platinum.ott.data.local.entity.ChannelStreamEntity
 import com.platinum.ott.data.remote.ZenithApiService
 import com.platinum.ott.data.remote.dto.StreamVariantDto
 import com.platinum.ott.data.repository.PlaylistRepository
@@ -16,7 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Три независимых, все рабочих пути получения ссылки на видео — выбор по
+ * Четыре независимых, все рабочих пути получения ссылки на видео — выбор по
  * префиксу ID:
  *
  *  1. "yt_"/"ia_" (контент из Zenith backend) — ГИБРИДНАЯ МОДЕЛЬ (Задача 2,
@@ -30,10 +33,25 @@ import kotlinx.coroutines.withTimeoutOrNull
  *     той самой болячкой Lampa, которую решили не повторять).
  *
  *  2. "m3u_"/"xt_" (контент из собственного M3U/Xtream-плейлиста
- *     пользователя) — ссылка уже известна из парсинга плейлиста/Xtream API,
- *     второй сетевой запрос не нужен вообще.
+ *     пользователя, VOD) — ссылка уже известна из парсинга плейлиста/Xtream
+ *     API, второй сетевой запрос не нужен вообще.
  *
- *  3. Любой другой ID (контент, добавленный через ScriptProvider —
+ *  3. "ch_" (живой канал, PROMPT_IPTV_FOUNDATION.md, подзадача "fallback
+ *     при воспроизведении") — Channel.id как таковой не хранит ссылку,
+ *     ссылок несколько (по одной на источник, ChannelStreamEntity).
+ *     Стратегия: НЕ пробовать их по очереди самим (это добавило бы
+ *     задержку перед стартом воспроизведения на каждый мёртвый источник) —
+ *     вернуть ВСЕ как отдельные StreamVariant, отсортированные так, чтобы
+ *     первый (currentVariant по умолчанию в PlayerViewModel.loadMovie())
+ *     был самым вероятным живым по уже накопленным health-check данным
+ *     (ChannelHealthChecker). Реальная гонка/переключение при отказе — уже
+ *     готовый механизм PlayerViewModel: на ERROR_CODE_IO_* он сам берёт
+ *     variants.getOrNull(currentIndex + 1) и пробует следующий — тот же
+ *     код, что уже переключает 1080p→720p при сбое качества, здесь просто
+ *     "следующий вариант" оказывается другим источником того же канала,
+ *     не другим качеством. Продолжение уже выбранного подхода, не с нуля.
+ *
+ *  4. Любой другой ID (контент, добавленный через ScriptProvider —
  *     ОТДЕЛЬНЫЙ от PluginManager механизм, один встроенный "parser"-скрипт,
  *     не путать с гонкой по установленным плагинам из пункта 1).
  */
@@ -42,11 +60,14 @@ class GetPlayableUrlUseCase(
     private val api: ZenithApiService,
     private val playlistRepository: PlaylistRepository,
     private val pluginManager: PluginManager,
-    private val getMovie: GetMovieByIdUseCase
+    private val getMovie: GetMovieByIdUseCase,
+    private val channelDao: ChannelDao,
+    private val channelStreamDao: ChannelStreamDao
 ) {
     companion object {
         private val ZENITH_BACKEND_PREFIXES = setOf("yt", "ia")
         private val PLAYLIST_PREFIXES = setOf("m3u", "xt")
+        private const val CHANNEL_PREFIX = "ch_"
         private const val PARSER_SCRIPT_NAME = "player_parser" // без .js — см. ScriptProvider.getScript
         private const val PARSER_FUNCTION_NAME = "parseMovie"
 
@@ -58,6 +79,12 @@ class GetPlayableUrlUseCase(
         // QuickJS и вернёт null — просто не участвует в гонке, не ошибка.
         private const val PLUGIN_FUNCTION_NAME = "findStream"
         private const val PLUGIN_RACE_TIMEOUT_MS = 4000L
+
+        // Сортировка ChannelStream при fallback — см. executeChannelFallback().
+        // "dead" не исключается совсем: если ВСЕ стримы канала мертвы,
+        // лучше дать PlayerViewModel честно попробовать и показать ошибку,
+        // чем заранее решить за пользователя "тут вообще нечего показывать".
+        private val CHANNEL_STATUS_RANK = mapOf("alive" to 0, "unknown" to 1, "dead" to 2)
     }
 
     private val gson = Gson()
@@ -81,8 +108,10 @@ class GetPlayableUrlUseCase(
         // записей), и новый с UUID источника впереди.
         val isPlaylist = PLAYLIST_PREFIXES.any { movieId.startsWith("${it}_") || movieId.contains("_${it}_") }
         val isBackend = ZENITH_BACKEND_PREFIXES.any { movieId.startsWith("${it}_") || movieId.contains("_${it}_") }
+        val isChannel = movieId.startsWith(CHANNEL_PREFIX)
         when {
             isBackend -> executeWithPluginRace(movieId)
+            isChannel -> executeChannelFallback(movieId)
             isPlaylist -> {
                 val info = playlistRepository.getStreamInfo(movieId)
                 if (info != null) listOf(StreamVariant("Оригинал", info.url, source = "Мой плейлист", headers = info.headers)) else emptyList()
@@ -142,5 +171,40 @@ class GetPlayableUrlUseCase(
         }
 
         backendDeferred.await() + pluginsDeferred.await()
+    }
+
+    /**
+     * НЕ гонка с реальными сетевыми запросами здесь (см. заголовок класса,
+     * пункт 3) — чисто сортировка уже известных данных. Порядок:
+     * "alive" → "unknown" → "dead" (см. STATUS_RANK), внутри группы —
+     * ChannelStreamEntity.priority по возрастанию. Живой эфир без вообще
+     * ни одного ChannelStream (источник удалён/отписан) — пустой список,
+     * тот же контракт, что и у playlist-ветки (info == null → emptyList()).
+     */
+    private suspend fun executeChannelFallback(channelId: String): List<StreamVariant> {
+        // channelDao.getById() здесь не для данных о самом стриме (та
+        // информация целиком в ChannelStreamEntity) — только чтобы у
+        // "безымянного" стрима (rawTitle == null, ChannelMatchingRepository
+        // не всегда получает осмысленное название от источника) был
+        // human-readable фолбэк вместо голого "Источник N".
+        val channel = channelDao.getById(channelId) ?: return emptyList()
+        val streams = channelStreamDao.getByChannelId(channelId)
+        if (streams.isEmpty()) return emptyList()
+        return streams
+            .sortedWith(compareBy({ CHANNEL_STATUS_RANK[it.lastCheckStatus] ?: 1 }, { it.priority }))
+            .mapIndexed { index, stream -> stream.toStreamVariant(index, channel.canonicalName) }
+    }
+
+    private fun ChannelStreamEntity.toStreamVariant(index: Int, fallbackName: String): StreamVariant {
+        val headers = buildMap {
+            userAgent?.let { put("User-Agent", it) }
+            referrer?.let { put("Referer", it) }
+        }
+        // quality — не разрешение, а человекочитаемая метка ИСТОЧНИКА
+        // этого конкретного стрима (rawTitle — как называл этот канал
+        // именно этот источник, см. ChannelStreamEntity) — тот же принцип
+        // "видно, откуда вариант", что и StreamVariant.source для VOD.
+        val label = rawTitle?.takeIf { it.isNotBlank() } ?: "$fallbackName (${index + 1})"
+        return StreamVariant(quality = label, url = streamUrl, source = "Прямой эфир", headers = headers)
     }
 }

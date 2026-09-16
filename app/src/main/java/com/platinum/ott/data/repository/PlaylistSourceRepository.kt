@@ -7,6 +7,7 @@ import com.platinum.ott.data.local.dao.PlaylistSourceDao
 import com.platinum.ott.data.local.entity.PlaylistMovieEntity
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
 import com.platinum.ott.data.playlist.M3uPlaylistParser
+import com.platinum.ott.data.playlist.XtreamLiveStreamInfo
 import com.platinum.ott.data.playlist.XtreamVodClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -42,7 +43,8 @@ class PlaylistSourceRepository(
     private val authPreferences: AuthPreferences,
     private val sourceDao: PlaylistSourceDao,
     private val movieDao: PlaylistMovieDao,
-    private val client: OkHttpClient
+    private val client: OkHttpClient,
+    private val channelMatchingRepository: ChannelMatchingRepository
 ) {
     // Локальные снапшоты M3U-файлов, добавленных через "Локальный файл"
     // (ACTION_OPEN_DOCUMENT). Решение сессии: копируем содержимое один раз
@@ -131,18 +133,24 @@ class PlaylistSourceRepository(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    suspend fun addM3uUrlSource(label: String, url: String): PlaylistSourceEntity = withContext(Dispatchers.IO) {
-        val entity = PlaylistSourceEntity(id = UUID.randomUUID().toString(), type = "m3u", label = label, url = url, priority = nextPriority())
+    suspend fun addM3uUrlSource(label: String, url: String, isLiveChannels: Boolean = false): PlaylistSourceEntity = withContext(Dispatchers.IO) {
+        val entity = PlaylistSourceEntity(
+            id = UUID.randomUUID().toString(), type = "m3u", label = label, url = url, priority = nextPriority(),
+            contentKind = if (isLiveChannels) "live" else "vod"
+        )
         sourceDao.upsert(entity)
         entity
     }
 
     /** См. заголовок класса — снапшот копируется один раз при добавлении. */
-    suspend fun addM3uFileSource(label: String, fileContent: String): PlaylistSourceEntity = withContext(Dispatchers.IO) {
+    suspend fun addM3uFileSource(label: String, fileContent: String, isLiveChannels: Boolean = false): PlaylistSourceEntity = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
         val snapshotFile = File(snapshotDir, "$id.m3u")
         snapshotFile.writeText(fileContent)
-        val entity = PlaylistSourceEntity(id = id, type = "m3u", label = label, url = "file://${snapshotFile.absolutePath}", priority = nextPriority())
+        val entity = PlaylistSourceEntity(
+            id = id, type = "m3u", label = label, url = "file://${snapshotFile.absolutePath}", priority = nextPriority(),
+            contentKind = if (isLiveChannels) "live" else "vod"
+        )
         sourceDao.upsert(entity)
         entity
     }
@@ -208,7 +216,7 @@ class PlaylistSourceRepository(
             if (System.currentTimeMillis() - lastCache <= SOURCE_REFRESH_TTL_MS) return@withContext
         }
         try {
-            val rawEntries: List<PlaylistMovieEntity> = when (source.type) {
+            when (source.type) {
                 "m3u" -> {
                     val url = source.url ?: return@withContext
                     val body = if (url.startsWith("file://")) {
@@ -217,37 +225,66 @@ class PlaylistSourceRepository(
                         val req = Request.Builder().url(url).build()
                         client.newCall(req).execute().use { it.body?.string() ?: "" }
                     }
-                    M3uPlaylistParser.parse(body)
+                    val rawEntries = M3uPlaylistParser.parse(body)
+                    if (source.contentKind == "live") {
+                        // Живой эфир целиком уходит в Channel/ChannelStream —
+                        // не пишется в playlist_movies вообще (см.
+                        // PROMPT_IPTV_FOUNDATION.md, ChannelMatchingRepository).
+                        channelMatchingRepository.matchAndStore(sourceId, rawEntries.map { it.toRawChannelCandidate() })
+                    } else {
+                        storeVodEntries(source, sourceId, rawEntries)
+                    }
                 }
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
                     if (host == null || user == null || pass == null) return@withContext
-                    XtreamVodClient.fetch(client, host, user, pass)
+                    storeVodEntries(source, sourceId, XtreamVodClient.fetch(client, host, user, pass))
+
+                    // Живой эфир — отдельный эндпоинт Xtream, не зависит от
+                    // contentKind (то поле имеет смысл только для M3U — Xtream
+                    // сам структурно разделяет VOD/live). fetchLiveStreams()
+                    // сама ловит исключение "у панели вообще нет раздела live"
+                    // и возвращает emptyList(), так что уже успешный VOD-фетч
+                    // выше этим не роняется.
+                    val liveStreams = XtreamVodClient.fetchLiveStreams(client, host, user, pass)
+                    channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
                 }
-                else -> emptyList()
-            }
-            val scoped = rawEntries.map { entry ->
-                if (source.legacyIds) {
-                    entry.copy(sourceId = sourceId)
-                } else {
-                    entry.copy(
-                        id = "${sourceId}_${entry.id}",
-                        sourceId = sourceId,
-                        seriesId = entry.seriesId?.let { "${sourceId}_$it" }
-                    )
-                }
-            }
-            // Не чистим таблицу, пока не убедились что новые данные реально
-            // пришли — иначе временный сетевой сбой посреди refresh() стёр
-            // бы уже рабочий кэш этого источника и заменил его пустотой
-            // (тот же принцип, что был в предыдущей версии PlaylistRepository).
-            if (scoped.isNotEmpty()) {
-                movieDao.deleteBySource(sourceId)
-                movieDao.upsertAll(scoped)
+                else -> {}
             }
             sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), "ok")
         } catch (e: Exception) {
             sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), e.message ?: "Ошибка обновления")
         }
     }
+
+    private suspend fun storeVodEntries(source: PlaylistSourceEntity, sourceId: String, rawEntries: List<PlaylistMovieEntity>) {
+        val scoped = rawEntries.map { entry ->
+            if (source.legacyIds) {
+                entry.copy(sourceId = sourceId)
+            } else {
+                entry.copy(
+                    id = "${sourceId}_${entry.id}",
+                    sourceId = sourceId,
+                    seriesId = entry.seriesId?.let { "${sourceId}_$it" }
+                )
+            }
+        }
+        // Не чистим таблицу, пока не убедились что новые данные реально
+        // пришли — иначе временный сетевой сбой посреди refresh() стёр бы
+        // уже рабочий кэш этого источника и заменил его пустотой (тот же
+        // принцип, что был в предыдущей версии PlaylistRepository).
+        if (scoped.isNotEmpty()) {
+            movieDao.deleteBySource(sourceId)
+            movieDao.upsertAll(scoped)
+        }
+    }
+
+    private fun PlaylistMovieEntity.toRawChannelCandidate() = RawChannelCandidate(
+        tvgId = tvgId, name = title, logo = poster, category = genre,
+        streamUrl = streamUrl, userAgent = userAgent, referrer = referrer
+    )
+
+    private fun XtreamLiveStreamInfo.toRawChannelCandidate() = RawChannelCandidate(
+        tvgId = tvgId, name = name, logo = logo, category = categoryName, streamUrl = streamUrl
+    )
 }

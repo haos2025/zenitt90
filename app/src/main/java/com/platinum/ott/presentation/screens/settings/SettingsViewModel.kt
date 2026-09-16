@@ -54,6 +54,13 @@ class SettingsViewModel @Inject constructor(
     private val _sourcesCount = MutableStateFlow(0)
     val sourcesCount: StateFlow<Int> = _sourcesCount
 
+    // PROMPT_IPTV_FOUNDATION.md — тот же принцип, что и sourcesCount выше:
+    // реально сохранённые записи (здесь — ПОДПИСАННЫЕ каналы, не все
+    // импортированные, см. ChannelRepository.getSubscribedCount()), не
+    // прогноз/кэш.
+    private val _channelsCount = MutableStateFlow(0)
+    val channelsCount: StateFlow<Int> = _channelsCount
+
     // lastSyncTimestamp пишется в SyncRepositoryImpl при каждом успешном
     // sync() (тот же источник данных, что уже читает SyncPairingViewModel
     // для своей строки "Последняя синхронизация: ...") — здесь просто
@@ -71,6 +78,7 @@ class SettingsViewModel @Inject constructor(
     fun refreshStatusRows() {
         viewModelScope.launch {
             _sourcesCount.value = sessionGraph.playlistSourceRepository.getAll().size
+            _channelsCount.value = sessionGraph.channelRepository.getSubscribedCount()
             _lastSyncedAtMs.value = authPreferences.lastSyncTimestamp
         }
     }

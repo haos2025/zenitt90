@@ -19,6 +19,35 @@ private data class XtreamCategory(
     @SerializedName("category_name") val categoryName: String = ""
 )
 
+// get_live_streams — раздел живого эфира Xtream-панели, структурно похож
+// на get_vod_streams, но с epg_channel_id — это и есть Xtream-эквивалент
+// tvg-id из M3U (тот же смысл: ключ для сопоставления канала с EPG/другими
+// источниками), просто под другим именем в этом конкретном API.
+private data class XtreamLiveItem(
+    @SerializedName("stream_id") val streamId: Int = 0,
+    val name: String = "",
+    @SerializedName("stream_icon") val streamIcon: String? = null,
+    @SerializedName("category_id") val categoryId: String? = null,
+    @SerializedName("epg_channel_id") val epgChannelId: String? = null
+)
+
+/**
+ * Результат fetchLiveStreams() — сознательно НЕ PlaylistMovieEntity: канал
+ * живого эфира не фильм (нет года/сезона/эпизода), и эта модель — сырые
+ * данные с панели для дальнейшего сопоставления в Channel/ChannelStream
+ * (см. PROMPT_IPTV_FOUNDATION.md, подзадача "Сопоставление" — она решает,
+ * какая из этих записей становится новым Channel, а какая — новым
+ * ChannelStream к уже существующему).
+ */
+data class XtreamLiveStreamInfo(
+    val streamId: Int,
+    val name: String,
+    val logo: String?,
+    val categoryName: String?,
+    val tvgId: String?,
+    val streamUrl: String
+)
+
 // get_series — список сериалов (без эпизодов, только карточка сериала).
 private data class XtreamSeriesItem(
     @SerializedName("series_id") val seriesId: Int = 0,
@@ -102,6 +131,64 @@ object XtreamVodClient {
         val episodes = fetchSeriesEpisodes(client, gson, base, username, password, categories)
 
         return movies + episodes
+    }
+
+    /**
+     * get_live_categories + get_live_streams — раздел живого эфира.
+     * Не вызывается из fetch() и не подмешивается в его результат: живой
+     * эфир — это Channel/ChannelStream (см. PROMPT_IPTV_FOUNDATION.md),
+     * отдельный слой от PlaylistMovieEntity, вызывающий код сам решает,
+     * когда и куда класть результат — эта функция только достаёт данные
+     * с панели, ничего не пишет и не сопоставляет.
+     *
+     * ДОПУЩЕНИЕ (не проверено на реальной панели, честно): расширение
+     * потока для live-ссылок Xtream в get_live_streams обычно не
+     * приходит отдельным полем (в отличие от VOD, где container_extension
+     * есть у каждого item) — стандартная договорённость самого протокола
+     * -- ".ts" для прямого потока. Часть панелей отдаёт и m3u8 по той же
+     * ссылке с иным расширением — если на реальном плейлисте окажется не
+     * так, поправить константу LIVE_EXTENSION ниже, это не архитектурное
+     * решение, а один параметр.
+     */
+    private const val LIVE_EXTENSION = "ts"
+
+    fun fetchLiveStreams(client: OkHttpClient, host: String, username: String, password: String): List<XtreamLiveStreamInfo> {
+        val base = host.trimEnd('/')
+        val gson = Gson()
+
+        val categories = try {
+            val req = Request.Builder()
+                .url("$base/player_api.php?username=$username&password=$password&action=get_live_categories")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: "[]"
+                gson.fromJson(body, Array<XtreamCategory>::class.java)
+            }.associate { it.categoryId to it.categoryName }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        return try {
+            val req = Request.Builder()
+                .url("$base/player_api.php?username=$username&password=$password&action=get_live_streams")
+                .build()
+            val items = client.newCall(req).execute().use { resp ->
+                val body = resp.body?.string() ?: "[]"
+                gson.fromJson(body, Array<XtreamLiveItem>::class.java) ?: emptyArray()
+            }
+            items.map { item ->
+                XtreamLiveStreamInfo(
+                    streamId = item.streamId,
+                    name = item.name,
+                    logo = item.streamIcon,
+                    categoryName = categories[item.categoryId],
+                    tvgId = item.epgChannelId?.ifBlank { null },
+                    streamUrl = "$base/live/$username/$password/${item.streamId}.$LIVE_EXTENSION"
+                )
+            }
+        } catch (_: Exception) {
+            emptyList() // панель без раздела живого эфира — не ошибка, как и с get_series
+        }
     }
 
     private fun fetchSeriesEpisodes(

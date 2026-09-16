@@ -50,5 +50,12 @@ data class PlaylistMovieEntity(
     // refresh() после миграции AuthPreferences → первая запись PlaylistSource
     // (отдельная подзадача).
     val sourceId: String? = null,
-    val cachedAt: Long = System.currentTimeMillis()
+    val cachedAt: Long = System.currentTimeMillis(),
+    // Добавлено задачей IPTV-фундамента (PROMPT_IPTV_FOUNDATION.md) —
+    // стандартный M3U-атрибут #EXTINF, раньше вообще не читался парсером.
+    // Ключ автосопоставления одного и того же канала между разными
+    // источниками (см. ChannelEntity.tvgId) — используется только для
+    // живого эфира, для фильмов/сериалов остаётся null и ни на что не
+    // влияет. Nullable без DEFAULT — тот же паттерн, что и у sourceId выше.
+    val tvgId: String? = null
 )

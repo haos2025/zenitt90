@@ -13,9 +13,10 @@ import com.platinum.ott.data.local.entity.*
     entities = [
         MovieEntity::class, FavoriteEntity::class, FolderEntity::class,
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
-        PluginEntity::class, PlaylistMovieEntity::class, PlaylistSourceEntity::class
+        PluginEntity::class, PlaylistMovieEntity::class, PlaylistSourceEntity::class,
+        ChannelEntity::class, ChannelStreamEntity::class
     ],
-    version = 13, exportSchema = true
+    version = 16, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -26,6 +27,8 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun pluginDao(): PluginDao
     abstract fun playlistMovieDao(): PlaylistMovieDao
     abstract fun playlistSourceDao(): PlaylistSourceDao
+    abstract fun channelDao(): ChannelDao
+    abstract fun channelStreamDao(): ChannelStreamDao
 
     companion object {
         // Раньше версия схемы никогда не поднималась после первого релиза,
@@ -147,10 +150,75 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // IPTV-фундамент (PROMPT_IPTV_FOUNDATION.md) — раньше живой канал
+        // от разных источников представлялся отдельными несвязанными
+        // строками playlist_movies (риск дублей в избранном, нет способа
+        // переключиться на другой источник при отказе одного без потери
+        // избранного/истории). Новые таблицы разделяют понятия: channels —
+        // канонический канал (то, на что ссылается избранное), channel_streams —
+        // конкретная ссылка конкретного источника на него.
+        //
+        // Существующие данные НЕ переносятся этой миграцией: до сих пор
+        // playlist_movies не различал "живой канал" и "обычный VOD" никаким
+        // отдельным флагом, поэтому надёжно понять, какие из уже сохранённых
+        // строк на самом деле каналы, а какие — фильмы, здесь неоткуда — это
+        // и есть работа подзадачи "Сопоставление" (следующая), которая при
+        // очередном refresh() источника сама создаст Channel/ChannelStream
+        // из свежих данных, используя tvgId. Явный столбец tvgId в
+        // playlist_movies (добавлен в прошлой подзадаче на уровне Entity/
+        // парсера) в схеме здесь появляется впервые — ALTER TABLE без
+        // DEFAULT, тот же безопасный nullable-паттерн, что и во всех
+        // предыдущих миграциях этого файла.
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `tvgId` TEXT")
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `channels` (" +
+                        "`id` TEXT NOT NULL, `canonicalName` TEXT NOT NULL, `tvgId` TEXT, " +
+                        "`logo` TEXT, `category` TEXT, `regionHint` TEXT, " +
+                        "`isSubscribed` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `channel_streams` (" +
+                        "`id` TEXT NOT NULL, `channelId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, " +
+                        "`streamUrl` TEXT NOT NULL, `rawTitle` TEXT, `userAgent` TEXT, " +
+                        "`referrer` TEXT, `lastCheckedAt` INTEGER, `lastCheckStatus` TEXT NOT NULL, " +
+                        "`priority` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_channel_streams_channelId` ON `channel_streams` (`channelId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_channel_streams_sourceId` ON `channel_streams` (`sourceId`)")
+            }
+        }
+
+        // Явный переключатель "это плейлист живых каналов" на добавлении
+        // M3U-источника (продуктовое решение сессии "Сопоставление" —
+        // tvg-id один не разделяет VOD/live внутри плоского M3U-списка,
+        // нужен явный выбор пользователя). NOT NULL DEFAULT 'vod' безопасен
+        // для SQLite и не меняет поведение уже существующих источников.
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_sources` ADD COLUMN `contentKind` TEXT NOT NULL DEFAULT 'vod'")
+            }
+        }
+
+        // Health-check (PROMPT_IPTV_FOUNDATION.md) — бэкофф-счётчик для
+        // экспоненциального интервала повторной проверки, см. комментарий
+        // у поля в ChannelStreamEntity. NOT NULL DEFAULT 0 безопасен для
+        // SQLite, существующие записи (ещё ни разу не проверялись) получают
+        // 0 — то же значение, с которым живёт свежесозданная запись.
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `channel_streams` ADD COLUMN `consecutiveFailures` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }
