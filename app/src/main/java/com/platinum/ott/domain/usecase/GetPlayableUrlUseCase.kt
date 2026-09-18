@@ -6,7 +6,7 @@ import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.data.local.dao.ChannelDao
 import com.platinum.ott.data.local.dao.ChannelStreamDao
 import com.platinum.ott.data.local.entity.ChannelStreamEntity
-import com.platinum.ott.data.local.entity.PlaylistSourceDao
+import com.platinum.ott.data.local.dao.PlaylistSourceDao
 import com.platinum.ott.data.playlist.CatchupUrlBuilder
 import com.platinum.ott.data.remote.ZenithApiService
 import com.platinum.ott.data.remote.dto.StreamVariantDto
