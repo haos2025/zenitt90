@@ -13,6 +13,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.platinum.ott.worker.SeriesUpdateWorker
 import com.platinum.ott.worker.ChannelHealthCheckWorker
+import com.platinum.ott.worker.EpgCleanupWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import java.io.File
@@ -52,6 +53,7 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         createNotificationChannel()
         SeriesUpdateWorker.enqueue(this)
         ChannelHealthCheckWorker.enqueue(this)
+        EpgCleanupWorker.enqueue(this)
     }
 
     private fun createNotificationChannel() {

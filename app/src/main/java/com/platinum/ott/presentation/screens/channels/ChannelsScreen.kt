@@ -47,6 +47,7 @@ import com.platinum.ott.ui.theme.*
 fun ChannelsScreen(
     onBackPressed: () -> Unit,
     onPlayChannel: (String) -> Unit,
+    onOpenEpgGrid: () -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -72,6 +73,11 @@ fun ChannelsScreen(
             OutlinedButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                 Text(if (isChecking) "Проверка..." else "Проверить сейчас")
             }
+            Spacer(Modifier.width(ZenithDimens.paddingS))
+            // PROMPT_EPG.md, подзадача 4 — сетка не отсюда управляет
+            // подпиской, только показывает уже подписанные, поэтому это
+            // просто переход, а не часть состояния этого экрана.
+            OutlinedButton(onClick = onOpenEpgGrid) { Text("Программа передач") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }

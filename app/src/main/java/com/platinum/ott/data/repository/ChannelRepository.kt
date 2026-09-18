@@ -29,15 +29,37 @@ data class ChannelUiItem(
     // при fallback, следующая подзадача); "dead" — все проверенные мертвы;
     // "unknown" — ни разу не проверялись (health-check ещё не добрался,
     // или нет ни одного стрима вообще, см. streamCount == 0).
-    val healthStatus: String
+    val healthStatus: String,
+    // PROMPT_EPG.md, подзадача 5 — максимум по всем ChannelStreamEntity
+    // этого канала (тот же принцип агрегата, что и healthStatus выше): 0 —
+    // ни один источник этого канала архив не заявляет. Максимум, не
+    // "любой" — сетка (EpgGridScreen) считает программу доступной для
+    // архива по САМОМУ ЩЕДРОМУ источнику канала, конкретный вариант с
+    // подходящим catchupDays для программы всё равно отбирает
+    // GetPlayableUrlUseCase.executeChannelCatchup() по месту.
+    val catchupDaysAvailable: Int,
+    // PROMPT_EPG.md, подзадача 6 — ChannelEntity.sortOrder, тот же номер,
+    // что и в списке "Каналы" (см. комментарий у поля в ChannelEntity.kt).
+    val channelNumber: Int
 )
 
 class ChannelRepository(
     private val channelDao: ChannelDao,
     private val channelStreamDao: ChannelStreamDao
 ) {
-    suspend fun getAll(): List<ChannelUiItem> = withContext(Dispatchers.IO) {
-        channelDao.getAll().map { channel ->
+    suspend fun getAll(): List<ChannelUiItem> = withContext(Dispatchers.IO) { toUiItems(channelDao.getAll()) }
+
+    // PROMPT_EPG.md, подзадача 4 (сетка программ) — только подписанные,
+    // не весь каталог: сетка по определению показывает "мои каналы", как
+    // и сам список каналов в разделе Настройки (см. комментарий у
+    // ChannelsViewModel.load() про сортировку "подписанные — сначала").
+    suspend fun getSubscribed(): List<ChannelUiItem> = withContext(Dispatchers.IO) { toUiItems(channelDao.getSubscribed()) }
+
+    // Общая часть getAll()/getSubscribed() — раньше (до этой подзадачи)
+    // была только внутри getAll(), дублировать её ради getSubscribed()
+    // означало бы либо копипасту, либо расхождение в будущем.
+    private suspend fun toUiItems(channels: List<com.platinum.ott.data.local.entity.ChannelEntity>): List<ChannelUiItem> =
+        channels.map { channel ->
             val streams = channelStreamDao.getByChannelId(channel.id)
             ChannelUiItem(
                 id = channel.id,
@@ -52,9 +74,19 @@ class ChannelRepository(
                     streams.any { it.lastCheckStatus == "alive" } -> "alive"
                     streams.isNotEmpty() && streams.all { it.lastCheckStatus == "dead" } -> "dead"
                     else -> "unknown"
-                }
+                },
+                catchupDaysAvailable = streams.maxOfOrNull { it.catchupDays } ?: 0,
+                channelNumber = channel.sortOrder
             )
         }
+
+    // PROMPT_EPG.md, подзадача 6 — заппинг по номеру, используется
+    // PlayerViewModel.zapToChannelNumber(). Оборачивает найденный
+    // ChannelEntity через toUiItems(), а не строит ChannelUiItem вручную —
+    // чтобы healthStatus/streamCount/catchupDaysAvailable считались тем же
+    // кодом, что и везде, не отдельной (и рискующей разойтись) копией.
+    suspend fun getSubscribedByNumber(number: Int): ChannelUiItem? = withContext(Dispatchers.IO) {
+        channelDao.getSubscribedByNumber(number)?.let { toUiItems(listOf(it)).firstOrNull() }
     }
 
     suspend fun getSubscribedCount(): Int = withContext(Dispatchers.IO) { channelDao.getSubscribed().size }

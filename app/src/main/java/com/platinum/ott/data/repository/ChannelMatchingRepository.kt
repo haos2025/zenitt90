@@ -20,7 +20,20 @@ data class RawChannelCandidate(
     val category: String?,
     val streamUrl: String,
     val userAgent: String? = null,
-    val referrer: String? = null
+    val referrer: String? = null,
+    // PROMPT_EPG.md, подзадача 2 — числовой Xtream stream_id ЭТОГО
+    // источника, если кандидат пришёл из XtreamVodClient.fetchLiveStreams()
+    // (см. ChannelStreamEntity.externalStreamId). Всегда null для M3U —
+    // там его физически нет, EPG для таких каналов только через XMLTV.
+    val externalStreamId: String? = null,
+    // PROMPT_EPG.md, подзадача 5 — см. ChannelStreamEntity.catchupDays/
+    // catchupTemplate, ровно тот же смысл, просто на кандидате ДО того,
+    // как он станет ChannelStreamEntity.
+    val catchupDays: Int = 0,
+    val catchupTemplate: String? = null,
+    // PROMPT_EPG.md, подзадача 6 — см. ChannelEntity.sortOrder (тот же
+    // номер, до превращения кандидата в канал).
+    val channelNumber: Int? = null
 )
 
 /**
@@ -67,7 +80,15 @@ class ChannelMatchingRepository(
                     lastCheckedAt = previous?.lastCheckedAt,
                     lastCheckStatus = previous?.lastCheckStatus ?: "unknown",
                     consecutiveFailures = previous?.consecutiveFailures ?: 0,
-                    priority = previous?.priority ?: 0
+                    priority = previous?.priority ?: 0,
+                    // Не falls back на previous, в отличие от health-check-полей
+                    // выше: candidate — это ВСЕГДА свежий ответ панели ЭТОГО
+                    // refresh(), а не что-то, что можно потерять между
+                    // обновлениями (в отличие от lastCheckStatus, который
+                    // пишет отдельный ChannelHealthCheckWorker, а не refresh()).
+                    externalStreamId = candidate.externalStreamId,
+                    catchupDays = candidate.catchupDays,
+                    catchupTemplate = candidate.catchupTemplate
                 )
             }
 
@@ -106,18 +127,29 @@ class ChannelMatchingRepository(
                     tvgId = candidate.tvgId,
                     logo = candidate.logo,
                     category = candidate.category,
-                    isSubscribed = false
+                    isSubscribed = false,
+                    // PROMPT_EPG.md, подзадача 6 — явный tvg-chno/num, если
+                    // источник его дал; иначе следующий свободный номер, а
+                    // не 0 (0 у всех несопоставленных каналов сразу сделал
+                    // бы номер бесполезным для заппинга — все "0" неотличимы
+                    // друг от друга). Присваивается ОДИН РАЗ при первом
+                    // появлении канала, дальше не пересчитывается (см. ветку
+                    // ниже) — тот же принцип стабильности, что и у самого id.
+                    sortOrder = candidate.channelNumber ?: ((channelDao.getMaxSortOrder() ?: 0) + 1)
                 )
             )
         } else {
-            // canonicalName/regionHint/isSubscribed/sortOrder — пользователь
-            // мог поменять их вручную (переименование, подписка, слияние).
-            // Обновляем только то, что реально приходит заново от источника
-            // при каждом refresh(), не трогая выбор пользователя.
             channelDao.upsert(
                 existing.copy(
                     logo = candidate.logo ?: existing.logo,
-                    category = candidate.category ?: existing.category
+                    category = candidate.category ?: existing.category,
+                    // Обновляем, только если источник явно прислал номер И
+                    // он отличается — источник авторитетен для ЯВНОГО
+                    // номера (провайдер мог перенумеровать канал), но
+                    // молчание источника (candidate.channelNumber == null)
+                    // никогда не должно откатывать уже присвоенный
+                    // авто-номер обратно в неопределённость.
+                    sortOrder = candidate.channelNumber ?: existing.sortOrder
                 )
             )
         }

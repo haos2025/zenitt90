@@ -66,6 +66,11 @@ class SessionGraph @Inject constructor(
     // используется и ChannelHealthCheckWorker (по расписанию), и
     // ChannelsViewModel ("Проверить сейчас").
     lateinit var channelHealthChecker: ChannelHealthChecker; private set
+    // PROMPT_EPG.md, подзадача 1 — хранение/чтение программ передач, не
+    // зависит от auth ровно как и channelMatchingRepository/channelRepository/
+    // channelHealthChecker выше (нужен только database.epgProgramDao()),
+    // используется EpgCleanupWorker и парсерами следующих подзадач.
+    lateinit var epgProgramRepository: EpgProgramRepository; private set
     lateinit var tmdbApi: TmdbApiService; private set
     lateinit var tmdbRepository: TmdbRepository; private set
     lateinit var syncRepository: SyncRepository; private set
@@ -125,7 +130,8 @@ class SessionGraph @Inject constructor(
         channelMatchingRepository = ChannelMatchingRepository(database.channelDao(), database.channelStreamDao())
         channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao())
         channelHealthChecker = ChannelHealthChecker(database.channelDao(), database.channelStreamDao())
-        playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient, channelMatchingRepository)
+        epgProgramRepository = EpgProgramRepository(database.epgProgramDao())
+        playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient, channelMatchingRepository, epgProgramRepository)
         // Синхронно (runBlocking) и до создания playlistRepository — иначе
         // самый первый getCatalog() после обновления приложения (например,
         // из HomeViewModel сразу при старте) мог бы прочитать пустой список
@@ -153,7 +159,7 @@ class SessionGraph @Inject constructor(
             networkPreferences, notificationPreferences
         )
         appScope.launch { pluginManager.loadAllEnabled() }
-        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, database.channelDao(), database.channelStreamDao())
+        getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, database.channelDao(), database.channelStreamDao(), database.playlistSourceDao())
         searchMoviesUseCase = SearchMoviesUseCase(movieRepository)
         cacheManagementUseCase = CacheManagementUseCase(appContext, database.movieDao(), database.playlistMovieDao(), database.metadataDao())
         otaUpdateUseCase = OtaUpdateUseCase(scriptProvider, api)

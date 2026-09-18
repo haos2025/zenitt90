@@ -39,4 +39,13 @@ interface PlaylistSourceDao {
     // последней попытки, а не только последнего успеха.
     @Query("UPDATE playlist_sources SET lastRefreshedAt = :timestamp, lastRefreshStatus = :status WHERE id = :id")
     suspend fun updateRefreshResult(id: String, timestamp: Long, status: String)
+
+    // PROMPT_EPG.md, подзадача 2 — вызывается PlaylistSourceRepository.refresh()
+    // при каждом обновлении m3u-источника, после M3uPlaylistParser.parseEpgUrl().
+    // Отдельный @Query, не часть updateRefreshResult() — эти два вызова
+    // логически независимы (результат парсинга плейлиста vs результат
+    // самого сетевого запроса), держать их одним запросом было бы менее
+    // явно при чтении вызывающего кода.
+    @Query("UPDATE playlist_sources SET epgUrl = :epgUrl WHERE id = :id")
+    suspend fun updateEpgUrl(id: String, epgUrl: String?)
 }

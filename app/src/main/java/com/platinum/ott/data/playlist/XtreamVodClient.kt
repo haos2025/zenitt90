@@ -28,7 +28,22 @@ private data class XtreamLiveItem(
     val name: String = "",
     @SerializedName("stream_icon") val streamIcon: String? = null,
     @SerializedName("category_id") val categoryId: String? = null,
-    @SerializedName("epg_channel_id") val epgChannelId: String? = null
+    @SerializedName("epg_channel_id") val epgChannelId: String? = null,
+    // PROMPT_EPG.md, подзадача 5 — 1 = панель отдаёт архив ПО ЭТОМУ каналу,
+    // tv_archive_duration — на сколько дней назад. Оба поля документированы
+    // в Xtream Codes API. ДОПУЩЕНИЕ (честно, не проверено на реальной
+    // панели): часть реализаций Xtream отдаёт tv_archive как строку "0"/"1",
+    // не число — как это переживёт Gson с полем-Int, не проверялось; если
+    // на реальной панели archive определяется неверно, первое, что стоит
+    // проверить, — реальный тип этого поля в ответе панели.
+    @SerializedName("tv_archive") val tvArchive: Int = 0,
+    @SerializedName("tv_archive_duration") val tvArchiveDuration: Int = 0,
+    // PROMPT_EPG.md, подзадача 6 — порядковый номер канала на панели,
+    // тот же смысл, что и tvg-chno у M3U. ДОПУЩЕНИЕ (честно, не проверено
+    // на реальной панели): часть панелей отдаёт его как "num", часть —
+    // как "channel_num"; реализовано только "num", более распространённое
+    // в документации Xtream Codes.
+    val num: Int? = null
 )
 
 /**
@@ -45,7 +60,13 @@ data class XtreamLiveStreamInfo(
     val logo: String?,
     val categoryName: String?,
     val tvgId: String?,
-    val streamUrl: String
+    val streamUrl: String,
+    // PROMPT_EPG.md, подзадача 5 — см. XtreamLiveItem.tvArchive/tvArchiveDuration.
+    // 0, если tv_archive != 1, даже когда tvArchiveDuration>0 в ответе —
+    // тот же признак "0 = нет катчапа", что и ChannelStreamEntity.catchupDays.
+    val catchupDays: Int,
+    // PROMPT_EPG.md, подзадача 6 — см. XtreamLiveItem.num.
+    val channelNumber: Int?
 )
 
 // get_series — список сериалов (без эпизодов, только карточка сериала).
@@ -183,7 +204,9 @@ object XtreamVodClient {
                     logo = item.streamIcon,
                     categoryName = categories[item.categoryId],
                     tvgId = item.epgChannelId?.ifBlank { null },
-                    streamUrl = "$base/live/$username/$password/${item.streamId}.$LIVE_EXTENSION"
+                    streamUrl = "$base/live/$username/$password/${item.streamId}.$LIVE_EXTENSION",
+                    catchupDays = if (item.tvArchive == 1) item.tvArchiveDuration else 0,
+                    channelNumber = item.num
                 )
             }
         } catch (_: Exception) {

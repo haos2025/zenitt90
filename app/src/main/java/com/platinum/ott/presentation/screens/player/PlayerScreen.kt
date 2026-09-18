@@ -92,8 +92,15 @@ import kotlinx.coroutines.delay
  */
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
-fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl: String? = null, viewModel: PlayerViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
+fun PlayerScreen(
+    movieId: String,
+    onBackPressed: () -> Unit,
+    preferredVariantUrl: String? = null,
+    catchupStartMillis: Long? = null,
+    catchupEndMillis: Long? = null,
+    viewModel: PlayerViewModel = hiltViewModel()
+) {
+    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl, catchupStartMillis, catchupEndMillis) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     // PROMPT_SUBTITLES.md, подзадача 8.
@@ -115,6 +122,22 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
             delay(700)
             seekToast = null
         }
+    }
+
+    // PROMPT_EPG.md, подзадача 6 (заппинг по номерам) — только для живых
+    // каналов (movieId с префиксом "ch_", проверяется и здесь, и ещё раз в
+    // PlayerViewModel.zapToChannelNumber() — UI просто не должен копить
+    // буфер там, где им всё равно некому воспользоваться). До 4 цифр — при
+    // достижении лимита переход происходит сразу, не дожидаясь паузы в
+    // вводе; иначе после ZAP_INPUT_TIMEOUT_MS с момента последней цифры.
+    // LaunchedEffect(zapBuffer) перезапускается на каждую новую цифру — тот
+    // же паттерн, что и у seekToast/seekPulseNonce рядом.
+    var zapBuffer by remember { mutableStateOf("") }
+    LaunchedEffect(zapBuffer) {
+        if (zapBuffer.isEmpty()) return@LaunchedEffect
+        if (zapBuffer.length < ZAP_MAX_DIGITS) delay(ZAP_INPUT_TIMEOUT_MS)
+        zapBuffer.toIntOrNull()?.let { viewModel.zapToChannelNumber(it) }
+        zapBuffer = ""
     }
 
     // Растущий прогресс-бар (PlayerController.ProgressBar, isSeekActive) —
@@ -265,7 +288,13 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     // комментарии там) — сюда доходят, только если
                     // rootHasFocus, для остальных необработанных клавиш
                     // ничего не перехватываем.
-                    else -> false
+                    else -> {
+                        val digit = digitFromKey(event.key)
+                        if (digit != null && movieId.startsWith("ch_")) {
+                            zapBuffer = (zapBuffer + digit).takeLast(ZAP_MAX_DIGITS)
+                            true
+                        } else false
+                    }
                 }
             }
     ) {
@@ -288,7 +317,7 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                     Spacer(Modifier.height(ZenithDimens.paddingM))
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                         Button(onClick = { onBackPressed() }) { Text("Назад") }
-                        Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") }
+                        Button(onClick = { viewModel.loadMovie(movieId, catchupStartMillis = catchupStartMillis, catchupEndMillis = catchupEndMillis) }) { Text("Повторить") }
                     }
                 }
             }
@@ -396,5 +425,45 @@ fun PlayerScreen(movieId: String, onBackPressed: () -> Unit, preferredVariantUrl
                 Text(text = seekToast ?: "", style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
+        // PROMPT_EPG.md, подзадача 6 — набираемый номер канала, тот же
+        // паттерн AnimatedVisibility, что и у seekToast выше.
+        AnimatedVisibility(
+            visible = zapBuffer.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(ZenithDimens.paddingL)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(ZenithSurface.copy(alpha = 0.85f))
+                    .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
+            ) {
+                Text(text = "Канал: $zapBuffer", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+        }
     }
+}
+
+// PROMPT_EPG.md, подзадача 6 — до 4 цифр (каналов больше 9999 у типичного
+// провайдера не бывает), 1200мс — тот же порядок времени, что обычно
+// используют TV-приставки для ввода номера канала на пульте.
+private const val ZAP_MAX_DIGITS = 4
+private const val ZAP_INPUT_TIMEOUT_MS = 1200L
+
+// И основной цифровой ряд, и NumPad — разные пульты/эмуляторы шлют разные
+// коды для "цифра 5", не полагаемся на то, что все пришлют один и тот же.
+private fun digitFromKey(key: Key): Int? = when (key) {
+    Key.Zero, Key.NumPad0 -> 0
+    Key.One, Key.NumPad1 -> 1
+    Key.Two, Key.NumPad2 -> 2
+    Key.Three, Key.NumPad3 -> 3
+    Key.Four, Key.NumPad4 -> 4
+    Key.Five, Key.NumPad5 -> 5
+    Key.Six, Key.NumPad6 -> 6
+    Key.Seven, Key.NumPad7 -> 7
+    Key.Eight, Key.NumPad8 -> 8
+    Key.Nine, Key.NumPad9 -> 9
+    else -> null
 }

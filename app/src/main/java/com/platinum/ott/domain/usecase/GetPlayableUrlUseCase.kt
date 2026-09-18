@@ -6,6 +6,8 @@ import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.data.local.dao.ChannelDao
 import com.platinum.ott.data.local.dao.ChannelStreamDao
 import com.platinum.ott.data.local.entity.ChannelStreamEntity
+import com.platinum.ott.data.local.entity.PlaylistSourceDao
+import com.platinum.ott.data.playlist.CatchupUrlBuilder
 import com.platinum.ott.data.remote.ZenithApiService
 import com.platinum.ott.data.remote.dto.StreamVariantDto
 import com.platinum.ott.data.repository.PlaylistRepository
@@ -55,6 +57,15 @@ import kotlinx.coroutines.withTimeoutOrNull
  *     ОТДЕЛЬНЫЙ от PluginManager механизм, один встроенный "parser"-скрипт,
  *     не путать с гонкой по установленным плагинам из пункта 1).
  */
+/**
+ * PROMPT_EPG.md, подзадача 5 — если передан execute(), значит запрошено
+ * воспроизведение АРХИВА конкретной программы, а не прямого эфира; окно
+ * должно совпадать с временем самой программы (см. EpgGridViewModel/
+ * EpgGridScreen — там же и решается, какие программы вообще кликабельны
+ * для этого).
+ */
+data class CatchupWindow(val startMillis: Long, val endMillis: Long)
+
 class GetPlayableUrlUseCase(
     private val scriptProvider: ScriptProvider,
     private val api: ZenithApiService,
@@ -62,7 +73,12 @@ class GetPlayableUrlUseCase(
     private val pluginManager: PluginManager,
     private val getMovie: GetMovieByIdUseCase,
     private val channelDao: ChannelDao,
-    private val channelStreamDao: ChannelStreamDao
+    private val channelStreamDao: ChannelStreamDao,
+    // PROMPT_EPG.md, подзадача 5 — нужен только для catchup-ветки (host/
+    // username/password источника, см. executeChannelCatchup()); live-ветка
+    // (executeChannelFallback()) его не трогает, ChannelStreamEntity.streamUrl
+    // и так уже полный.
+    private val playlistSourceDao: PlaylistSourceDao
 ) {
     companion object {
         private val ZENITH_BACKEND_PREFIXES = setOf("yt", "ia")
@@ -89,7 +105,7 @@ class GetPlayableUrlUseCase(
 
     private val gson = Gson()
 
-    suspend fun execute(movieId: String): List<StreamVariant> = withContext(Dispatchers.IO) {
+    suspend fun execute(movieId: String, catchupWindow: CatchupWindow? = null): List<StreamVariant> = withContext(Dispatchers.IO) {
         // Раньше — movieId.substringBefore('_') — работало, пока id был
         // буквально "m3u_N"/"xt_N". PlaylistSourceRepository.kt (мульти-
         // источники, "Источники") давно переписывает готовый id парсера в
@@ -111,6 +127,11 @@ class GetPlayableUrlUseCase(
         val isChannel = movieId.startsWith(CHANNEL_PREFIX)
         when {
             isBackend -> executeWithPluginRace(movieId)
+            // catchupWindow != null только когда вызывающий код (PlayerViewModel,
+            // из player/{id}?catchupStart=...&catchupEnd=...) явно просит архив —
+            // обычный переход "Смотреть" на канал catchupWindow не передаёт
+            // вообще, ветка executeChannelFallback() не изменилась ни на строку.
+            isChannel && catchupWindow != null -> executeChannelCatchup(movieId, catchupWindow)
             isChannel -> executeChannelFallback(movieId)
             isPlaylist -> {
                 val info = playlistRepository.getStreamInfo(movieId)
@@ -206,5 +227,30 @@ class GetPlayableUrlUseCase(
         // "видно, откуда вариант", что и StreamVariant.source для VOD.
         val label = rawTitle?.takeIf { it.isNotBlank() } ?: "$fallbackName (${index + 1})"
         return StreamVariant(quality = label, url = streamUrl, source = "Прямой эфир", headers = headers)
+    }
+
+    /**
+     * PROMPT_EPG.md, подзадача 5 — тот же принцип, что и executeChannelFallback()
+     * (вернуть ВСЕ пригодные варианты, не пытаться самим угадать один живой),
+     * только источник URL другой (CatchupUrlBuilder, не streamUrl напрямую) и
+     * фильтр по catchupDays > 0 — стрим без заявленной поддержки архива
+     * вообще не участвует, ему нечего предложить на этот промежуток.
+     */
+    private suspend fun executeChannelCatchup(channelId: String, window: CatchupWindow): List<StreamVariant> {
+        val channel = channelDao.getById(channelId) ?: return emptyList()
+        val streams = channelStreamDao.getByChannelId(channelId).filter { it.catchupDays > 0 }
+        if (streams.isEmpty()) return emptyList()
+        return streams
+            .sortedWith(compareBy({ CHANNEL_STATUS_RANK[it.lastCheckStatus] ?: 1 }, { it.priority }))
+            .mapIndexedNotNull { index, stream ->
+                val source = playlistSourceDao.getById(stream.sourceId) ?: return@mapIndexedNotNull null
+                val url = CatchupUrlBuilder.build(stream, source, window.startMillis, window.endMillis) ?: return@mapIndexedNotNull null
+                val headers = buildMap {
+                    stream.userAgent?.let { put("User-Agent", it) }
+                    stream.referrer?.let { put("Referer", it) }
+                }
+                val label = stream.rawTitle?.takeIf { it.isNotBlank() } ?: "${channel.canonicalName} (${index + 1})"
+                StreamVariant(quality = label, url = url, source = "Архив эфира", headers = headers)
+            }
     }
 }

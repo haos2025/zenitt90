@@ -57,5 +57,16 @@ data class PlaylistMovieEntity(
     // источниками (см. ChannelEntity.tvgId) — используется только для
     // живого эфира, для фильмов/сериалов остаётся null и ни на что не
     // влияет. Nullable без DEFAULT — тот же паттерн, что и у sourceId выше.
-    val tvgId: String? = null
+    val tvgId: String? = null,
+    // PROMPT_EPG.md, подзадача 5 — атрибуты catchup-days/catchup-source
+    // #EXTINF, тот же принцип, что и tvgId выше: используется только для
+    // живого эфира, для фильмов/сериалов null и ни на что не влияет.
+    // 0/null, а не отдельный Boolean "поддерживает catchup" — 0 УЖЕ значит
+    // "нет" (тот же выбор, что и ChannelStreamEntity.catchupDays).
+    val catchupDays: Int? = null,
+    val catchupTemplate: String? = null,
+    // PROMPT_EPG.md, подзадача 6 — tvg-chno из M3U, тот же принцип, что и
+    // catchupDays выше: используется только для живого эфира, для
+    // фильмов/сериалов null и ни на что не влияет.
+    val channelNumber: Int? = null
 )

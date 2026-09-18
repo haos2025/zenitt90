@@ -14,9 +14,9 @@ import com.platinum.ott.data.local.entity.*
         MovieEntity::class, FavoriteEntity::class, FolderEntity::class,
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class, PlaylistSourceEntity::class,
-        ChannelEntity::class, ChannelStreamEntity::class
+        ChannelEntity::class, ChannelStreamEntity::class, EpgProgramEntity::class
     ],
-    version = 16, exportSchema = true
+    version = 20, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -29,6 +29,7 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun playlistSourceDao(): PlaylistSourceDao
     abstract fun channelDao(): ChannelDao
     abstract fun channelStreamDao(): ChannelStreamDao
+    abstract fun epgProgramDao(): EpgProgramDao
 
     companion object {
         // Раньше версия схемы никогда не поднималась после первого релиза,
@@ -215,10 +216,82 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Данные EPG (PROMPT_EPG.md, подзадача 1) — новая таблица под
+        // программы передач, ни одна существующая таблица не меняется.
+        // Составной индекс сразу по (channelId, startTimeMillis) — именно
+        // так строится и запрос сетки (getForChannelInRange), и запрос
+        // "текущая программа" (getCurrentForChannel), без индекса оба
+        // требовали бы полного скана таблицы на каждое обращение, как и
+        // объяснялось для index_playlist_movies_sourceId в MIGRATION_12_13.
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `epg_programs` (" +
+                        "`id` TEXT NOT NULL, `channelId` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`description` TEXT, `category` TEXT, " +
+                        "`startTimeMillis` INTEGER NOT NULL, `endTimeMillis` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_epg_programs_channelId_startTimeMillis` " +
+                        "ON `epg_programs` (`channelId`, `startTimeMillis`)"
+                )
+            }
+        }
+
+        // PROMPT_EPG.md, подзадача 2 ("Источники EPG") — два независимых
+        // дополнения, оба ADD COLUMN без DEFAULT (тот же безопасный
+        // nullable-паттерн, что и во всех предыдущих миграциях этого файла):
+        // epgUrl на playlist_sources — адрес XMLTV из `url-tvg=` M3U-плейлиста
+        // (только для type == "m3u", см. комментарий у поля); externalStreamId
+        // на channel_streams — числовой Xtream stream_id ЭТОГО источника,
+        // нужен для get_short_epg/get_epg (см. комментарий у поля,
+        // XtreamEpgClient.kt). Разные таблицы, но один логический шаг —
+        // "откуда брать EPG для канала", поэтому одна миграция на двоих.
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_sources` ADD COLUMN `epgUrl` TEXT")
+                db.execSQL("ALTER TABLE `channel_streams` ADD COLUMN `externalStreamId` TEXT")
+            }
+        }
+
+        // PROMPT_EPG.md, подзадача 5 (timeshift/catch-up) — тот же принцип
+        // "одна миграция на двоих", что и MIGRATION_17_18: catchupDays/
+        // catchupTemplate на channel_streams (см. комментарий у полей) и
+        // те же два столбца на playlist_movies (сырые catchup-days/
+        // catchup-source из M3U ДО того, как строка станет
+        // ChannelStreamEntity через ChannelMatchingRepository). catchupDays
+        // на channel_streams — NOT NULL DEFAULT 0 (0 уже значит "нет
+        // архива", безопасное значение по умолчанию для существующих
+        // строк); на playlist_movies — nullable без DEFAULT, тот же паттерн,
+        // что и у tvgId там же (существующие строки перекачаются заново
+        // при следующем refresh()).
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `channel_streams` ADD COLUMN `catchupDays` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `channel_streams` ADD COLUMN `catchupTemplate` TEXT")
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `catchupDays` INTEGER")
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `catchupTemplate` TEXT")
+            }
+        }
+
+        // PROMPT_EPG.md, подзадача 6 (заппинг по номерам) — только
+        // playlist_movies: ChannelEntity.sortOrder уже существует в схеме
+        // (переиспользуется как номер канала, см. комментарий у поля),
+        // новый столбец нужен только на "сырых" M3U-записях ДО того, как
+        // строка станет ChannelStreamEntity через ChannelMatchingRepository
+        // (тот же паттерн, что и catchupDays/catchupTemplate там же).
+        // Nullable без DEFAULT — тот же безопасный паттерн, что и у tvgId.
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `playlist_movies` ADD COLUMN `channelNumber` INTEGER")
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

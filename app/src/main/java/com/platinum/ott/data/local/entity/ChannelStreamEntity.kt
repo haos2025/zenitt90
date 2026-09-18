@@ -52,5 +52,28 @@ data class ChannelStreamEntity(
     // Приоритет ЭТОГО стрима для ЭТОГО канала — не путать с приоритетом
     // источника в целом (PlaylistSourceEntity.priority). Меньше — выше,
     // тот же порядок сравнения, что и у источников.
-    val priority: Int = 0
+    val priority: Int = 0,
+    // PROMPT_EPG.md, подзадача 2 — числовой stream_id Xtream ДЛЯ ЭТОГО
+    // источника (не путать с ChannelEntity.tvgId — tvgId сопоставляет канал
+    // МЕЖДУ источниками через epg_channel_id, этот id нужен только чтобы
+    // дёрнуть get_short_epg/get_epg У ЭТОЙ КОНКРЕТНОЙ панели, см.
+    // XtreamEpgClient.kt). null для M3U-стримов — там такого понятия нет,
+    // EPG для них идёт только через XMLTV (url-tvg), не через этот путь.
+    val externalStreamId: String? = null,
+    // PROMPT_EPG.md, подзадача 5 (timeshift/catch-up) — 0 = архив не
+    // поддерживается ЭТИМ источником для ЭТОГО канала. Для Xtream — это
+    // tv_archive_duration с панели (только когда tv_archive == 1, иначе
+    // остаётся 0, см. XtreamVodClient.fetchLiveStreams()); для M3U —
+    // catchup-days из #EXTINF (см. M3uPlaylistParser.kt). Разные источники
+    // одного канала могут поддерживать архив по-разному — тот же принцип,
+    // что и у lastCheckStatus/priority выше: свойство КОНКРЕТНОГО стрима,
+    // не канала в целом.
+    val catchupDays: Int = 0,
+    // Сырой catchup-source из M3U (плейсхолдеры ${start}/${end}, см.
+    // CatchupUrlBuilder.kt) — null для Xtream (там URL таймшифта строится
+    // детерминированно из host/username/password/externalStreamId, ничего
+    // хранить не нужно, тот же принцип, что и epgUrl для Xtream в
+    // PlaylistSourceEntity) и для M3U без явного catchup-source (тогда
+    // используется обобщённая конвенция "shift", см. CatchupUrlBuilder.kt).
+    val catchupTemplate: String? = null
 )

@@ -4,9 +4,12 @@ import android.content.Context
 import com.platinum.ott.core.AuthPreferences
 import com.platinum.ott.data.local.dao.PlaylistMovieDao
 import com.platinum.ott.data.local.dao.PlaylistSourceDao
+import com.platinum.ott.data.local.entity.EpgProgramEntity
 import com.platinum.ott.data.local.entity.PlaylistMovieEntity
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
 import com.platinum.ott.data.playlist.M3uPlaylistParser
+import com.platinum.ott.data.playlist.XmltvSaxParser
+import com.platinum.ott.data.playlist.XtreamEpgClient
 import com.platinum.ott.data.playlist.XtreamLiveStreamInfo
 import com.platinum.ott.data.playlist.XtreamVodClient
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 // Тот же час, что и у единственного источника раньше (PlaylistRepository,
 // REFRESH_TTL_MS) — плейлисты бывают большие, не гонять на каждый вход.
@@ -44,7 +48,8 @@ class PlaylistSourceRepository(
     private val sourceDao: PlaylistSourceDao,
     private val movieDao: PlaylistMovieDao,
     private val client: OkHttpClient,
-    private val channelMatchingRepository: ChannelMatchingRepository
+    private val channelMatchingRepository: ChannelMatchingRepository,
+    private val epgProgramRepository: EpgProgramRepository
 ) {
     // Локальные снапшоты M3U-файлов, добавленных через "Локальный файл"
     // (ACTION_OPEN_DOCUMENT). Решение сессии: копируем содержимое один раз
@@ -226,6 +231,21 @@ class PlaylistSourceRepository(
                         client.newCall(req).execute().use { it.body?.string() ?: "" }
                     }
                     val rawEntries = M3uPlaylistParser.parse(body)
+                    // PROMPT_EPG.md, подзадача 2 — парсится при каждом
+                    // refresh() независимо от contentKind (обычный VOD-плейлист
+                    // тоже технически может нести url-tvg, хотя типичный
+                    // случай — именно contentKind == "live"). null тоже
+                    // пишется явно: если провайдер уберёт url-tvg из шапки,
+                    // источник не должен продолжать молча ссылаться на
+                    // устаревший адрес.
+                    val epgUrl = M3uPlaylistParser.parseEpgUrl(body)
+                    sourceDao.updateEpgUrl(sourceId, epgUrl)
+                    // PROMPT_EPG.md, подзадача 3 — независимо от того,
+                    // "live" этот источник или "vod": обычный VOD-плейлист
+                    // с url-tvg в шапке технически тоже может встретиться,
+                    // хоть и нетипично (см. допущение у sourceDao.updateEpgUrl
+                    // выше в предыдущей подзадаче).
+                    if (epgUrl != null) refreshEpgFromXmltv(epgUrl)
                     if (source.contentKind == "live") {
                         // Живой эфир целиком уходит в Channel/ChannelStream —
                         // не пишется в playlist_movies вообще (см.
@@ -248,6 +268,13 @@ class PlaylistSourceRepository(
                     // выше этим не роняется.
                     val liveStreams = XtreamVodClient.fetchLiveStreams(client, host, user, pass)
                     channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
+
+                    // PROMPT_EPG.md, подзадача 3 — xmltv.php у Xtream не у
+                    // каждой панели есть (это доп. эндпоинт сверх основного
+                    // Xtream Codes API), refreshEpgFromXmltv() сама тихо
+                    // проглатывает 404/сетевую ошибку, тем же принципом,
+                    // что и fetchLiveStreams() выше для панелей без live.
+                    refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
                 }
                 else -> {}
             }
@@ -281,10 +308,85 @@ class PlaylistSourceRepository(
 
     private fun PlaylistMovieEntity.toRawChannelCandidate() = RawChannelCandidate(
         tvgId = tvgId, name = title, logo = poster, category = genre,
-        streamUrl = streamUrl, userAgent = userAgent, referrer = referrer
+        streamUrl = streamUrl, userAgent = userAgent, referrer = referrer,
+        catchupDays = catchupDays ?: 0, catchupTemplate = catchupTemplate,
+        channelNumber = channelNumber
     )
 
     private fun XtreamLiveStreamInfo.toRawChannelCandidate() = RawChannelCandidate(
-        tvgId = tvgId, name = name, logo = logo, category = categoryName, streamUrl = streamUrl
+        tvgId = tvgId, name = name, logo = logo, category = categoryName, streamUrl = streamUrl,
+        externalStreamId = streamId.toString(), catchupDays = catchupDays, channelNumber = channelNumber
     )
+
+    /**
+     * PROMPT_EPG.md, подзадача 3 — общая точка для обоих источников XMLTV
+     * (M3U url-tvg и Xtream xmltv.php): скачивает и потоково (SAX,
+     * XmltvSaxParser) разбирает файл, оставляя только слоты внутри
+     * скользящего окна (−2ч/+48ч, то же окно, что и в
+     * EpgProgramRepository.cleanupOutsideWindow() — прошлый край должен
+     * совпадать, иначе только что записанные, но уже "устаревшие" по
+     * меркам этой функции программы тут же подчистит EpgCleanupWorker),
+     * группирует по каналу (channel="X" → тот же "ch_tvg_X", что и
+     * ChannelMatchingRepository.resolveChannelId() для tvg-id) и заменяет
+     * расписание каждого затронутого канала.
+     *
+     * Отдельный try/catch, НЕ пробрасывается наверх в refresh(): EPG —
+     * дополнение к основному контенту источника, а не равноправная часть
+     * его успеха/провала — недоступный/битый XMLTV не должен помечать
+     * успешно обновившийся VOD/live-каталог как "Ошибка обновления" в
+     * карточке источника (тот же принцип, что и в fetchLiveStreams()/
+     * fetchSeriesEpisodes() в XtreamVodClient — частичный сбой изолирован).
+     *
+     * ДОПУЩЕНИЕ (честно, не проверено на реальном файле в десятки МБ на
+     * слабом устройстве): SAX-обработчик не копит вне окна, но сам поток
+     * от OkHttp читается за один проход целиком — если реальный XMLTV
+     * окажется на порядок больше "десятков МБ" из PROMPT_EPG.md, стоит
+     * перепроверить отдельно, здесь это не тестировалось.
+     */
+    private suspend fun refreshEpgFromXmltv(url: String) {
+        try {
+            val now = System.currentTimeMillis()
+            val windowStart = now - TimeUnit.HOURS.toMillis(2)
+            val windowEnd = now + TimeUnit.HOURS.toMillis(48)
+            val req = Request.Builder().url(url).build()
+            val programs = client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use emptyList()
+                resp.body?.byteStream()?.use { stream -> XmltvSaxParser.parse(stream, windowStart, windowEnd) } ?: emptyList()
+            }
+            if (programs.isEmpty()) return
+            programs.groupBy { "ch_tvg_${it.channelId}" }.forEach { (channelId, channelPrograms) ->
+                val entities = channelPrograms.map { p ->
+                    EpgProgramEntity(
+                        id = "$channelId:${p.startTimeMillis}",
+                        channelId = channelId,
+                        title = p.title,
+                        description = p.description,
+                        category = p.category,
+                        startTimeMillis = p.startTimeMillis,
+                        endTimeMillis = p.endTimeMillis
+                    )
+                }
+                epgProgramRepository.replaceProgramsForChannel(channelId, entities)
+            }
+        } catch (_: Exception) {
+            // См. комментарий в KDoc функции — источник без EPG/с битым
+            // XMLTV не должен мешать основному контенту обновиться.
+        }
+    }
+
+    /**
+     * PROMPT_EPG.md, подзадача 2 — единая точка входа для будущих
+     * подзадач (5: сетка программ), чтобы им не приходилось знать разницу
+     * между "URL уже лежит в поле" (M3U) и "URL строится на месте"
+     * (Xtream) — тот же принцип инкапсуляции, что и у streamUrl в
+     * XtreamVodClient (вызывающий код не собирает ссылки на потоки вручную).
+     */
+    fun epgSourceUrl(source: PlaylistSourceEntity): String? = when (source.type) {
+        "m3u" -> source.epgUrl
+        "xtream" -> {
+            val host = source.host; val user = source.username; val pass = source.password
+            if (host != null && user != null && pass != null) XtreamEpgClient.buildXmltvUrl(host, user, pass) else null
+        }
+        else -> null
+    }
 }

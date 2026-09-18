@@ -23,6 +23,7 @@ import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.core.player.ArchiveOrgMirrorResolver
 import com.platinum.ott.domain.model.StreamVariant
+import com.platinum.ott.domain.usecase.CatchupWindow
 import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.core.subtitles.SubtitleCue
 import com.platinum.ott.domain.model.SubtitleFormat
@@ -95,6 +96,10 @@ class PlayerViewModel @Inject constructor(
     // seasonNumber/episodeNumber), отдельного use case заводить не стали
     // ради одного вызова.
     private val playlistRepository = sessionGraph.playlistRepository
+    // PROMPT_EPG.md, подзадача 6 — только для поиска канала по номеру
+    // (zapToChannelNumber() ниже), больше ничего из этого репозитория
+    // здесь не нужно.
+    private val channelRepository = sessionGraph.channelRepository
     // PROMPT_SUBTITLES.md, подзадача 6 — оркестратор сам решает
     // OpenSubtitles/облако/локальный Whisper по приоритету; PlayerViewModel
     // только даёт ему контекст (URL/заголовки/позицию) и слушает состояние.
@@ -416,7 +421,7 @@ class PlayerViewModel @Inject constructor(
         exoPlayer.seekTo(if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0))
     }
 
-    fun loadMovie(movieId: String, preferredVariantUrl: String? = null) {
+    fun loadMovie(movieId: String, preferredVariantUrl: String? = null, catchupStartMillis: Long? = null, catchupEndMillis: Long? = null) {
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
         // Новый фильм — попытки восстановления с предыдущего не должны
@@ -428,7 +433,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = PlayerUiState.Loading
             try {
-                val variants = getPlayableUrl.execute(movieId)
+                // PROMPT_EPG.md, подзадача 5 — оба параметра приходят
+                // ВМЕСТЕ или не приходят вообще (см. player/{id} route в
+                // ZenithNavHost.kt), null-проверка на любой из двух
+                // достаточна: обычный переход "Смотреть" их не передаёт.
+                val catchupWindow = if (catchupStartMillis != null && catchupEndMillis != null) {
+                    CatchupWindow(catchupStartMillis, catchupEndMillis)
+                } else null
+                val variants = getPlayableUrl.execute(movieId, catchupWindow)
                 if (variants.isEmpty()) {
                     // Раньше — голое "Нет потоков", без единой зацепки, какой
                     // из трёх независимых путей получения ссылки
@@ -561,6 +573,29 @@ class PlayerViewModel @Inject constructor(
     fun playPreviousEpisode() {
         val id = (_uiState.value as? PlayerUiState.Ready)?.previousEpisodeId ?: return
         loadMovie(id)
+    }
+
+    /**
+     * PROMPT_EPG.md, подзадача 6 (заппинг по номерам) — набор цифр на
+     * пульте копится в PlayerScreen.kt (UI-таймаут ввода — забота
+     * composable, не ViewModel), сюда приходит уже готовое число.
+     * Тот же принцип, что и у playNextEpisode()/playPreviousEpisode() —
+     * переиспользует loadMovie() целиком, не отдельный облегчённый путь.
+     * Работает только поверх уже открытого живого канала (currentMovieId
+     * с префиксом "ch_" — VOD/сериал таким образом не переключить, у них
+     * нет понятия номера канала); канал с таким номером не найден среди
+     * ПОДПИСАННЫХ (ChannelRepository.getSubscribedByNumber()) — тихо
+     * ничего не делает, тот же принцип, что и остальные "не найдено —
+     * просто не сработало" места в этом файле, отдельного тоста с ошибкой
+     * не показываем (набор произвольных цифр мимо кассы — обычный сценарий
+     * опечатки, не что-то, что нужно отдельно объяснять пользователю).
+     */
+    fun zapToChannelNumber(number: Int) {
+        if (!currentMovieId.startsWith("ch_")) return
+        viewModelScope.launch {
+            val channel = channelRepository.getSubscribedByNumber(number) ?: return@launch
+            if (channel.id != currentMovieId) loadMovie(channel.id)
+        }
     }
 
     private val qualityRankOrder = listOf("240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")

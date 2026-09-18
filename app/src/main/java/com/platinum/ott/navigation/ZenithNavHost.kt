@@ -24,7 +24,9 @@ import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
 import com.platinum.ott.presentation.screens.plugins.PluginDetailScreen
 import com.platinum.ott.presentation.screens.channels.ChannelsScreen
+import com.platinum.ott.presentation.screens.epg.EpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneChannelsScreen
+import com.platinum.ott.presentation.phone.screens.PhoneEpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneHomeScreen
 import com.platinum.ott.presentation.phone.screens.PhoneDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneFavoritesScreen
@@ -64,8 +66,19 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // (те же соображения, что и у "sources" — нишевая функция, не
         // основная навигация).
         composable("channels") {
-            if (isTV) ChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") })
-            else PhoneChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") })
+            if (isTV) ChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onOpenEpgGrid = { navController.navigate("epg_grid") })
+            else PhoneChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onOpenEpgGrid = { navController.navigate("epg_grid") })
+        }
+        // PROMPT_EPG.md, подзадача 4 — тот же уровень вложенности, что и
+        // "channels" выше (обычная кнопка "Назад", достижим из ChannelsScreen,
+        // не из NavSidebar/PhoneBottomBar — та же логика "нишевый экран",
+        // что и у "channels"/"sources").
+        composable("epg_grid") {
+            val onPlayCatchup: (String, Long, Long) -> Unit = { channelId, start, end ->
+                navController.navigate("player/$channelId?catchupStart=$start&catchupEnd=$end")
+            }
+            if (isTV) EpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup)
+            else PhoneEpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup)
         }
         // PROMPT_NAVIGATION_SIDEBAR.md — HomeScreen (TV) больше не получает
         // отдельные onSettingsClick/onFavoritesClick/onHistoryClick/
@@ -91,7 +104,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             ) else PhoneDetailScreen(id, navController)
         }
         composable(
-            "player/{movieId}?variantUrl={variantUrl}",
+            "player/{movieId}?variantUrl={variantUrl}&catchupStart={catchupStart}&catchupEnd={catchupEnd}",
             arguments = listOf(
                 navArgument("movieId") { type = NavType.StringType },
                 // Выбор озвучки/варианта в едином окне сериала (см.
@@ -104,12 +117,23 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 // Navigation Compose не поддерживает nullable по умолчанию
                 // без доп. NavType, а пустая строка как "нет
                 // предпочтения" не пересекается с реальными URL.
-                navArgument("variantUrl") { type = NavType.StringType; defaultValue = "" }
+                navArgument("variantUrl") { type = NavType.StringType; defaultValue = "" },
+                // PROMPT_EPG.md, подзадача 5 — оба приходят ВМЕСТЕ (см.
+                // EpgGridScreen.kt/PhoneEpgGridScreen.kt, единственный
+                // источник этого перехода) или не приходят вообще; та же
+                // причина пустой строки вместо null, что и у variantUrl —
+                // millis всегда положительны, пустая строка с ними не
+                // пересекается.
+                navArgument("catchupStart") { type = NavType.StringType; defaultValue = "" },
+                navArgument("catchupEnd") { type = NavType.StringType; defaultValue = "" }
             )
         ) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
             val variantUrl = entry.arguments?.getString("variantUrl")?.ifBlank { null }
-            if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, onBackPressed = { navController.popBackStack() }) else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl)
+            val catchupStart = entry.arguments?.getString("catchupStart")?.toLongOrNull()
+            val catchupEnd = entry.arguments?.getString("catchupEnd")?.toLongOrNull()
+            if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd, onBackPressed = { navController.popBackStack() })
+            else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd)
         }
         composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onChannelsClick = { navController.navigate("channels") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -41,6 +42,7 @@ import com.platinum.ott.presentation.screens.channels.RenameChannelDialog
 fun PhoneChannelsScreen(
     onBackPressed: () -> Unit,
     onPlayChannel: (String) -> Unit,
+    onOpenEpgGrid: () -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,6 +58,8 @@ fun PhoneChannelsScreen(
                 title = { Text("Каналы") },
                 navigationIcon = { IconButton(onClick = onBackPressed) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") } },
                 actions = {
+                    // PROMPT_EPG.md, подзадача 4
+                    IconButton(onClick = onOpenEpgGrid) { Icon(Icons.Filled.DateRange, contentDescription = "Программа передач") }
                     IconButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                         if (isChecking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         else Icon(Icons.Default.Refresh, contentDescription = "Проверить сейчас")

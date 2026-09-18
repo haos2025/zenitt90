@@ -74,5 +74,15 @@ data class PlaylistSourceEntity(
     // этого поля — см. PlaylistSourceRepository.refresh() и
     // PROMPT_IPTV_FOUNDATION.md. По умолчанию "vod" — не меняет поведение
     // уже существующих источников, добавленных до этой задачи.
-    val contentKind: String = "vod"
+    val contentKind: String = "vod",
+    // PROMPT_EPG.md, подзадача 2 ("Источники EPG") — адрес XMLTV-справочника
+    // из заголовка `#EXTM3U url-tvg="..."` M3U-плейлиста (см.
+    // M3uPlaylistParser.parseEpgUrl()). Пишется PlaylistSourceRepository.refresh()
+    // при каждом обновлении m3u-источника, значит только для type == "m3u".
+    // Для type == "xtream" остаётся null — у Xtream такого заголовка нет,
+    // адрес XMLTV (`xmltv.php`) детерминирован из host/username/password и
+    // вычисляется на месте (см. PlaylistSourceRepository.epgSourceUrl()),
+    // а не хранится отдельным полем — незачем дублировать то, что уже есть
+    // в трёх других полях этой же сущности.
+    val epgUrl: String? = null
 )

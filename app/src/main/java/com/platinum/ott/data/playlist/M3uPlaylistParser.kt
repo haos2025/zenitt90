@@ -27,13 +27,19 @@ import com.platinum.ott.data.local.entity.PlaylistMovieEntity
  */
 object M3uPlaylistParser {
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
-    private val ATTR_REGEX = Regex("(tvg-id|tvg-logo|group-title)=\"([^\"]*)\"")
+    private val ATTR_REGEX = Regex("(tvg-id|tvg-logo|group-title|catchup|catchup-days|catchup-source|tvg-chno)=\"([^\"]*)\"")
     private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
+    // PROMPT_EPG.md, подзадача 2 — стандартный атрибут шапки плейлиста
+    // (строка "#EXTM3U url-tvg="http://...""), не строки #EXTINF, поэтому
+    // отдельный regex и отдельная функция ниже, а не добавление в ATTR_REGEX.
+    private val URL_TVG_REGEX = Regex("url-tvg=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
     // У M3U, в отличие от Xtream, нет структурированного API сериалов —
     // единственный источник "это серия N сезона M" — сам текст названия.
     // Это ЭВРИСТИКА, не гарантия: сработает на "Шоу S01E02", не сработает
     // на "Шоу 1 сезон 2 серия" или нестандартных форматах провайдера.
     private val EPISODE_REGEX = Regex("S(\\d{1,2})E(\\d{1,3})", RegexOption.IGNORE_CASE)
+    // См. комментарий у вычисления catchupDays в parse() ниже.
+    private const val DEFAULT_CATCHUP_DAYS_WHEN_UNSPECIFIED = 1
 
     fun parse(raw: String): List<PlaylistMovieEntity> {
         val lines = raw.lines()
@@ -54,6 +60,25 @@ object M3uPlaylistParser {
                 // "Шоу S01E01" и "Шоу S01E02" совпал ключ группировки.
                 val seriesId = if (seasonNumber != null) "m3u_series_" + title.replace(EPISODE_REGEX, "").trim().lowercase() else null
                 val seriesTitle = if (seasonNumber != null) title.replace(EPISODE_REGEX, "").trim().trimEnd('-', '—', ' ') else null
+
+                // PROMPT_EPG.md, подзадача 5 — catchup-days="N" однозначен;
+                // просто catchup="default"/"shift"/"append" БЕЗ catchup-days
+                // тоже реально встречается (провайдер поддерживает архив, но
+                // не пишет срок явно). ДОПУЩЕНИЕ (честно, не проверено на
+                // реальном плейлисте без catchup-days): в этом случае берём
+                // консервативный DEFAULT_CATCHUP_DAYS_WHEN_UNSPECIFIED, а не
+                // считаем, что архива нет вообще — это не единственно
+                // возможная трактовка, если окажется не так, поправить
+                // только эту константу.
+                val catchupAttr = attrs["catchup"]?.ifBlank { null }
+                val catchupDaysAttr = attrs["catchup-days"]?.toIntOrNull()
+                val catchupDays = when {
+                    catchupDaysAttr != null && catchupDaysAttr > 0 -> catchupDaysAttr
+                    catchupAttr != null -> DEFAULT_CATCHUP_DAYS_WHEN_UNSPECIFIED
+                    else -> null
+                }
+                val catchupTemplate = attrs["catchup-source"]?.ifBlank { null }
+                val channelNumber = attrs["tvg-chno"]?.toIntOrNull()
 
                 // Между #EXTINF и URL могут быть #EXTVLCOPT (заголовки для
                 // этого конкретного канала) и другие строки-комментарии —
@@ -88,7 +113,10 @@ object M3uPlaylistParser {
                             seriesTitle = seriesTitle,
                             seasonNumber = seasonNumber,
                             episodeNumber = episodeNumber,
-                            tvgId = attrs["tvg-id"]?.ifBlank { null }
+                            tvgId = attrs["tvg-id"]?.ifBlank { null },
+                            catchupDays = catchupDays,
+                            catchupTemplate = catchupTemplate,
+                            channelNumber = channelNumber
                         )
                     )
                     index++
@@ -99,5 +127,23 @@ object M3uPlaylistParser {
             }
         }
         return result
+    }
+
+    /**
+     * Достаёт "url-tvg=" из шапки плейлиста (первая строка "#EXTM3U ...",
+     * если она вообще есть — не все плейлисты её пишут). Не часть parse()
+     * намеренно: это метаданные ИСТОЧНИКА целиком (PlaylistSourceEntity.epgUrl),
+     * а не какой-то отдельной записи — вызывается один раз на refresh(),
+     * не по одной на каждый канал, как ATTR_REGEX внутри цикла выше.
+     *
+     * ДОПУЩЕНИЕ (не проверено на реальном плейлисте с несколькими url-tvg
+     * через запятую — такой вариант тоже встречается в дикой природе):
+     * берём только первый адрес. Мульти-источник XMLTV на один плейлист —
+     * не тема этой подзадачи, если реально понадобится, это отдельное
+     * расширение парсинга, не архитектурное решение.
+     */
+    fun parseEpgUrl(raw: String): String? {
+        val headerLine = raw.lineSequence().firstOrNull { it.trim().startsWith("#EXTM3U") } ?: return null
+        return URL_TVG_REGEX.find(headerLine)?.groupValues?.get(1)?.ifBlank { null }
     }
 }

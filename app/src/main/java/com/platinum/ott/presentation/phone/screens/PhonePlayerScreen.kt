@@ -43,8 +43,15 @@ import kotlin.math.roundToInt
 // время просмотра. Теперь свой оверлей, как на TV, только под тач вместо
 // D-pad — см. PhonePlayerController.kt.
 @Composable
-fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferredVariantUrl: String? = null, viewModel: PlayerViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl) }
+fun PhonePlayerScreen(
+    movieId: String,
+    navController: NavHostController,
+    preferredVariantUrl: String? = null,
+    catchupStartMillis: Long? = null,
+    catchupEndMillis: Long? = null,
+    viewModel: PlayerViewModel = hiltViewModel()
+) {
+    LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl, catchupStartMillis, catchupEndMillis) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     // PROMPT_SUBTITLES.md, подзадача 8.
@@ -243,7 +250,7 @@ fun PhonePlayerScreen(movieId: String, navController: NavHostController, preferr
                 Row {
                     Button(onClick = { navController.popBackStack() }) { Text("Назад") }
                     Spacer(Modifier.width(ZenithDimens.paddingS))
-                    Button(onClick = { viewModel.loadMovie(movieId) }) { Text("Повторить") }
+                    Button(onClick = { viewModel.loadMovie(movieId, catchupStartMillis = catchupStartMillis, catchupEndMillis = catchupEndMillis) }) { Text("Повторить") }
                 }
             }
             is PlayerUiState.Ready -> {
