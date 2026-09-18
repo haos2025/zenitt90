@@ -53,6 +53,7 @@ fun PluginCatalogScreen(
     // нажимает пользователь сам (см. промт: установка необратимее поиска,
     // автоматической установки по приезду текста быть не должно).
     var installUrl by remember { mutableStateOf("") }
+    var installScript by remember { mutableStateOf("") }
     var showCompanionQr by remember { mutableStateOf(false) }
     var companionAddress by remember { mutableStateOf<String?>(null) }
     DisposableEffect(showCompanionQr) {
@@ -103,6 +104,17 @@ fun PluginCatalogScreen(
             onInstall = viewModel::installFromUrl,
             onReset = viewModel::resetInstallState,
             onQrClick = { showCompanionQr = true }
+        )
+        Spacer(Modifier.height(ZenithDimens.paddingM))
+        // PROMPT_HOME_LOADING_FIX.md, п.3 — installFromScript() в
+        // PluginViewModel был готов принимать текст скрипта напрямую (не по
+        // URL), но ни один экран не показывал для него ни поля, ни кнопки.
+        InstallFromScriptRow(
+            script = installScript,
+            onScriptChange = { installScript = it },
+            installState = installState,
+            onInstall = viewModel::installFromScript,
+            onReset = viewModel::resetInstallState
         )
         Spacer(Modifier.height(ZenithDimens.paddingM))
         when (selectedTab) {
@@ -164,6 +176,60 @@ private fun InstallFromUrlRow(
                 LaunchedEffect(state) { onReset() }
             }
             else -> {}
+        }
+    }
+}
+
+// PROMPT_HOME_LOADING_FIX.md, п.3 — второй, независимый способ установки
+// плагина: вставить текст скрипта целиком, а не URL. Свёрнуто по умолчанию
+// (expanded) — поле URL выше остаётся основным путём, это запасной, не
+// хочется занимать место многострочным полем на каждом открытии экрана.
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun InstallFromScriptRow(
+    script: String,
+    onScriptChange: (String) -> Unit,
+    installState: PluginViewModel.InstallState,
+    onInstall: (String) -> Unit,
+    onReset: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val installing = installState is PluginViewModel.InstallState.Installing
+    Column {
+        OutlinedButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "Скрыть вставку скрипта" else "…или вставить скрипт плагина целиком")
+        }
+        if (expanded) {
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            BasicTextField(
+                value = script,
+                onValueChange = onScriptChange,
+                enabled = !installing,
+                textStyle = TextStyle(Color.White, 14.sp),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)
+                    .background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .padding(ZenithDimens.paddingM),
+                decorationBox = { inner ->
+                    if (script.isEmpty()) Text("Текст скрипта плагина (.js)…", style = TextStyle(Color.White.copy(0.3f), 14.sp))
+                    inner()
+                }
+            )
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Button(enabled = script.isNotBlank() && !installing, onClick = { onInstall(script) }) {
+                Text(if (installing) "Установка…" else "Установить")
+            }
+            when (val state = installState) {
+                is PluginViewModel.InstallState.Done -> {
+                    Text("✓ Установлен: ${state.manifest.name}", color = ZenithSuccess, modifier = Modifier.padding(top = ZenithDimens.paddingS))
+                    LaunchedEffect(state) { onScriptChange(""); onReset() }
+                }
+                is PluginViewModel.InstallState.Failed -> {
+                    Text("⚠ ${state.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = ZenithDimens.paddingS))
+                    LaunchedEffect(state) { onReset() }
+                }
+                else -> {}
+            }
         }
     }
 }

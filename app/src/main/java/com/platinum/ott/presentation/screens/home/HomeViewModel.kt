@@ -117,10 +117,31 @@ class HomeViewModel @Inject constructor(
             // свой источник загружался нормально. Теперь оба запроса идут
             // параллельно через async{} — общее время ожидания равно
             // МЕДЛЕННЕЙШЕМУ из двух, а не их сумме.
-            val playlistDeferred = async { try { getPlaylistCatalog.execute() } catch (_: Exception) { emptyList() } }
+            // PROMPT_HOME_LOADING_FIX.md, п.4 — сериал из плейлиста теперь
+            // одной карточкой, не N плоскими эпизодами (см.
+            // PlaylistRepository.getCatalogGroupedBySeries()).
+            val playlistDeferred = async { try { getPlaylistCatalog.executeGroupedBySeries() } catch (_: Exception) { emptyList() } }
             val catalogDeferred = async { getCatalog.execute(page) }
 
             cachedPlaylistMovies = playlistDeferred.await()
+
+            // PROMPT_HOME_LOADING_FIX.md, п.1 — раньше здесь ничего не
+            // обновлялось до ответа backend'а, хотя async{} выше уже сделал
+            // оба запроса параллельными: async/awaitAll всё равно one-shot,
+            // экран показывался только когда готовы ОБА. Плейлист (Room,
+            // локально) обычно готов почти мгновенно — показываем его сразу
+            // отдельным промежуточным состоянием (isBackendLoading=true, не
+            // полноценный Success без оговорок), backend-ряды домешиваются
+            // ниже вторым обновлением _uiState, когда действительно ответят.
+            if (cachedPlaylistMovies.isNotEmpty()) {
+                _uiState.value = HomeUiState.Success(
+                    movies = cachedPlaylistMovies,
+                    page = 1,
+                    totalPages = 1,
+                    isBackendLoading = true
+                )
+                computeGenrePriority(cachedPlaylistMovies)
+            }
 
             catalogDeferred.await().onSuccess {
                 val allMovies = cachedPlaylistMovies + it.movies
@@ -137,8 +158,9 @@ class HomeViewModel @Inject constructor(
                 // Backend недоступен, но свой плейлист может быть жив —
                 // не превращать это в полный отказ экрана, если есть хоть что-то
                 if (cachedPlaylistMovies.isNotEmpty()) {
+                    // Уже показан выше (промежуточное состояние) — просто
+                    // снимаем isBackendLoading, не превращаем в общий Error.
                     _uiState.value = HomeUiState.Success(cachedPlaylistMovies, 1, 1)
-                    computeGenrePriority(cachedPlaylistMovies)
                 } else {
                     _uiState.value = HomeUiState.Error(error.message ?: "Ошибка загрузки")
                 }

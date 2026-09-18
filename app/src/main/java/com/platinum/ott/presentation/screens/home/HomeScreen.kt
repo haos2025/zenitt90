@@ -75,6 +75,17 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                     val heroMovies = state.heroMovies
                     val listState = rememberLazyListState()
 
+                    // PROMPT_HOME_LOADING_FIX.md, п.1 — плейлист уже показан
+                    // (список ниже не пустой), backend-каталог ещё грузится.
+                    // Тонкая полоса поверх уже видимого контента, не
+                    // заменяющая его полноэкранным Loading.
+                    if (state.isBackendLoading) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingL)
+                        )
+                        Spacer(Modifier.height(ZenithDimens.paddingS))
+                    }
+
                     // Решение 1/2 меняют структуру списка — hero-баннер и
                     // ряд "Продолжить просмотр" (если есть) идут ПЕРЕД
                     // жанровыми рядами как отдельные LazyColumn-элементы.

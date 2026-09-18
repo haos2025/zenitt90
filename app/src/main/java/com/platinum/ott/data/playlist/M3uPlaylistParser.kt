@@ -59,7 +59,11 @@ object M3uPlaylistParser {
                 // а название БЕЗ SxxEyy-части, нормализованное — чтобы у
                 // "Шоу S01E01" и "Шоу S01E02" совпал ключ группировки.
                 val seriesId = if (seasonNumber != null) "m3u_series_" + title.replace(EPISODE_REGEX, "").trim().lowercase() else null
-                val seriesTitle = if (seasonNumber != null) title.replace(EPISODE_REGEX, "").trim().trimEnd('-', '—', ' ') else null
+                // Раньше здесь был trimEnd(...) — чистил лишний "- "/"— "
+                // только с конца, а после удаления кода серии (S1E1 и т.п.)
+                // из НАЧАЛА строки остаётся ведущее тире. trim(chars) чистит
+                // с обеих сторон.
+                val seriesTitle = if (seasonNumber != null) title.replace(EPISODE_REGEX, "").trim().trim('-', '—', ' ') else null
 
                 // PROMPT_EPG.md, подзадача 5 — catchup-days="N" однозначен;
                 // просто catchup="default"/"shift"/"append" БЕЗ catchup-days

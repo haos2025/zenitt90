@@ -48,6 +48,31 @@ class PlaylistRepository(
             .map { it.toMovie() }
     }
 
+    // PROMPT_HOME_LOADING_FIX.md, п.4 — на главной ленте сериал из плейлиста
+    // выглядел как N отдельных карточек ("S1E1 — …", "S1E2 — …") вместо
+    // одной карточки сериала, потому что HomeViewModel брал плоский
+    // getCatalog(). Не переиспользует getSeriesList() напрямую — та отдаёт
+    // SeriesSummary без Movie.id, а id первого эпизода здесь обязателен:
+    // карточка должна открыться через уже существующий маршрут
+    // "detail/$id" → DetailViewModel.load() сам находит movie.seriesId !=
+    // null и редиректит на единое окно сериала (см. DetailViewModel.kt) —
+    // заводить новый тип элемента ленты или отдельный маршрут навигации
+    // только ради Home не нужно. getCatalog() уже делает refresh+дедуп,
+    // поэтому вызывается один раз, не дублируется.
+    suspend fun getCatalogGroupedBySeries(forceRefresh: Boolean = false): List<Movie> {
+        val movies = getCatalog(forceRefresh)
+        val (episodes, standalone) = movies.partition { it.seriesId != null }
+        val seriesCards = episodes.groupBy { it.seriesId!! }.map { (_, group) ->
+            // Первый эпизод из уже отсортированного/дедуплицированного
+            // списка — тот же практичный выбор "первого", что и в
+            // getSeriesList(). id остаётся собственным id этого эпизода —
+            // это и есть ключ для корректного редиректа в DetailViewModel.
+            val first = group.first()
+            first.copy(title = first.seriesTitle ?: first.title)
+        }
+        return standalone + seriesCards
+    }
+
     suspend fun getMovieById(id: String): Movie? = withContext(Dispatchers.IO) {
         movieDao.getById(id)?.toMovie()
     }

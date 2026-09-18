@@ -83,6 +83,13 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                 }
                 is HomeUiState.Success -> {
                     Column(Modifier.fillMaxSize()) {
+                        // PROMPT_HOME_LOADING_FIX.md, п.1 — плейлист уже
+                        // показан ниже, backend-каталог ещё грузится. Тонкая
+                        // полоса поверх уже видимого контента, не
+                        // полноэкранный Loading.
+                        if (state.isBackendLoading) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
                             modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)

@@ -63,6 +63,9 @@ fun PhonePluginCatalogScreen(navController: NavHostController) {
             // вкладками, а не внутри "Каталога": это независимый способ
             // установки, не часть каталога.
             PhoneInstallFromUrlRow(installState, onInstall = viewModel::installFromUrl, onReset = viewModel::resetInstallState)
+            // PROMPT_HOME_LOADING_FIX.md, п.3 — installFromScript() был
+            // готов в PluginViewModel, но ни один экран его не вызывал.
+            PhoneInstallFromScriptRow(installState, onInstall = viewModel::installFromScript, onReset = viewModel::resetInstallState)
 
             // Install status
             when (val state = installState) {
@@ -108,6 +111,40 @@ private fun PhoneInstallFromUrlRow(installState: PluginViewModel.InstallState, o
     // остаётся, чтобы не перепечатывать длинный URL заново.
     LaunchedEffect(installState) {
         if (installState is PluginViewModel.InstallState.Done) url = ""
+    }
+}
+
+// PROMPT_HOME_LOADING_FIX.md, п.3 — второй, независимый способ установки:
+// вставить текст скрипта плагина целиком. Свёрнуто по умолчанию — поле URL
+// выше остаётся основным путём.
+@Composable
+private fun PhoneInstallFromScriptRow(installState: PluginViewModel.InstallState, onInstall: (String) -> Unit, onReset: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    var script by remember { mutableStateOf("") }
+    val installing = installState is PluginViewModel.InstallState.Installing
+    Column(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM)) {
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "Скрыть вставку скрипта" else "…или вставить скрипт плагина целиком")
+        }
+        if (expanded) {
+            OutlinedTextField(
+                value = script, onValueChange = { script = it },
+                label = { Text("Текст скрипта плагина (.js)") },
+                enabled = !installing,
+                minLines = 4,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Button(enabled = script.isNotBlank() && !installing, onClick = { onInstall(script) }, modifier = Modifier.align(Alignment.End)) {
+                Text(if (installing) "Установка…" else "Установить")
+            }
+        }
+    }
+    // Поле очищается только по успешной установке — после ошибки текст
+    // остаётся, чтобы не перепечатывать длинный скрипт заново (тот же
+    // приём, что и в PhoneInstallFromUrlRow выше).
+    LaunchedEffect(installState) {
+        if (installState is PluginViewModel.InstallState.Done) script = ""
     }
 }
 

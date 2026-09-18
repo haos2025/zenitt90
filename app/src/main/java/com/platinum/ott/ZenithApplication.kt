@@ -51,6 +51,10 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         // в очередь — SeriesUpdateWorker.enqueue() существовал, но был
         // мёртвым кодом, вызывавшимся из НИГДЕ.
         createNotificationChannel()
+        // PROMPT_HOME_LOADING_FIX.md, п.2 — CHANNEL_NEW_CONTENT (уведомления
+        // о новом контенте от плагинов, PluginApi.showNewContent()) нигде не
+        // регистрировался, поэтому такие уведомления молча не показывались.
+        com.platinum.ott.worker.NotificationHelper.createChannels(this)
         SeriesUpdateWorker.enqueue(this)
         ChannelHealthCheckWorker.enqueue(this)
         EpgCleanupWorker.enqueue(this)
