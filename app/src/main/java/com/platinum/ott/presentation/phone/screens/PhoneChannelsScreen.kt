@@ -29,6 +29,8 @@ import com.platinum.ott.presentation.screens.channels.ChannelsViewModel
 import com.platinum.ott.presentation.screens.channels.DeleteChannelConfirmDialog
 import com.platinum.ott.presentation.screens.channels.MergeChannelDialog
 import com.platinum.ott.presentation.screens.channels.RenameChannelDialog
+import com.platinum.ott.ui.theme.ZenithShapeMedium
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 /**
  * Телефон-версия ChannelsScreen.kt (TV) — тот же ChannelsViewModel и те же
