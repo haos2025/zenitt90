@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.runtime.*
@@ -129,14 +128,14 @@ private fun VariantChoiceDialog(variants: List<StreamVariant>, onSelect: (Stream
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+    Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)
     ) { Text(label, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), color = Color.White) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun EpisodeRow(episodeNumber: Int?, title: String, poster: String, description: String, progress: Float?, completed: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(containerColor = ZenithFocusContainer, focusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.5f))
     ) {
         Row(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
@@ -156,7 +155,7 @@ private fun EpisodeRow(episodeNumber: Int?, title: String, poster: String, descr
                 contentScale = ContentScale.Fit,
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.width(96.dp).height(144.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surface)
+                modifier = Modifier.width(96.dp).height(144.dp).clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
             )
             Spacer(Modifier.width(ZenithDimens.paddingSM))
             episodeNumber?.let { Text("$it.", color = Color.Gray, modifier = Modifier.padding(end = ZenithDimens.paddingSM)) }

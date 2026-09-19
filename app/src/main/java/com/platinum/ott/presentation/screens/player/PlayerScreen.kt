@@ -1,12 +1,12 @@
 package com.platinum.ott.presentation.screens.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -27,6 +27,10 @@ import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.ui.theme.ZenithDurationMedium
+import com.platinum.ott.ui.theme.ZenithEasingStandard
+import com.platinum.ott.ui.theme.ZenithShapeMedium
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 import com.platinum.ott.ui.theme.ZenithSurface
 import androidx.tv.material3.*
 import kotlinx.coroutines.delay
@@ -396,7 +400,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = ZenithDimens.paddingXL, vertical = 120.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(ZenithShapeSmall)
                     .background(Color.Black.copy(alpha = 0.7f))
                     .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
             ) {
@@ -410,15 +414,19 @@ fun PlayerScreen(
         }
 
         // Короткая надпись по центру экрана на DirectionLeft/DirectionRight
+        // Motion.kt (PROMPT_DESIGN_SYSTEM.md, подзадача 2) — та же
+        // осознанная замена дефолтного FastOutSlowInEasing на единую
+        // ZenithEasingStandard, что и в PlayerController.kt/
+        // PhonePlayerController.kt.
         AnimatedVisibility(
             visible = seekToast != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+            exit = fadeOut(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
             modifier = Modifier.align(Alignment.Center)
         ) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ZenithShapeMedium)
                     .background(ZenithSurface.copy(alpha = 0.85f))
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {
@@ -429,14 +437,14 @@ fun PlayerScreen(
         // паттерн AnimatedVisibility, что и у seekToast выше.
         AnimatedVisibility(
             visible = zapBuffer.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+            exit = fadeOut(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
             modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Box(
                 modifier = Modifier
                     .padding(ZenithDimens.paddingL)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(ZenithShapeMedium)
                     .background(ZenithSurface.copy(alpha = 0.85f))
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {

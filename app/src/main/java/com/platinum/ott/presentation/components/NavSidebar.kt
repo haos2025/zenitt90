@@ -2,7 +2,6 @@ package com.platinum.ott.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -22,6 +21,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.navigation.navigateToTab
+import com.platinum.ott.ui.theme.ZenithShapeMedium
 
 // PROMPT_NAVIGATION_SIDEBAR.md — постоянный боковой сайдбар на TV, тот же
 // принцип, что уже применён в PhoneBottomBar.kt: один общий компонент,
@@ -56,13 +56,20 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
     ) {
         SidebarItem.values().forEach { item ->
             val selected = currentRoute == item.route
+            // PROMPT_DESIGN_SYSTEM.md, подзадача 3. Подсветка фона тут уже
+            // была и реально работает (маленькая кнопка-иконка, картинка её
+            // не перекрывает) — добавляю только явный scale, вместо
+            // скрытого дефолта ClickableSurfaceDefaults.scale()
+            // (необъявленный focusedScale = 1.1f), тем же числом 1.06f,
+            // что у MovieCard.kt/SeriesCard.kt (SeriesListScreen.kt).
             Surface(
                 onClick = { if (!selected) navController.navigateToTab(item.route) },
-                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                shape = ClickableSurfaceDefaults.shape(ZenithShapeMedium),
                 colors = ClickableSurfaceDefaults.colors(
                     containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
                     focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                 ),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
                 modifier = Modifier.padding(vertical = ZenithDimens.paddingS).size(56.dp)
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyColumnItems
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -37,6 +36,7 @@ import androidx.compose.material3.Icon
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.components.NavSidebar
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 // Раньше поиск существовал только снаружи приложения (системный поиск TV
 // через MovieSearchProvider) — внутри самого приложения зайти в поиск
@@ -166,7 +166,7 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                     singleLine = true,
                     textStyle = TextStyle(Color.White, 20.sp),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                    modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                     decorationBox = { inner ->
                         if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(Color.White.copy(0.3f), 20.sp))
                         inner()
@@ -252,7 +252,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Surface(
             onClick = onClick,
-            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color.Transparent,
                 focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
@@ -264,7 +264,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
         Spacer(Modifier.width(ZenithDimens.paddingSM))
         Surface(
             onClick = onRemove,
-            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color.Transparent,
                 focusedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
@@ -280,7 +280,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
 private fun RecentSearchClearRow(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)

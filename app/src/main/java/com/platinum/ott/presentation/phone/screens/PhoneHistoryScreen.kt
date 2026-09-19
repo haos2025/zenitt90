@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -28,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.ui.theme.ZenithShapeMedium
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
@@ -85,7 +86,7 @@ Scaffold(
                     state = dismissState,
                     backgroundContent = {
                         Box(
-                            Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = ZenithDimens.paddingM),
+                            Modifier.fillMaxSize().clip(ZenithShapeMedium).background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = ZenithDimens.paddingM),
                             contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) Alignment.CenterEnd else Alignment.CenterStart
                         ) { Icon(Icons.Default.Delete, "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer) }
                     }
@@ -111,7 +112,7 @@ Scaffold(
                             contentScale = ContentScale.Fit,
                             placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                             error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                            modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
+                            modifier = Modifier.width(56.dp).height(84.dp).clip(ZenithShapeSmall)
                         )
                         Spacer(Modifier.width(ZenithDimens.paddingSM))
                         Column(Modifier.weight(1f)) {

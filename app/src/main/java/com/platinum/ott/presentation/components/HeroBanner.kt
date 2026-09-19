@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -24,6 +23,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.Movie
+import com.platinum.ott.ui.theme.ZenithShapeMedium
 import kotlinx.coroutines.delay
 
 /**
@@ -78,7 +78,7 @@ fun HeroBanner(
             onClick = { onMovieClick(movie.id) },
             modifier = Modifier.fillMaxSize().padding(horizontal = ZenithDimens.tvOverscanPadding)
         ) {
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))) {
+            Box(Modifier.fillMaxSize().clip(ZenithShapeMedium)) {
                 AsyncImage(
                     model = request,
                     contentDescription = movie.title,

@@ -6,7 +6,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -33,6 +32,7 @@ import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.CastMember
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 private val photoWidth = 84.dp
 private val photoHeight = 110.dp
@@ -78,8 +78,8 @@ fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
                 Column(modifier = Modifier.width(photoWidth)) {
                     Box(
                         modifier = Modifier.width(photoWidth).height(photoHeight)
-                            .clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface)
-                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
+                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
                             .onFocusChanged { isFocused = it.isFocused }
                             .focusable()
                     ) {

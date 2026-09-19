@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -24,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.tv.material3.*
@@ -100,7 +100,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                                     contentScale = ContentScale.Fit,
                                     placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                                     error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                                    modifier = Modifier.width(96.dp).height(144.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surface)
+                                    modifier = Modifier.width(96.dp).height(144.dp).clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
                                 )
                                 Spacer(Modifier.width(ZenithDimens.paddingSM))
                                 Column(Modifier.weight(1f)) {

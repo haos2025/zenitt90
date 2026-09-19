@@ -153,7 +153,7 @@ private fun InstallFromUrlRow(
                 enabled = !installing,
                 textStyle = TextStyle(Color.White, 16.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                 decorationBox = { inner ->
                     if (url.isEmpty()) Text("Ссылка на плагин (URL .js)…", style = TextStyle(Color.White.copy(0.3f), 16.sp))
                     inner()
@@ -208,7 +208,7 @@ private fun InstallFromScriptRow(
                 textStyle = TextStyle(Color.White, 14.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)
-                    .background(Color.White.copy(0.08f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(0.08f), ZenithShapeSmall)
                     .padding(ZenithDimens.paddingM),
                 decorationBox = { inner ->
                     if (script.isEmpty()) Text("Текст скрипта плагина (.js)…", style = TextStyle(Color.White.copy(0.3f), 14.sp))

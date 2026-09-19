@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -196,7 +195,7 @@ fun AddSourceScreen(
 private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer,
             focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive
@@ -234,7 +233,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
     if (!isEditing) {
         Surface(
             onClick = { isEditing = true },
-            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color.White.copy(alpha = 0.06f),
                 focusedContainerColor = ZenithFocusContainerActive
@@ -264,7 +263,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
-                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.06f), ZenithShapeSmall)
                 .padding(16.dp, 14.dp)
                 .onFocusChanged { if (!it.isFocused) { isEditing = false; keyboardController?.hide() } },
             decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(alpha = 0.3f), 16.sp)); it() }

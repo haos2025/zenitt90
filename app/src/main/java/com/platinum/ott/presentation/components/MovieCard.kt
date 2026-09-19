@@ -1,16 +1,22 @@
 package com.platinum.ott.presentation.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -22,6 +28,10 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.ui.theme.ZenithDurationShort
+import com.platinum.ott.ui.theme.ZenithEasingStandard
+import com.platinum.ott.ui.theme.ZenithFocusContainerActive
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 @Composable
 fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -51,7 +61,38 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
             .build()
     }
 
-    Card(onClick = onClick, modifier = modifier.width(cardWidth).height(cardHeight), shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    // PROMPT_DESIGN_SYSTEM.md, подзадача 3. Раньше у этой карточки не
+    // было вообще никакой D-pad-подсветки на TV (ни смены фона, ни
+    // чего-либо ещё) — MovieCard использует обычный
+    // androidx.compose.material3.Card, который сам по себе ничего не
+    // подсвечивает при фокусе пультом. Добавляю оба эффекта сразу
+    // (решение согласовано с Shadow): скейл 1f→1.06f — новый эффект,
+    // плюс полупрозрачная подсветка ZenithFocusContainerActive — тот же
+    // паттерн, что уже используется в ChannelsScreen.kt/EpgGridScreen.kt/
+    // SourcesScreen.kt и других экранах. Токены длительности/easing —
+    // из Motion.kt (подзадача 2), а не новое магическое число.
+    //
+    // Компонент общий для TV и телефона (см. CatalogRow.kt/
+    // PhoneCatalogRow.kt и другие места использования) — на телефоне
+    // isFocused обычным тапом не выставляется (там нет фокуса пультом),
+    // так что оба эффекта на практике проявляются только на TV.
+    var isFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.06f else 1f,
+        animationSpec = tween(ZenithDurationShort, easing = ZenithEasingStandard),
+        label = "movieCardFocusScale"
+    )
+
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .scale(scale)
+            .onFocusChanged { isFocused = it.isFocused },
+        shape = ZenithShapeSmall,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(
                 model = request,
@@ -74,6 +115,12 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
                     Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (year > 0) Text("$year", color = Color.Gray)
                 }
+            }
+            // Подсветка фокуса поверх всей карточки (включая постер и
+            // плашку с названием) — рисуется последней, чтобы быть видной
+            // и там, где AsyncImage непрозрачен, а не только по краям.
+            if (isFocused) {
+                Box(Modifier.fillMaxSize().background(ZenithFocusContainerActive))
             }
         }
     }

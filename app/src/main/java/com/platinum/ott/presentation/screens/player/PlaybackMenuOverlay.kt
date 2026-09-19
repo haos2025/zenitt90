@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -97,9 +96,9 @@ fun PlaybackMenuOverlay(
                 .padding(ZenithDimens.paddingL)
                 .width(320.dp)
                 .fillMaxHeight(0.82f)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(ZenithShapeLarge)
                 .background(ZenithSurface.copy(alpha = 0.96f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
                 .padding(vertical = ZenithDimens.paddingL)
         ) {
             Row(
@@ -109,7 +108,7 @@ fun PlaybackMenuOverlay(
                 Text("Настройки", style = MaterialTheme.typography.titleMedium, color = Color.White)
                 Surface(
                     onClick = onDismiss,
-                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+                    shape = ClickableSurfaceDefaults.shape(ZenithShapePill),
                     colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = ZenithFocusContainerActive),
                     // См. комментарий у MenuRow ниже — тот же фикс оверфлоу
                     // подсветки за скруглённый край узкой панели (320dp).
@@ -123,7 +122,7 @@ fun PlaybackMenuOverlay(
             // группа переключателей, а не четыре разные кнопки.
             Row(
                 Modifier.padding(horizontal = ZenithDimens.paddingM)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(ZenithShapeMedium)
                     .background(Color.White.copy(alpha = 0.05f))
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -212,7 +211,7 @@ private fun MenuTabButton(label: String, selected: Boolean, modifier: Modifier =
     Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(9.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
             focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive
@@ -239,7 +238,7 @@ private fun MenuRow(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeMedium),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,
             focusedContainerColor = ZenithFocusContainerActive

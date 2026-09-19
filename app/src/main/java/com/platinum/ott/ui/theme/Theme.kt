@@ -58,6 +58,10 @@ fun ZenithTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = ZenithTypography,
+        // Подзадача 1 PROMPT_DESIGN_SYSTEM.md (см. Shapes.kt) — до этого
+        // MaterialTheme вообще не получал Shapes, каждый компонент задавал
+        // форму сам через сырой RoundedCornerShape(Ndp).
+        shapes = ZenithShapes,
         content = content,
     )
 }
@@ -65,5 +69,11 @@ fun ZenithTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ZenithTvTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
-    TvMaterialTheme(colorScheme = if (darkTheme) TvColorScheme else TvLightColorScheme, content = content)
+    TvMaterialTheme(
+        colorScheme = if (darkTheme) TvColorScheme else TvLightColorScheme,
+        // См. Shapes.kt / ZenithTvShapes — та же причина, что и выше для
+        // ZenithTheme: TvMaterialTheme тоже не получал общий Shapes.
+        shapes = ZenithTvShapes,
+        content = content,
+    )
 }

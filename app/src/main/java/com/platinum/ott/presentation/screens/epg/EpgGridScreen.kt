@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,7 +124,7 @@ private fun EpgChannelRowView(row: EpgChannelRow, onPlay: () -> Unit, onPlayCatc
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(40.dp, 28.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.08f)),
+                Modifier.size(40.dp, 28.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (row.channel.logo != null) {
@@ -161,7 +160,7 @@ private fun ProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, playable:
     var isFocused by remember { mutableStateOf(false) }
     Box(
         modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(ZenithShapeSmall)
             .background(
                 when {
                     isFocused -> ZenithFocusContainerActive
@@ -177,7 +176,7 @@ private fun ProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, playable:
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (slot.isLive) {
-                    Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(ZenithSuccess))
+                    Box(Modifier.size(6.dp).clip(ZenithShapePill).background(ZenithSuccess))
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(slot.program.title, style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)

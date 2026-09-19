@@ -1,7 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -10,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBackIosNew
@@ -42,7 +40,13 @@ import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.screens.player.PlaybackMenuTab
 import com.platinum.ott.presentation.screens.player.TrackOption
+import com.platinum.ott.ui.theme.ZenithDurationMedium
+import com.platinum.ott.ui.theme.ZenithDurationShort
+import com.platinum.ott.ui.theme.ZenithEasingStandard
 import com.platinum.ott.ui.theme.ZenithSecondary
+import com.platinum.ott.ui.theme.ZenithShapeLarge
+import com.platinum.ott.ui.theme.ZenithShapePill
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 import com.platinum.ott.ui.theme.ZenithSurface
 
 // Третий раунд редизайна: убраны кнопки ±10с (были рабочими, но
@@ -141,7 +145,15 @@ fun PhonePlayerController(
     var moreSheetCategory by remember { mutableStateOf<PlaybackMenuTab?>(null) }
     val isSeries = hasNextEpisode || hasPreviousEpisode
 
-    AnimatedVisibility(visible = isVisible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
+    // Motion.kt (PROMPT_DESIGN_SYSTEM.md, подзадача 2) — тот же
+    // осознанный переход на ZenithEasingStandard, что и в TV-версии
+    // PlayerController.kt, вместо дефолтного FastOutSlowInEasing.
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+        exit = fadeOut(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+        modifier = modifier
+    ) {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.18f).align(Alignment.TopCenter)
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(0.65f), Color.Transparent))))
@@ -161,9 +173,9 @@ fun PhonePlayerController(
             ) {
                 Column(
                     Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(ZenithShapeLarge)
                         .background(ZenithSurface.copy(alpha = 0.9f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
                         .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
                 ) {
                     // Время слито в один ряд со скраббером (было: слайдер
@@ -376,7 +388,7 @@ private fun SmallMenuIconButton(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(32.dp)
-                .clip(RoundedCornerShape(9.dp))
+                .clip(ZenithShapeSmall)
                 .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f))
         ) {
             Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(16.dp))
@@ -420,7 +432,7 @@ private fun ScrubberBar(
 
     val trackHeight by animateDpAsState(
         targetValue = if (isDragging) 10.dp else 4.dp,
-        animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
+        animationSpec = tween(durationMillis = ZenithDurationShort, easing = ZenithEasingStandard),
         label = "phoneScrubberHeight"
     )
 
@@ -463,12 +475,12 @@ private fun ScrubberBar(
 private fun ScrubberTrack(playedFraction: Float, bufferedFraction: Float, height: Dp, isDragging: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         val trackWidth = maxWidth
-        Box(Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.2f)))
+        Box(Modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.2f)))
         if (bufferedFraction > playedFraction) {
-            Box(Modifier.width(trackWidth * bufferedFraction).height(height).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.4f)))
+            Box(Modifier.width(trackWidth * bufferedFraction).height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.4f)))
         }
         Box(
-            Modifier.width(trackWidth * playedFraction).height(height).clip(RoundedCornerShape(50))
+            Modifier.width(trackWidth * playedFraction).height(height).clip(ZenithShapePill)
                 .background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, ZenithSecondary)))
         )
         if (isDragging) {

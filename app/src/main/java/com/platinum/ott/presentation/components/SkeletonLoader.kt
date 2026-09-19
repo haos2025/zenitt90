@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -19,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 // Раньше загрузка каталога (и на TV, и на телефоне) показывала только
 // CircularProgressIndicator посреди пустого экрана — ни намёка на форму
@@ -44,7 +44,7 @@ private fun rememberShimmerBrush(): Brush {
 
 @Composable
 private fun SkeletonBox(width: Dp, height: Dp, modifier: Modifier = Modifier) {
-    Box(modifier.width(width).height(height).clip(RoundedCornerShape(8.dp)).background(rememberShimmerBrush()))
+    Box(modifier.width(width).height(height).clip(ZenithShapeSmall).background(rememberShimmerBrush()))
 }
 
 /**

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
@@ -152,7 +151,7 @@ private fun ChannelCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(ZenithShapeMedium)
             .background(ZenithSurface)
     ) {
         Row(
@@ -160,7 +159,7 @@ private fun ChannelCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(56.dp, 36.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)),
+                Modifier.size(56.dp, 36.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (item.logo != null) {

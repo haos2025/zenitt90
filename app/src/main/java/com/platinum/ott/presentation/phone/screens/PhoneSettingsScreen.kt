@@ -6,7 +6,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -45,6 +44,7 @@ import com.platinum.ott.core.QualityPreferences
 import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.ui.theme.ZenithError
+import com.platinum.ott.ui.theme.ZenithShapeMedium
 import com.platinum.ott.ui.theme.ZenithSuccess
 import com.platinum.ott.ui.theme.ZenithSurfaceVariant
 
@@ -367,7 +367,7 @@ private fun SectionHeader(title: String, icon: ImageVector) {
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = ZenithShapeMedium,
         colors = CardDefaults.cardColors(containerColor = ZenithSurfaceVariant.copy(alpha = 0.5f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
@@ -390,7 +390,7 @@ private fun NavCard(title: String, status: String, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = ZenithShapeMedium,
         colors = CardDefaults.cardColors(containerColor = ZenithSurfaceVariant.copy(alpha = 0.5f)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {

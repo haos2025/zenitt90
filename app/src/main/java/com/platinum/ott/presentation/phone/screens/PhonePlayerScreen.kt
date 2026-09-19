@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.VolumeUp
@@ -33,6 +32,8 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.screens.player.PlayerUiState
 import com.platinum.ott.presentation.screens.player.PlayerViewModel
+import com.platinum.ott.ui.theme.ZenithShapeMedium
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -230,7 +231,7 @@ fun PhonePlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = ZenithDimens.paddingL, vertical = 100.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clip(ZenithShapeSmall)
                     .background(Color.Black.copy(alpha = 0.7f))
                     .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
             ) {
@@ -322,7 +323,7 @@ private sealed interface GestureIndicator {
 @Composable
 private fun GestureIndicatorOverlay(indicator: GestureIndicator, modifier: Modifier = Modifier) {
     Row(
-        modifier.background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier.background(Color.Black.copy(alpha = 0.6f), ZenithShapeMedium).padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         when (indicator) {

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -306,9 +305,9 @@ private fun formatLastSynced(ms: Long): String {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(ZenithShapeMedium)
                 .background(ZenithSurfaceVariant.copy(alpha = 0.5f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeMedium)
                 .padding(vertical = ZenithDimens.paddingXS, horizontal = ZenithDimens.paddingS),
             content = content
         )
@@ -337,7 +336,7 @@ private fun formatLastSynced(ms: Long): String {
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
@@ -367,7 +366,7 @@ private fun formatLastSynced(ms: Long): String {
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun CycleSetting(label: String, value: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)

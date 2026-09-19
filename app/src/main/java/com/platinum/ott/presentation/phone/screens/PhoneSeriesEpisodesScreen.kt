@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -114,7 +113,7 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                                                 contentScale = ContentScale.Fit,
                                                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                                                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                                                modifier = Modifier.width(56.dp).height(84.dp).clip(RoundedCornerShape(6.dp))
+                                                modifier = Modifier.width(56.dp).height(84.dp).clip(ZenithShapeSmall)
                                             )
                                             Icon(Icons.Default.PlayArrow, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.align(Alignment.Center).size(20.dp))
                                         }

@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -22,6 +21,7 @@ import androidx.navigation.NavHostController
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.presentation.screens.sources.AddSourceUiState
 import com.platinum.ott.presentation.screens.sources.AddSourceViewModel
+import com.platinum.ott.ui.theme.ZenithShapeMedium
 
 /**
  * Телефон-версия AddSourceScreen.kt (TV) — тот же AddSourceViewModel.
@@ -79,7 +79,7 @@ fun PhoneAddSourceScreen(
             OutlinedTextField(
                 value = label, onValueChange = { label = it },
                 placeholder = { Text("Название источника (необязательно)") },
-                singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = RoundedCornerShape(12.dp)
+                singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = ZenithShapeMedium
             )
 
             when (sourceType) {
@@ -93,7 +93,7 @@ fun PhoneAddSourceScreen(
                         M3uMethodTab.URL -> OutlinedTextField(
                             value = m3uUrl, onValueChange = { m3uUrl = it },
                             placeholder = { Text("http://example.com/playlist.m3u") },
-                            singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
+                            singleLine = true, modifier = Modifier.fillMaxWidth(), shape = ZenithShapeMedium
                         )
                         M3uMethodTab.FILE -> OutlinedButton(
                             onClick = { filePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*")) },
@@ -116,9 +116,9 @@ fun PhoneAddSourceScreen(
                     }
                 }
                 SourceTypeTab.XTREAM -> {
-                    OutlinedTextField(value = xtHost, onValueChange = { xtHost = it }, placeholder = { Text("Хост, например http://example.com:8080") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = RoundedCornerShape(12.dp))
-                    OutlinedTextField(value = xtUser, onValueChange = { xtUser = it }, placeholder = { Text("Логин") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = RoundedCornerShape(12.dp))
-                    OutlinedTextField(value = xtPass, onValueChange = { xtPass = it }, placeholder = { Text("Пароль") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = RoundedCornerShape(12.dp))
+                    OutlinedTextField(value = xtHost, onValueChange = { xtHost = it }, placeholder = { Text("Хост, например http://example.com:8080") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = ZenithShapeMedium)
+                    OutlinedTextField(value = xtUser, onValueChange = { xtUser = it }, placeholder = { Text("Логин") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = ZenithShapeMedium)
+                    OutlinedTextField(value = xtPass, onValueChange = { xtPass = it }, placeholder = { Text("Пароль") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), shape = ZenithShapeMedium)
                 }
             }
 
@@ -139,7 +139,7 @@ fun PhoneAddSourceScreen(
                 },
                 enabled = uiState !is AddSourceUiState.Loading,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp)
+                shape = ZenithShapeMedium
             ) { Text(if (uiState is AddSourceUiState.Loading) "Проверка..." else "Добавить") }
         }
     }

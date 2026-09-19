@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -28,6 +27,7 @@ import com.platinum.ott.presentation.screens.epg.EpgGridUiState
 import com.platinum.ott.presentation.screens.epg.EpgGridViewModel
 import com.platinum.ott.presentation.screens.epg.EpgSlot
 import com.platinum.ott.presentation.screens.epg.formatHm
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 private val CHANNEL_COLUMN_WIDTH = 96.dp
 private val ROW_HEIGHT = 56.dp
@@ -125,7 +125,7 @@ private fun PhoneEpgChannelRowView(row: EpgChannelRow, onPlay: () -> Unit, onPla
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(32.dp, 22.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                Modifier.size(32.dp, 22.dp).clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (row.channel.logo != null) {
@@ -158,7 +158,7 @@ private fun PhoneEpgChannelRowView(row: EpgChannelRow, onPlay: () -> Unit, onPla
 private fun PhoneProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, playable: Boolean, onClick: () -> Unit) {
     Box(
         modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(ZenithShapeSmall)
             .background(
                 when {
                     slot.isLive -> MaterialTheme.colorScheme.primaryContainer

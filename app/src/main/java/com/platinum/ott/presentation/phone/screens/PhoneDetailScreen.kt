@@ -16,7 +16,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
@@ -89,7 +88,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                         contentScale = if (hasRealBackdrop) ContentScale.Crop else ContentScale.Fit,
                         placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                         error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                        modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.fillMaxWidth().height(220.dp).clip(ZenithShapeMedium)
                             .background(MaterialTheme.colorScheme.surface)
                     )
                     Spacer(Modifier.height(ZenithDimens.paddingM))

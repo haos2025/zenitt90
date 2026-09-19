@@ -1,7 +1,6 @@
 package com.platinum.ott.presentation.screens.player
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
@@ -106,10 +104,15 @@ fun PlayerController(
 ) {
     val isSeries = hasNextEpisode || hasPreviousEpisode
 
+    // Motion.kt (PROMPT_DESIGN_SYSTEM.md, подзадача 2): длительность та
+    // же, что была неявным дефолтом Compose (300ms), но easing теперь
+    // явно ZenithEasingStandard, а не дефолтный FastOutSlowInEasing —
+    // сознательное решение свести все переходы проекта к одной кривой,
+    // а не оставить два разных типа easing на разные случаи.
     AnimatedVisibility(
         visible = isVisible,
-        enter   = fadeIn(),
-        exit    = fadeOut(),
+        enter   = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+        exit    = fadeOut(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
         modifier = modifier
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -138,9 +141,9 @@ fun PlayerController(
                     .padding(bottom = ZenithDimens.paddingXXL)
                     .widthIn(max = 860.dp)
                     .fillMaxWidth(0.8f)
-                    .clip(RoundedCornerShape(28.dp))
+                    .clip(ZenithShapeLarge)
                     .background(ZenithSurface.copy(alpha = 0.92f))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
                     .padding(horizontal = ZenithDimens.paddingXL, vertical = ZenithDimens.paddingM),
                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
             ) {
@@ -272,7 +275,7 @@ private fun MenuIconButton(
 ) {
     Surface(
         onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
             focusedContainerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.38f) else ZenithFocusContainerActive
@@ -301,13 +304,13 @@ private fun ProgressBar(currentMs: Long, durationMs: Long, isActive: Boolean, mo
     // только источник взаимодействия другой (D-pad, не касание/драг).
     val height by animateDpAsState(
         targetValue = if (isActive) 10.dp else 4.dp,
-        animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
+        animationSpec = tween(durationMillis = ZenithDurationShort, easing = ZenithEasingStandard),
         label = "tvProgressBarHeight"
     )
     Box(
-        modifier = modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.15f))
+        modifier = modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.15f))
     ) {
-        Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary))
+        Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().clip(ZenithShapePill).background(MaterialTheme.colorScheme.primary))
     }
 }
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
@@ -138,12 +137,12 @@ private fun PhoneChannelCard(
     // внутри останавливают свой собственный клик через consumeClick-семантику
     // material3-компонентов, не пропуская его наверх на родительский Surface.
     Surface(
-        shape = RoundedCornerShape(12.dp), tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth(),
+        shape = ZenithShapeMedium, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth(),
         onClick = onPlay, enabled = item.streamCount > 0
     ) {
         Row(Modifier.padding(ZenithDimens.paddingM).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(48.dp, 32.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                Modifier.size(48.dp, 32.dp).clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (item.logo != null) {

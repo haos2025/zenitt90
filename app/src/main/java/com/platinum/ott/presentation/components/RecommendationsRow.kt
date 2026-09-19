@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +28,7 @@ import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.domain.model.Recommendation
+import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 private val posterWidth = 110.dp
 private val posterHeight = 165.dp
@@ -71,8 +71,8 @@ fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation
                 Column(modifier = Modifier.width(posterWidth)) {
                     Box(
                         modifier = Modifier.width(posterWidth).height(posterHeight)
-                            .clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface)
-                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
+                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
                             .onFocusChanged { isFocused = it.isFocused }
                             .clickable { onItemClick(rec) }
                     ) {
