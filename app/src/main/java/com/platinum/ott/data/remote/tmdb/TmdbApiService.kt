@@ -26,8 +26,16 @@ interface TmdbApiService {
     // PROMPT_DETAIL_SCREEN_UPGRADE.md, п.5 — те же ограничения, что и выше:
     // только фильмы, вариант (б) (без кликабельности) не требует связи с
     // собственным каталогом.
-    @GET("movie/{id}/recommendations")
-    suspend fun getMovieRecommendations(@Path("id") id: Int): TmdbRecommendationsResponse
+    // PROMPT_DESIGN_SYSTEM.md-сессия про фокус/оверлей/актёров, подзадача 4 —
+    // экран актёра с фильмографией. person/{id} — базовые данные (фото,
+    // биография, дата/место рождения); combined_credits, а не отдельные
+    // movie_credits/tv_credits — TMDB отдаёт фильмографию персоны только так,
+    // одним списком с полем media_type ("movie"/"tv") на каждой записи,
+    // разделение на секции Фильмы/Сериалы делается на стороне приложения.
+    @GET("person/{id}")
+    suspend fun getPersonDetails(@Path("id") id: Int): TmdbPersonDetails
+    @GET("person/{id}/combined_credits")
+    suspend fun getPersonCombinedCredits(@Path("id") id: Int): TmdbPersonCombinedCredits
 }
 
 data class TmdbSearchResponse(val results: List<TmdbSearchResult> = emptyList())
@@ -45,9 +53,23 @@ data class TmdbCredits(val cast: List<TmdbCast> = emptyList())
 // нигде не передавался), так что details.credits?.cast?.take(5) из
 // TmdbRepositoryImpl фактически никогда не срабатывал — реального
 // поведения это поле раньше не меняло.
-data class TmdbCast(val name: String, val character: String?, val profile_path: String? = null)
+// id (person id) добавлен для экрана актёра/фильмографии — без него
+// /person/{id} не адресовать вообще; default 0 — совместимость со старыми
+// закэшированными записями CastMember в Room (castJson), у которых этого
+// поля физически ещё нет (см. CastMember.kt).
+data class TmdbCast(val id: Int = 0, val name: String, val character: String?, val profile_path: String? = null)
 data class TmdbVideos(val results: List<TmdbVideo> = emptyList())
 data class TmdbVideo(val key: String, val site: String, val type: String)
 data class TmdbNextEpisode(val air_date: String?, val season_number: Int, val episode_number: Int, val name: String?)
 data class TmdbRecommendationsResponse(val results: List<TmdbRecommendationItem> = emptyList())
 data class TmdbRecommendationItem(val id: Int, val title: String?, val name: String?, val poster_path: String?, val release_date: String?)
+// Ни deathday, ни biography TMDB не гарантирует непустыми — оба Nullable,
+// экран актёра сам решает, что не показывать при отсутствии данных.
+data class TmdbPersonDetails(val id: Int, val name: String, val biography: String?, val birthday: String?, val deathday: String? = null, val place_of_birth: String? = null, val profile_path: String? = null, val known_for_department: String? = null)
+data class TmdbPersonCombinedCredits(val cast: List<TmdbPersonCreditItem> = emptyList())
+// title — у фильмов, name — у сериалов (TMDB так и отдаёт, в одном списке
+// combined_credits, разница только в том, какое из двух полей заполнено);
+// release_date/first_air_date — та же пара по тому же принципу.
+// media_type ("movie"/"tv") — самое надёжное поле для разделения на секции,
+// не наличие title/name (могут теоретически совпадать по формату).
+data class TmdbPersonCreditItem(val id: Int, val title: String?, val name: String?, val poster_path: String?, val character: String?, val media_type: String?, val release_date: String?, val first_air_date: String?)

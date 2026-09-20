@@ -5,10 +5,9 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -26,7 +25,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,6 +71,21 @@ import com.platinum.ott.ui.theme.*
  * DirectionLeft/DirectionRight (см. isSeekActive — считается в
  * PlayerScreen.kt по частоте KeyDown-событий, Android сам шлёt повторные
  * KeyDown при удержании клавиши на пульте).
+ *
+ * Пятый раунд (сравнение с TiviMate/Netflix/YouTube TV, реальный репорт —
+ * кнопки транспорта выглядят как настоящие, но не выделяются пультом):
+ * IconGlyphButton (play/pause, след./пред. серия) до этого раунда был тем
+ * же decorative-паттерном, что чинили в четвёртом раунде для "Подключить
+ * телефон" — .focusProperties { canFocus = false }, реальное действие
+ * только через скрытые глобальные хоткеи. Переведён на тот же
+ * tv-material3 Surface, что и MenuIconButton — теперь весь ряд транспорта
+ * реально фокусируется и подсвечивается белой рамкой, а не только четыре
+ * иконки настроек справа. Глобальные хоткеи (DirectionCenter/Left/Right в
+ * PlayerScreen.onKeyEvent) не убраны — они по-прежнему нужны, пока фокус
+ * стоит на самом видео (rootHasFocus), а не в капсуле; как только
+ * пользователь явно переводит фокус на кнопку в капсуле, Left/Right
+ * закономерно начинают перемещать фокус между кнопками ряда, а не
+ * перематывать — это соответствует поведению конкурентов, не регрессия.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -210,6 +223,7 @@ fun PlayerController(
     }
 }
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun IconGlyphButton(
     icon: ImageVector,
@@ -219,50 +233,64 @@ private fun IconGlyphButton(
     isPrimary: Boolean = false,
     enabled: Boolean = true
 ) {
-    // Раньше здесь стоял комментарий "clickable не получает фокус напрямую" —
-    // это было неверно и не проверено на реальном устройстве: обычный
-    // Modifier.clickable(...) в Compose ВСЕГДА добавляет фокусируемость,
-    // indication = null убирает только визуальную рябь, не фокус. На
-    // реальном пульте это означало: D-pad Down с общего фокуса плеера
-    // попадал СЮДА (play/pause — первая заметная цель по прямой), а не на
-    // настоящие фокусируемые иконки настроек (MenuIconButton ниже) — ровно
-    // репорт "работает только плей, до других кнопок не добраться". Left/
-    // Right, не будучи погашены этой кнопкой (у clickable нет обработки
-    // стрелок, только activation-клавиш), улетали дальше по дереву в
-    // глобальный обработчик PlayerScreen.onKeyEvent — отсюда "стрелки
-    // всегда только перематывают". focusProperties { canFocus = false }
-    // ниже — явный, а не предполагаемый, способ выключить фокус: D-pad
-    // Down/Up теперь проходит МИМО этой кнопки насквозь, к настоящим
-    // фокусируемым элементам капсулы.
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(size)
-            .focusProperties { canFocus = false }
-            .clip(CircleShape)
-            .background(
-                when {
-                    isPrimary -> MaterialTheme.colorScheme.primary
-                    else -> Color.White.copy(alpha = 0.1f)
-                }
-            )
-            .clickable(enabled = enabled, indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
+    // Реальный репорт (сравнение с TiviMate/Netflix/YouTube TV): раньше
+    // здесь стоял Box с .focusProperties { canFocus = false } — play/pause
+    // и след./пред. серия были НАВСЕГДА недостижимы с пульта через
+    // навигацию, реальное действие шло только через скрытые глобальные
+    // хоткеи (DirectionCenter/Left/Right в PlayerScreen.onKeyEvent, пока
+    // фокус нигде в капсуле не стоит). Кнопка при этом визуально выглядела
+    // как обычная — не было способа понять, что её нельзя "выделить".
+    // Прошлая причина отключения фокуса (см. старый комментарий в
+    // MIGRATION_NOTES.md/более раннюю версию этого файла) была в том, что
+    // Modifier.clickable(...) даёт фокусируемость БЕЗ визуальной индикации
+    // фокуса — а не в том, что фокус здесь в принципе не нужен. Решение —
+    // не убирать фокус, а сделать его настоящим и видимым, как у
+    // MenuIconButton ниже (тот же tv-material3 Surface).
+    //
+    // enabled = false (границы сериала — нет пред./след. серии) — Surface
+    // остаётся фокусируемым и в disabled-состоянии (так и задумано в
+    // tv-material3, см. официальную документацию Surface: "A disabled
+    // surface will still be focusable"), просто тусклее и не кликабелен —
+    // это лучше, чем прятать кнопку целиком: видно, что она есть, но
+    // сейчас недоступна, а не путает пустым местом в ряду.
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(size),
+        shape = ClickableSurfaceDefaults.shape(CircleShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+            focusedContainerColor = if (isPrimary) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive,
+            disabledContainerColor = if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.04f)
+        ),
+        // Белая рамка на фокусе — единственная смена фона (как у
+        // MenuIconButton) была бы малозаметна на primary-заливке play/pause,
+        // рамка работает одинаково на обоих вариантах кнопки.
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = CircleShape)
+        ),
+        // Тот же приём, что у MenuIconButton — кнопки стоят плотно в ряду
+        // капсулы, стандартный pop-эффект скейла может задевать соседнюю
+        // кнопку или скруглённый край самой капсулы.
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
         Icon(
             icon, contentDescription,
             tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f),
-            modifier = Modifier.size(size * 0.5f)
+            modifier = Modifier.align(Alignment.Center).size(size * 0.5f)
         )
     }
 }
 
 /**
  * Маленькие квадратные иконки (субтитры/аудио/качество/скорость внизу
- * капсулы, "Подключить телефон" наверху) — в отличие от IconGlyphButton
- * выше, это НАСТОЯЩИЙ фокусируемый TV-компонент (tv-material3 Surface),
- * потому что клик по каждой должен реально работать с пульта, не быть
- * декоративным. iconSize — из-за переиспользования для "Подключить
- * телефон" в шапке (четвёртый раунд, см. комментарий над PlayerController
- * выше), которая крупнее четырёх нижних иконок.
+ * капсулы, "Подключить телефон" наверху) — tv-material3 Surface,
+ * тот же принцип реального фокуса, что теперь и у IconGlyphButton выше
+ * (до пятого раунда разница была принципиальной — см. комментарий там).
+ * iconSize — из-за переиспользования для "Подключить телефон" в шапке
+ * (четвёртый раунд, см. комментарий над PlayerController выше), которая
+ * крупнее четырёх нижних иконок.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

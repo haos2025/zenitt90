@@ -1,6 +1,7 @@
 package com.platinum.ott.domain.repository
 
 import com.platinum.ott.domain.model.NextEpisode
+import com.platinum.ott.domain.model.PersonProfile
 import com.platinum.ott.domain.model.Recommendation
 import com.platinum.ott.domain.model.TmdbMetadata
 
@@ -17,4 +18,10 @@ interface TmdbRepository {
     // при tmdbId == null или любой ошибке сети — вызывающая сторона просто
     // не рисует блок "Смотрите также", не показывает ошибку.
     suspend fun getRecommendations(tmdbId: Int): List<Recommendation>
+    // Экран актёра (подзадача 4) — та же логика "живого запроса", что и
+    // getRecommendations() выше: один актёр за раз на время открытого
+    // экрана, не 20-30 карточек ленты разом — кэшировать в Room, как
+    // getMetadata(), тут не требуется. null при ошибке сети/неизвестном
+    // personId — PersonDetailScreen.kt показывает состояние ошибки.
+    suspend fun getPersonProfile(personId: Int): PersonProfile?
 }

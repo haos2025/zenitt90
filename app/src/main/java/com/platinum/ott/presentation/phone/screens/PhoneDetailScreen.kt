@@ -1,6 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -106,7 +108,31 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                     ).joinToString(" · ")
                     if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
                     m.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
-                    m.overview?.let { Text(it, color = Color.White.copy(0.8f), modifier = Modifier.padding(top = ZenithDimens.paddingS)) }
+                    m.overview?.let { overview ->
+                        // Тот же паттерн, что и в DetailScreen.kt (TV) —
+                        // клэмп в 4 строки + "Показать полностью"/"Свернуть",
+                        // тумблер только когда текст реально обрезается
+                        // (onTextLayout.hasVisualOverflow). На телефоне
+                        // тумблер — обычный clickable, фокуса пультом здесь
+                        // нет, реальный тап работает всегда.
+                        var isOverviewExpanded by remember(movieId) { mutableStateOf(false) }
+                        var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
+                        Text(
+                            overview,
+                            color = Color.White.copy(0.8f),
+                            modifier = Modifier.padding(top = ZenithDimens.paddingS),
+                            maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { if (!isOverviewExpanded) isOverviewExpandable = it.hasVisualOverflow }
+                        )
+                        if (isOverviewExpandable) {
+                            Text(
+                                if (isOverviewExpanded) "Свернуть" else "Показать полностью",
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = ZenithDimens.paddingXS).clickable { isOverviewExpanded = !isOverviewExpanded }
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
@@ -126,7 +152,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 // Карусель актёров (п.4) — как на TV, не рисуется, если пусто.
                 if (state.metadata?.cast?.isNotEmpty() == true) {
                     Spacer(Modifier.height(ZenithDimens.paddingM))
-                    CastRow(state.metadata.cast)
+                    CastRow(state.metadata.cast, onMemberClick = { member -> navController.navigate("person/${member.id}") })
                 }
                 // "Смотрите также" (п.5) — только когда TMDB нашёл совпадение.
                 if (state.recommendations.isNotEmpty()) {

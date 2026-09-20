@@ -6,6 +6,8 @@ import com.platinum.ott.data.local.dao.MetadataDao
 import com.platinum.ott.data.local.entity.MetadataEntity
 import com.platinum.ott.data.remote.tmdb.TmdbApiService
 import com.platinum.ott.domain.model.CastMember
+import com.platinum.ott.domain.model.PersonCreditItem
+import com.platinum.ott.domain.model.PersonProfile
 import com.platinum.ott.domain.model.Recommendation
 import com.platinum.ott.domain.model.TmdbMetadata
 import com.platinum.ott.domain.repository.TmdbRepository
@@ -68,7 +70,7 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             val genres = details.genres.joinToString(", ") { it.name }
             val castMembers = try {
                 api.getMovieCredits(result.id).cast.take(15)
-                    .map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path) }
+                    .map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path, it.id) }
             } catch (e: Exception) { emptyList() } // карусель актёров — второстепенная деталь, не должна ронять всю карточку фильма
             val castJson = if (castMembers.isNotEmpty()) gson.toJson(castMembers) else null
             return MetadataEntity(contentId, result.id, details.poster_path, details.backdrop_path,
@@ -121,6 +123,43 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
                 .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                 .parse(airDate)?.time ?: return@withContext null
             com.platinum.ott.domain.model.NextEpisode(epochMs, next.season_number, next.episode_number, next.name ?: "")
+        } catch (e: Exception) { null }
+    }
+
+    // Экран актёра (подзадача 4) — details и combined_credits запрашиваются
+    // одним withPermit-блоком (тот же общий лимитер, что и у остальных
+    // TMDB-вызовов), но раздельными try/catch: если фильмография не
+    // загрузилась, но сама персона нашлась — экран покажет фото/био без
+    // фильмографии, а не упадёт в ошибку целиком (тот же принцип, что и
+    // castMembers внутри fetchWithRetry выше — второстепенная часть не
+    // должна ронять главную).
+    //
+    // distinctBy(id, mediaType) — combined_credits реально отдаёт дубли:
+    // если персона у одного и того же фильма и актёр, и режиссёр (или
+    // просто несколько ролей), TMDB возвращает несколько записей с одним
+    // id — экрану актёра это не нужно, оставляем первую попавшуюся.
+    override suspend fun getPersonProfile(personId: Int): PersonProfile? = withContext(Dispatchers.IO) {
+        try {
+            tmdbConcurrencyLimiter.withPermit {
+                val details = api.getPersonDetails(personId)
+                val credits = try { api.getPersonCombinedCredits(personId).cast } catch (e: Exception) { emptyList() }
+                val filmography = credits
+                    .distinctBy { it.id to it.media_type }
+                    .mapNotNull { item ->
+                        val title = item.title ?: item.name ?: return@mapNotNull null
+                        val mediaType = item.media_type ?: "movie"
+                        val dateStr = item.release_date ?: item.first_air_date
+                        val year = dateStr?.takeIf { it.length >= 4 }?.substring(0, 4)?.toIntOrNull()
+                        PersonCreditItem(item.id, title, item.poster_path, item.character?.takeIf { c -> c.isNotBlank() }, year, mediaType)
+                    }
+                    .sortedByDescending { it.year ?: 0 }
+                PersonProfile(
+                    id = details.id, name = details.name, profilePath = details.profile_path,
+                    biography = details.biography?.takeIf { it.isNotBlank() }, birthday = details.birthday,
+                    deathday = details.deathday, placeOfBirth = details.place_of_birth,
+                    department = details.known_for_department, filmography = filmography
+                )
+            }
         } catch (e: Exception) { null }
     }
 }

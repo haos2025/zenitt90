@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.platinum.ott.presentation.screens.home.HomeScreen
 import com.platinum.ott.presentation.screens.detail.DetailScreen
+import com.platinum.ott.presentation.screens.person.PersonDetailScreen
 import com.platinum.ott.presentation.screens.player.PlayerScreen
 import com.platinum.ott.presentation.screens.sources.SourcesScreen
 import com.platinum.ott.presentation.screens.sources.AddSourceScreen
@@ -43,6 +44,7 @@ import com.platinum.ott.presentation.phone.screens.PhoneSeriesEpisodesScreen
 import com.platinum.ott.presentation.phone.screens.PhoneCacheManagementScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSourcesScreen
 import com.platinum.ott.presentation.phone.screens.PhoneAddSourceScreen
+import com.platinum.ott.presentation.phone.screens.PhonePersonDetailScreen
 
 @Composable
 fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()) {
@@ -100,8 +102,19 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 onNavigateToSeries = { seriesId -> navController.navigate("series/$seriesId") { popUpTo("detail/{movieId}") { inclusive = true } } },
                 // "Смотрите также" — переход на найденную по названию карточку
                 // (см. DetailViewModel.findInCatalog()/RecommendationsRow.kt).
-                onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") }
+                onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") },
+                // Экран актёра (подзадача 4) — CastRow.kt был осознанно
+                // некликабельным ("актёр никуда не ведёт"), теперь ведёт сюда.
+                onNavigateToPerson = { personId -> navController.navigate("person/$personId") }
             ) else PhoneDetailScreen(id, navController)
+        }
+        composable("person/{personId}", arguments = listOf(navArgument("personId") { type = NavType.IntType })) { entry ->
+            val personId = entry.arguments?.getInt("personId") ?: return@composable
+            if (isTV) PersonDetailScreen(
+                personId = personId,
+                onBackPressed = { navController.popBackStack() },
+                onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") }
+            ) else PhonePersonDetailScreen(personId, navController)
         }
         composable(
             "player/{movieId}?variantUrl={variantUrl}&catchupStart={catchupStart}&catchupEnd={catchupEnd}",

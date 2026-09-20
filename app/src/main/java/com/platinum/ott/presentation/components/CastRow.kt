@@ -2,7 +2,7 @@ package com.platinum.ott.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,17 +48,22 @@ private val photoHeight = 110.dp
  * докручивал вообще, потому что докрутка в Compose следует за фокусом, а
  * тут раньше не было ни одного фокусируемого элемента (общий файл с
  * телефоном, где это и не нужно — там скролл пальцем, фокус ни при чём).
- * .focusable() ниже — БЕЗ onClick, специально: этот компонент осознанно не
- * ведёт никуда (обычный актёр, не карточка фильма) — фокус нужен только
- * чтобы D-pad было куда "прицепиться", рамка при фокусе — единственная
- * разница с телефоном. Докрутка ВСЕГО экрана к этому ряду (когда он
- * изначально не виден) — на стороне DetailScreen.kt (TvLazyColumn), не
- * здесь; более ранняя версия этого файла пыталась решить это через
- * BringIntoViewRequester прямо тут — не помогло (см. разбор в
- * DetailScreen.kt), убрано за ненадобностью при переходе на TvLazyColumn.
+ * .focusable()/.clickable() ниже — раньше был только .focusable() без
+ * onClick, специально: "этот компонент осознанно не ведёт никуда, обычный
+ * актёр, не карточка фильма". Подзадача 4 прогона про фокус/оверлей/актёров
+ * разворачивает это решение в обратную сторону — теперь ведёт на
+ * PersonDetailScreen.kt (фото/био/фильмография). onMemberClick сделан
+ * always-attached (member.id != 0 проверяется ВНУТРИ обработчика, не через
+ * clickable(enabled=...)) — иначе enabled=false у Modifier.clickable убрал
+ * бы фокусируемость совсем, а она нужна независимо от кликабельности —
+ * именно ради неё элемент здесь и был фокусируемым с самого начала (см.
+ * абзац выше про докрутку). member.id == 0 — только у записей, которые
+ * закэшировались ДО этого изменения (см. CastMember.kt); такая карточка
+ * останется тут временно "живой на вид, но не ведущей никуда", пока кэш
+ * не обновится сам (TTL 24ч).
  */
 @Composable
-fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
+fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {}, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { photoWidth.roundToPx() }
@@ -81,7 +86,7 @@ fun CastRow(members: List<CastMember>, modifier: Modifier = Modifier) {
                             .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
                             .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
                             .onFocusChanged { isFocused = it.isFocused }
-                            .focusable()
+                            .clickable { if (member.id != 0) onMemberClick(member) }
                     ) {
                         if (request != null) {
                             AsyncImage(

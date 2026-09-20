@@ -6,10 +6,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -31,7 +34,7 @@ import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
+fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, onNavigateToPerson: (Int) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -42,6 +45,19 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
     // с избранного происходит сразу, без диалога. remember(movieId) — чтобы
     // не унаследовать открытый диалог при переходе на другой фильм.
     var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
+    // Подзадача 2 PROMPT'а про фокус/оверлей/актёров (реальный репорт:
+    // "фокус на детальной карточке всегда хочет показывать кнопки актёров
+    // и похожие фильмы"). Причина — нигде в TV-части проекта не было ни
+    // одного явного запроса начального фокуса (проверено по всем
+    // экранам), а карусели актёров/рекомендаций дописываются в
+    // LazyColumn АСИНХРОННО (TMDB-метаданные приходят позже первого
+    // кадра) — без явного "застолблённого" фокуса поведение Compose на
+    // TV при таком дозаполнении списка непредсказуемо. Ключ movieId, а
+    // не state — эффект должен сработать ровно один раз при первом
+    // попадании в Success для этого фильма, а не при каждом обновлении
+    // metadata (иначе фокус будет насильно дёргаться обратно на "Смотреть"
+    // и после того, как пользователь сам уже ушёл дальше по экрану).
+    val playButtonFocusRequester = remember(movieId) { FocusRequester() }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -50,6 +66,12 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
             is DetailUiState.RedirectToSeries -> LaunchedEffect(state.seriesId) { onNavigateToSeries(state.seriesId) }
             is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = onBackPressed) { Text("Назад") } }
             is DetailUiState.Success -> {
+                // Один раз на фильм (см. комментарий у объявления
+                // playButtonFocusRequester выше) — переводим фокус на
+                // "Смотреть" сразу, не дожидаясь, пока пользователь
+                // сам его найдёт, и не давая случайно подгрузившимся
+                // ниже каруселям перетянуть фокус на себя по умолчанию.
+                LaunchedEffect(movieId) { playButtonFocusRequester.requestFocus() }
                 // Раньше тут не было ни одной картинки — ни постера, ни backdrop'а,
                 // хотя TMDB-метаданные (state.metadata) уже приходили с backdropPath.
                 // Если TMDB backdrop недоступен — падаем на постер из бэкенда/плейлиста,
@@ -137,14 +159,58 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                     meta.genres?.takeIf { it.isNotBlank() }
                                 ).joinToString(" · ")
                                 if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
-                                meta.overview?.let { Text(it, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge) }
+                                meta.overview?.let { overview ->
+                                    // Подзадача 3 (стандартизация описания): раньше
+                                    // Text рисовался без maxLines вообще — высота
+                                    // блока прыгала от пары строк до экрана целиком
+                                    // в зависимости от длины overview у конкретного
+                                    // источника (это не наша ошибка в данных, просто
+                                    // у разных фильмов в TMDB описания разной длины —
+                                    // но UI никак это не сглаживал). Клэмп в 4 строки
+                                    // + "Показать полностью"/"Свернуть" — тот же
+                                    // паттерн, что у Netflix/Кинопоиска/Plex.
+                                    // isOverviewExpandable считается через
+                                    // onTextLayout.hasVisualOverflow — тумблер
+                                    // показывается только когда текст реально
+                                    // обрезается на 4 строках, а не всегда (короткое
+                                    // описание — тумблер не нужен, показывать
+                                    // "Показать полностью" при отсутствии обрезки
+                                    // было бы бессмысленно).
+                                    var isOverviewExpanded by remember(movieId) { mutableStateOf(false) }
+                                    var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
+                                    Text(
+                                        overview,
+                                        color = Color.White.copy(0.8f),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
+                                        overflow = TextOverflow.Ellipsis,
+                                        onTextLayout = { if (!isOverviewExpanded) isOverviewExpandable = it.hasVisualOverflow }
+                                    )
+                                    if (isOverviewExpandable) {
+                                        Surface(
+                                            onClick = { isOverviewExpanded = !isOverviewExpanded },
+                                            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+                                            colors = ClickableSurfaceDefaults.colors(
+                                                containerColor = Color.Transparent,
+                                                focusedContainerColor = ZenithFocusContainerActive
+                                            ),
+                                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+                                        ) {
+                                            Text(
+                                                if (isOverviewExpanded) "Свернуть" else "Показать полностью",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(horizontal = ZenithDimens.paddingS, vertical = ZenithDimens.paddingXS)
+                                            )
+                                        }
+                                    }
+                                }
                                 meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
                             }
                         }
                     }
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                            Button(onClick = onPlayClick) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
+                            Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
                             // Добавление показывает выбор папки, снятие — сразу,
                             // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
                             // Отметка "аниме" на этом экране убрана — управление
@@ -179,7 +245,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                     // credits не вернул ничего (старая закэшированная запись
                     // без castJson, ошибка сети, или у фильма правда нет cast).
                     if (state.metadata?.cast?.isNotEmpty() == true) {
-                        item { CastRow(state.metadata.cast) }
+                        item { CastRow(state.metadata.cast, onMemberClick = { member -> onNavigateToPerson(member.id) }) }
                     }
                     // "Смотрите также" (п.5) — только для контента, у которого
                     // TMDB нашёл совпадение (см. DetailViewModel.load()); для
