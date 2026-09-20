@@ -37,6 +37,28 @@ import androidx.tv.material3.Shapes as TvShapes
 // Как и предупреждал сам промт про shimmer в SkeletonLoader.kt для
 // анимаций — здесь аналогичных исключений нет, все 11 значений выше
 // имеют осмысленное место в этой шкале.
+//
+// РЕАЛЬНЫЙ БАГ (найден по репорту с телефона, после того как это уже
+// какое-то время было в проде): extraLarge ниже был = ZenithShapePill
+// (50%) — это сломало ВСЕ AlertDialog и ModalBottomSheet на телефоне
+// (PhonePlayerController.kt: "Ещё настройки", диалог субтитров и т.д.),
+// хотя ни один из них не задаёт свой shape явно. Material3's
+// AlertDialog/ModalBottomSheet по умолчанию берут форму из
+// MaterialTheme.shapes.extraLarge (AlertDialogDefaults.shape/
+// BottomSheetDefaults.ExpandedShape) — а 50%-скругление на ШИРОКОМ на
+// весь экран диалоге превращается в гигантский почти круглый нарост,
+// обрезающий текст ("отитры" вместо "Субтитры", "Закрыт" вместо
+// "Закрыть") — ровно то, что видно на скриншотах. TV этой проблемы не
+// коснулось не потому, что там код лучше, а потому что TV-диалоги
+// (PlaybackMenuOverlay.kt) — свои Surface с явным shape, никогда не
+// читают TvMaterialTheme.shapes.extraLarge неявно.
+//
+// extraLarge переопределён ниже на ZenithShapeLarge (24dp, близко к
+// недефолтному значению самого Material3, ~28dp) — обычный диалог
+// теперь снова выглядит как диалог. Явные обращения к ZenithShapePill
+// напрямую (прогресс-бары капсулы плеера и т.п.) эту правку не
+// затрагивают вообще — они ссылаются на константу напрямую, а не через
+// Shapes.extraLarge.
 
 val ZenithShapeSmall = RoundedCornerShape(8.dp)
 val ZenithShapeMedium = RoundedCornerShape(12.dp)
@@ -54,7 +76,10 @@ val ZenithShapes = Shapes(
     small = ZenithShapeSmall,
     medium = ZenithShapeMedium,
     large = ZenithShapeLarge,
-    extraLarge = ZenithShapePill,
+    // Было ZenithShapePill (50%) — реальный баг, см. комментарий выше:
+    // ломало AlertDialog/ModalBottomSheet на телефоне (оба берут форму
+    // из этого слота по умолчанию, если не задают свою явно).
+    extraLarge = ZenithShapeLarge,
 )
 
 /**
@@ -69,5 +94,9 @@ val ZenithTvShapes = TvShapes(
     small = ZenithShapeSmall,
     medium = ZenithShapeMedium,
     large = ZenithShapeLarge,
-    extraLarge = ZenithShapePill,
+    // Тот же фикс, что и в ZenithShapes выше — TV сейчас этим багом не
+    // задето (свои Surface с явным shape), но оставлять здесь Pill в
+    // этом слоте — заведомо неверно на будущее, тот же риск для любого
+    // TV-компонента, который когда-нибудь неявно возьмёт extraLarge.
+    extraLarge = ZenithShapeLarge,
 )
