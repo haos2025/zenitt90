@@ -26,6 +26,8 @@ interface TmdbApiService {
     // PROMPT_DETAIL_SCREEN_UPGRADE.md, п.5 — те же ограничения, что и выше:
     // только фильмы, вариант (б) (без кликабельности) не требует связи с
     // собственным каталогом.
+    @GET("movie/{id}/recommendations")
+    suspend fun getMovieRecommendations(@Path("id") id: Int): TmdbRecommendationsResponse
     // PROMPT_DESIGN_SYSTEM.md-сессия про фокус/оверлей/актёров, подзадача 4 —
     // экран актёра с фильмографией. person/{id} — базовые данные (фото,
     // биография, дата/место рождения); combined_credits, а не отдельные
