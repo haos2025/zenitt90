@@ -95,7 +95,13 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                             modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
                         ) {
                             HomeContentFilter.values().forEach { filter ->
-                                FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(filter.label) })
+                                // ФИКС (аудит) — тот же баг и то же решение, что в HomeScreen.kt (TV):
+                                // канал не Movie, фильтровать по нему этот список бессмысленно.
+                                val onFilterClick = {
+                                    if (filter == HomeContentFilter.CHANNELS) navController.navigate("channels")
+                                    else selectedFilter = filter
+                                }
+                                FilterChip(selected = selectedFilter == filter, onClick = onFilterClick, label = { Text(filter.label) })
                             }
                         }
 

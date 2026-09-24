@@ -7,10 +7,17 @@ import com.platinum.ott.data.local.entity.PlaylistMovieEntity
  * текстовый стандарт: строка "#EXTINF:-1 tvg-logo="..." group-title="...",Название"
  * затем следующей непустой строкой — сама ссылка на поток.
  *
- * id строится как "m3u_" + порядковый индекс — стабилен, пока провайдер не
- * переупорядочит плейлист; если переупорядочит — избранное/история,
- * привязанные к старому id, перестанут находить совпадение. Осознанный
- * компромисс ради простоты первой версии, не хэш от URL.
+ * ФИКС (аудит): id раньше строился как "m3u_" + порядковый индекс —
+ * стабилен только пока провайдер не переупорядочит плейлист; при
+ * переупорядочивании избранное/история, привязанные к старому id,
+ * переставали находить совпадение. Теперь id — стабильный хэш от tvg-id
+ * (если он есть — это как раз штатный атрибут именно для устойчивого
+ * опознания канала/записи, см. комментарий ниже про дедуп) либо, если
+ * tvg-id нет, от связки "название+URL" — то и другое не меняется от
+ * перестановки строк в файле. Коллизия хэша теоретически возможна (как и
+ * везде в проекте, где используется String.hashCode() — см. также
+ * SeriesUpdateWorker), но крайне маловероятна при реальном размере
+ * плейлиста одного пользователя.
  *
  * ДОБАВЛЕНО: между #EXTINF и URL многие реальные плейлисты (особенно
  * русскоязычные, проверено на реальном примере) вставляют
@@ -44,7 +51,6 @@ object M3uPlaylistParser {
     fun parse(raw: String): List<PlaylistMovieEntity> {
         val lines = raw.lines()
         val result = mutableListOf<PlaylistMovieEntity>()
-        var index = 0
         var i = 0
         while (i < lines.size) {
             val line = lines[i].trim()
@@ -103,9 +109,13 @@ object M3uPlaylistParser {
                 val url = if (j < lines.size) lines[j].trim() else null
 
                 if (!url.isNullOrBlank()) {
+                    val tvgId = attrs["tvg-id"]?.ifBlank { null }
+                    // ФИКС (аудит): стабильный id вместо "m3u_$index" — см.
+                    // комментарий в KDoc файла выше.
+                    val stableKey = tvgId ?: "$title|$url"
                     result.add(
                         PlaylistMovieEntity(
-                            id = "m3u_$index",
+                            id = "m3u_" + stableKey.hashCode().toUInt().toString(16),
                             title = title,
                             year = year,
                             poster = attrs["tvg-logo"],
@@ -117,13 +127,12 @@ object M3uPlaylistParser {
                             seriesTitle = seriesTitle,
                             seasonNumber = seasonNumber,
                             episodeNumber = episodeNumber,
-                            tvgId = attrs["tvg-id"]?.ifBlank { null },
+                            tvgId = tvgId,
                             catchupDays = catchupDays,
                             catchupTemplate = catchupTemplate,
                             channelNumber = channelNumber
                         )
                     )
-                    index++
                 }
                 i = j + 1
             } else {

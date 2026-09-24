@@ -57,7 +57,17 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = DetailUiState.RedirectToSeries(movie.seriesId)
                     return@onSuccess
                 }
-                val meta = try { tmdb.getMetadata(movieId, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
+                val meta = if (com.platinum.ott.domain.ContentIdKind.isZenithBackendContent(movieId)) {
+                    // ФИКС (аудит): раньше tmdb.getMetadata() вызывался
+                    // безусловно для ЛЮБОГО movieId, включая собственные
+                    // каналы/фильмы из плейлиста — ровно тот же риск
+                    // случайного совпадения, что HomeViewModel.
+                    // resolvePosterIfNeeded() уже осознанно исключает для
+                    // ленты Home. Детальная карточка эту защиту не
+                    // повторяла: неверный постер/описание для канала с
+                    // похожим на что-то в TMDB названием кэшировался на 24ч.
+                    try { tmdb.getMetadata(movieId, movie.title, movie.year).getOrNull() } catch (_: Exception) { null }
+                } else null
                 val favEntity = favorites.getByContentId(movieId)
                 val hist = history.getByContentId(movieId)
                 val progress = if (hist != null && hist.durationMs > 0) hist.positionMs.toFloat() / hist.durationMs else null

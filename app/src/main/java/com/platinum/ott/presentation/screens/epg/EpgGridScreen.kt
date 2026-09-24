@@ -49,6 +49,10 @@ fun EpgGridScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // ФИКС (аудит): та же причина, что в SourcesScreen.kt/ChannelsScreen.kt —
+    // EpgGridViewModel грузит расписание один раз в init{}.
+    LaunchedEffect(Unit) { viewModel.load() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -53,6 +53,8 @@ fun PhoneChannelsScreen(
     var deleteTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     val channels = (uiState as? ChannelsUiState.Success)?.channels.orEmpty()
 
+    // ФИКС (аудит): тот же паттерн, что в TV-версии (ChannelsScreen.kt).
+    LaunchedEffect(Unit) { viewModel.load() }
     Scaffold(
         topBar = {
             TopAppBar(

@@ -19,16 +19,25 @@ import java.util.concurrent.TimeUnit
  */
 class PluginApi(private val context: Context) {
     companion object {
+        // ФИКС (аудит): followRedirects/followSslRedirects были включены —
+        // PluginUrlValidator проверяет только ПЕРВЫЙ url; сервер, прошедший
+        // проверку, мог ответить 3xx на http://127.0.0.1/... или адрес из
+        // локальной сети, и OkHttp сам, без единой проверки, шёл по этому
+        // редиректу. Теперь редиректы отключены на уровне клиента и
+        // обрабатываются вручную в executeValidatingRedirects(), с повторной
+        // проверкой PluginUrlValidator на КАЖДЫЙ переход.
         internal val sharedClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
-                .followRedirects(true)
-                .followSslRedirects(true)
+                .followRedirects(false)
+                .followSslRedirects(false)
                 .build()
         }
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private const val MAX_PLUGIN_REDIRECTS = 5
+        private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
     }
 
     private val gson = Gson()
@@ -36,12 +45,44 @@ class PluginApi(private val context: Context) {
     /** Валидация URL — вынесена в PluginUrlValidator (раньше была продублирована здесь и в PluginRepository.kt) */
     private fun isValidUrl(url: String): Boolean = PluginUrlValidator.isValid(url)
 
+    /**
+     * Выполняет запрос и вручную идёт по редиректам (максимум
+     * MAX_PLUGIN_REDIRECTS), заново проверяя PluginUrlValidator.isValid()
+     * на КАЖДЫЙ Location — иначе именно эта проверка на первом хопе не
+     * защищает от того, куда сервер решит перенаправить запрос дальше.
+     * 301/302/303 на не-GET понижают метод до GET (стандартное поведение
+     * браузеров/OkHttp по умолчанию); 307/308 сохраняют метод и тело.
+     */
+    internal fun executeValidatingRedirects(initial: Request): okhttp3.Response {
+        var request = initial
+        repeat(MAX_PLUGIN_REDIRECTS) {
+            val response = sharedClient.newCall(request).execute()
+            if (response.code !in REDIRECT_CODES) return response
+            val location = response.header("Location")
+            response.close()
+            if (location.isNullOrBlank()) return response
+            val nextUrl = response.request.url.resolve(location)?.toString() ?: return response
+            if (!isValidUrl(nextUrl)) {
+                // Не идём по невалидному редиректу — возвращаем то, что есть,
+                // вызывающая сторона (httpGet/httpPost/httpHead) увидит
+                // пустой/неуспешный результат, не адрес из приватной сети.
+                return response
+            }
+            request = if (response.code == 307 || response.code == 308) {
+                request.newBuilder().url(nextUrl).build()
+            } else {
+                request.newBuilder().url(nextUrl).get().build()
+            }
+        }
+        return sharedClient.newCall(request).execute()
+    }
+
     /** HTTP GET запрос (для парсеров) */
     suspend fun httpGet(url: String, headers: Map<String, String> = emptyMap()): String = withContext(Dispatchers.IO) {
         if (!isValidUrl(url)) return@withContext ""
         val builder = Request.Builder().url(url).get()
         headers.forEach { (k, v) -> builder.addHeader(k, v) }
-        sharedClient.newCall(builder.build()).execute().use { it.body?.string() ?: "" }
+        executeValidatingRedirects(builder.build()).use { it.body?.string() ?: "" }
     }
 
     /** HTTP POST запрос */
@@ -50,14 +91,14 @@ class PluginApi(private val context: Context) {
         val reqBody = body.toRequestBody(JSON_MEDIA_TYPE)
         val builder = Request.Builder().url(url).post(reqBody)
         headers.forEach { (k, v) -> builder.addHeader(k, v) }
-        sharedClient.newCall(builder.build()).execute().use { it.body?.string() ?: "" }
+        executeValidatingRedirects(builder.build()).use { it.body?.string() ?: "" }
     }
 
     /** HTTP HEAD запрос (проверка доступности) */
     suspend fun httpHead(url: String): Int = withContext(Dispatchers.IO) {
         if (!isValidUrl(url)) return@withContext 0
         val req = Request.Builder().url(url).head().build()
-        sharedClient.newCall(req).execute().use { it.code }
+        executeValidatingRedirects(req).use { it.code }
     }
 
     /** Сохранить значение в хранилище плагина */

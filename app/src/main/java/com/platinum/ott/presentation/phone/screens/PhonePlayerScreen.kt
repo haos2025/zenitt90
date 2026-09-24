@@ -272,6 +272,7 @@ fun PhonePlayerScreen(
                     // больше не принимаются, перемотка идёт через
                     // onSeekTo (кастомный скраббер) и жест свайпа выше в
                     // этом файле (seekDeltaFromDrag), как и раньше.
+                    onInteraction = { lastInteraction = System.currentTimeMillis() },
                     onSeekTo = { viewModel.seekTo(it); lastInteraction = System.currentTimeMillis() },
                     onTogglePlay = { viewModel.togglePlayPause(); lastInteraction = System.currentTimeMillis() },
                     onSelectVariant = { viewModel.selectQuality(it); lastInteraction = System.currentTimeMillis() },

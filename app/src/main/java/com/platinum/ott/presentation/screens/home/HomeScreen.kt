@@ -49,7 +49,17 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                 modifier = Modifier.padding(horizontal = ZenithDimens.paddingL)
             ) {
                 HomeContentFilter.values().forEach { filter ->
-                    FilterChip(selectedFilter == filter, onClick = { selectedFilter = filter }) { Text(filter.label) }
+                    // ФИКС (аудит): "Каналы" раньше выставлял selectedFilter и
+                    // фильтровал state.movies — а Movie.matchesFilter(CHANNELS)
+                    // всегда возвращал false (канал — не Movie, такого типа в
+                    // этом списке никогда не будет). Правильное поведение —
+                    // не фильтровать несуществующий тип на месте, а вести на
+                    // реальный экран каналов (там настоящие Channel/ChannelStream).
+                    val onFilterClick = {
+                        if (filter == HomeContentFilter.CHANNELS) navController.navigate("channels")
+                        else selectedFilter = filter
+                    }
+                    FilterChip(selectedFilter == filter, onClick = onFilterClick) { Text(filter.label) }
                 }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))

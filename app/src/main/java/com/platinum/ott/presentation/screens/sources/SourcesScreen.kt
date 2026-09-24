@@ -51,6 +51,12 @@ fun SourcesScreen(
     var renameTarget by remember { mutableStateOf<SourceUiItem?>(null) }
     var deleteTarget by remember { mutableStateOf<SourceUiItem?>(null) }
 
+    // ФИКС (аудит): SourcesViewModel грузит список один раз в init{} —
+    // при возврате с AddSourceScreen (отдельный ViewModel) новый источник
+    // не появлялся, пока не выйти с экрана целиком и не зайти заново.
+    // Тот же приём, что уже есть в SettingsScreen.kt для аналогичного случая.
+    LaunchedEffect(Unit) { viewModel.load() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -26,6 +26,8 @@ import com.platinum.ott.domain.model.Movie
 @Composable
 fun PhoneSeriesListScreen(navController: NavHostController, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // ФИКС (аудит): тот же паттерн, что в TV-версии (SeriesListScreen.kt).
+    LaunchedEffect(Unit) { viewModel.load() }
     Scaffold(topBar = {
         TopAppBar(title = { Text("Сериалы") }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Назад") } })
     }) { padding ->

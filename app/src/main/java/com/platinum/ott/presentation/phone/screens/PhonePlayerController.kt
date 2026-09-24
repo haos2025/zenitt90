@@ -113,6 +113,14 @@ fun PhonePlayerController(
     audioTracks: List<TrackOption>,
     subtitleTracks: List<TrackOption>,
     subtitlesEnabled: Boolean,
+    // ФИКС (аудит): раньше во время самого перетаскивания скраббера
+    // ничего не сигнализировало "пользователь взаимодействует прямо
+    // сейчас" — только onSeekTo, вызываемый один раз при ОТПУСКАНИИ.
+    // PhonePlayerScreen.kt обновляет lastInteraction только по колбэкам
+    // отсюда, поэтому таймер автоскрытия (3с) мог сработать прямо во
+    // время активного драга и спрятать оверлей под пальцем — тот же
+    // баг, что уже когда-то чинили на TV в PlayerController.kt.
+    onInteraction: () -> Unit = {},
     onSeekTo: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onSelectVariant: (StreamVariant) -> Unit,
@@ -188,7 +196,7 @@ fun PhonePlayerController(
                             positionMs = currentPositionMs,
                             durationMs = durationMs,
                             bufferedPositionMs = bufferedPositionMs,
-                            onPreview = { previewPositionMs = it },
+                            onPreview = { previewPositionMs = it; onInteraction() },
                             onSeekTo = { onSeekTo(it); previewPositionMs = null },
                             modifier = Modifier.weight(1f)
                         )

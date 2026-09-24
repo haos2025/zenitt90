@@ -21,12 +21,23 @@ class WatchHistoryUseCase(private val dao: WatchHistoryDao) {
     // HomeViewModel (ряд "Продолжить просмотр", PROMPT_HOME_FEED_REDESIGN.md)
     // переиспользовал готовый результат напрямую, не изобретая вторую копию
     // того же алгоритма (см. HistoryViewModel.kt — теперь тоже вызывает это).
-    fun getRecentDeduped(limit: Int = 50): Flow<List<WatchHistoryEntity>> = getRecent(limit).map { entries ->
+    // ФИКС (аудит): раньше дедуп применялся ПОСЛЕ dao.getRecent(limit) —
+    // если посмотреть подряд, скажем, 40 серий одного сериала, эти 40
+    // сырых строк почти целиком занимали лимит в 50, и после схлопывания
+    // в "Продолжить просмотр"/"История" оставалось 2-3 позиции вместо 50,
+    // а старые фильмы физически не попадали в выборку. Теперь берём сырых
+    // записей с запасом (в RAW_POOL_MULTIPLIER раз больше) ДО дедупликации,
+    // и уже потом обрезаем до реального limit.
+    fun getRecentDeduped(limit: Int = 50): Flow<List<WatchHistoryEntity>> = getRecent(limit * RAW_POOL_MULTIPLIER).map { entries ->
         val seenSeries = HashSet<String>()
         entries.filter { entry ->
             val seriesId = entry.seriesId
             seriesId == null || seenSeries.add(seriesId)
-        }
+        }.take(limit)
+    }
+
+    private companion object {
+        const val RAW_POOL_MULTIPLIER = 5
     }
 
     suspend fun getByContentId(contentId: String) = dao.getByContentId(contentId)

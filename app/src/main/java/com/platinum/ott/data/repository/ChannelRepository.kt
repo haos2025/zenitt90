@@ -58,9 +58,12 @@ class ChannelRepository(
     // Общая часть getAll()/getSubscribed() — раньше (до этой подзадачи)
     // была только внутри getAll(), дублировать её ради getSubscribed()
     // означало бы либо копипасту, либо расхождение в будущем.
-    private suspend fun toUiItems(channels: List<com.platinum.ott.data.local.entity.ChannelEntity>): List<ChannelUiItem> =
-        channels.map { channel ->
-            val streams = channelStreamDao.getByChannelId(channel.id)
+    private suspend fun toUiItems(channels: List<com.platinum.ott.data.local.entity.ChannelEntity>): List<ChannelUiItem> {
+        // ФИКС (аудит): один батч-запрос вместо N — см. комментарий у
+        // ChannelStreamDao.getByChannelIds().
+        val streamsByChannel = channelStreamDao.getByChannelIds(channels.map { it.id }).groupBy { it.channelId }
+        return channels.map { channel ->
+            val streams = streamsByChannel[channel.id].orEmpty()
             ChannelUiItem(
                 id = channel.id,
                 canonicalName = channel.canonicalName,
@@ -79,6 +82,7 @@ class ChannelRepository(
                 channelNumber = channel.sortOrder
             )
         }
+    }
 
     // PROMPT_EPG.md, подзадача 6 — заппинг по номеру, используется
     // PlayerViewModel.zapToChannelNumber(). Оборачивает найденный
@@ -118,18 +122,23 @@ class ChannelRepository(
      * canonicalName/isSubscribed/regionHint как есть), sourceChannelId
      * теряет все свои ChannelStreamEntity (переносятся на target) и
      * удаляется целиком. Если у обоих каналов был стрим от одного и того
-     * же источника (streamId детерминирован как "cs_<sourceId>_<channelId>",
-     * см. ChannelMatchingRepository) — после переноса у target окажется
-     * два разных id, указывающих на тот же (sourceId, физический стрим) —
-     * это не коллизия PRIMARY KEY (разные строковые id), но и не
-     * дедуплицируется автоматически; следующий refresh() того источника
-     * пересоздаст стрим с корректным id под target и лишняя запись
-     * перестанет обновляться, но сама не исчезнет — доп. чистка не в этой
-     * подзадаче, отмечено как известное ограничение.
+     * же источника — после переноса у target оказывались два разных id,
+     * указывающих на тот же (sourceId, физический стрим). Раньше это было
+     * отмечено как известное ограничение ("сама не исчезнет") — теперь
+     * дочищаем сразу: группируем по (sourceId, streamUrl), из каждой
+     * группы дублей оставляем один (с наивысшим приоритетом), остальные
+     * удаляем.
      */
     suspend fun merge(sourceChannelId: String, targetChannelId: String) = withContext(Dispatchers.IO) {
         if (sourceChannelId == targetChannelId) return@withContext
         channelStreamDao.reassignChannel(sourceChannelId, targetChannelId)
         channelDao.deleteById(sourceChannelId)
+
+        val duplicateIds = channelStreamDao.getByChannelId(targetChannelId)
+            .groupBy { it.sourceId to it.streamUrl }
+            .values
+            .filter { it.size > 1 }
+            .flatMap { group -> group.sortedBy { it.priority }.drop(1).map { it.id } }
+        if (duplicateIds.isNotEmpty()) channelStreamDao.deleteByIds(duplicateIds)
     }
 }

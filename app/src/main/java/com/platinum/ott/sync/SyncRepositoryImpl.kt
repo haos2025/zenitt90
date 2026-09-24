@@ -10,7 +10,6 @@ import com.platinum.ott.data.remote.dto.FavoriteDto
 import com.platinum.ott.data.remote.dto.WatchHistoryDto
 import com.platinum.ott.data.remote.dto.SyncPushDto
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 class SyncRepositoryImpl(
@@ -88,7 +87,10 @@ class SyncRepositoryImpl(
             }
 
             // Push local changes
-            val localFavs = favDao.getAllFavorites().first()
+            // ФИКС (аудит): было favDao.getAllFavorites().first() — весь
+            // список целиком на каждый sync(). getSince(since) — тот же
+            // принцип, что уже применялся к истории строкой ниже.
+            val localFavs = favDao.getSince(since)
             val localHistory = histDao.getSince(since)
             val pushData = SyncPushDto(
                 favorites = localFavs.map {

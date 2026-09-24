@@ -35,6 +35,14 @@ interface FavoritesDao {
     suspend fun upsertAllFavorites(favs: List<FavoriteEntity>)
     @Query("SELECT * FROM favorites WHERE contentId = :contentId LIMIT 1")
     suspend fun getFavoriteByContentId(contentId: String): FavoriteEntity?
+    // ФИКС (аудит): SyncRepositoryImpl.sync() раньше отправлял ВСЁ
+    // избранное целиком при каждом вызове (в отличие от истории, которая
+    // уже шла инкрементально через WatchHistoryDao.getSince) — лишний
+    // трафик пропорционально размеру всего избранного на каждую
+    // синхронизацию. updatedAt уже есть у FavoriteEntity (используется при
+    // upsert), просто не было запроса с фильтром по нему.
+    @Query("SELECT * FROM favorites WHERE updatedAt > :since ORDER BY addedAt DESC")
+    suspend fun getSince(since: Long): List<FavoriteEntity>
     @Query("UPDATE favorites SET isAnime = :isAnime WHERE contentId = :contentId")
     suspend fun setAnime(contentId: String, isAnime: Boolean): Int
     @Query("DELETE FROM favorites WHERE folderId = :folderId")

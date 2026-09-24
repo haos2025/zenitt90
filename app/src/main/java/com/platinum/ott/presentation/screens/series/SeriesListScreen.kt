@@ -30,6 +30,8 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 @Composable
 fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit, viewModel: SeriesListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // ФИКС (аудит): тот же паттерн, что в SourcesScreen.kt/ChannelsScreen.kt/EpgGridScreen.kt.
+    LaunchedEffect(Unit) { viewModel.load() }
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }

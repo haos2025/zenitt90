@@ -37,7 +37,14 @@ class CacheManagementViewModel @Inject constructor(
     }
 
     fun clearCatalog() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearCatalog() }
-    fun clearPlaylist() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearPlaylist() }
+    // ФИКС (аудит): раньше очистка кэша плейлиста оставляла список каналов/
+    // фильмов пустым до следующего ручного/планового обновления источника —
+    // не потеря данных (пересоздастся при refresh), но лишний повод
+    // подумать, что что-то сломалось. Обновляем источники сразу же.
+    fun clearPlaylist() = clearAndRefresh {
+        sessionGraph.cacheManagementUseCase.clearPlaylist()
+        sessionGraph.playlistSourceRepository.refreshAll()
+    }
     fun clearMetadata() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearMetadata() }
     fun clearPosters() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearPosters() }
     fun clearCrashLogs() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearCrashLogs() }

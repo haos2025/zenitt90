@@ -56,9 +56,15 @@ class ChannelMatchingRepository(
      * список ничего не удаляет (транзиентная ошибка сети/парсинга не
      * должна стирать уже накопленные каналы этого источника).
      */
-    suspend fun matchAndStore(sourceId: String, candidates: List<RawChannelCandidate>) {
-        if (candidates.isEmpty()) return
-        withContext(Dispatchers.IO) {
+    // ФИКС (аудит): теперь возвращает только что записанные ChannelStreamEntity
+    // (channelId + externalStreamId) — PlaylistSourceRepository.refresh()
+    // использует это для fallback-EPG (get_short_epg по каждому каналу),
+    // когда у панели нет xmltv.php. Раньше matchAndStore() ничего не
+    // возвращал, и единственный уже готовый способ узнать channelId по
+    // Xtream stream_id пришлось бы писать заново отдельным запросом.
+    suspend fun matchAndStore(sourceId: String, candidates: List<RawChannelCandidate>): List<ChannelStreamEntity> {
+        if (candidates.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
             // Health-check данные (lastCheckedAt/lastCheckStatus) и ручной
             // priority конкретного стрима нужно перенести на новые записи —
             // иначе каждый refresh() обнулял бы результат health-check
@@ -94,6 +100,7 @@ class ChannelMatchingRepository(
 
             channelStreamDao.deleteBySourceId(sourceId)
             channelStreamDao.upsertAll(newStreams)
+            newStreams
         }
     }
 

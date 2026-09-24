@@ -13,6 +13,7 @@ import dagger.hilt.EntryPoints
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Раньше query() при любом запросе от двух символов возвращал одну
 // выдуманную строку "Search result for: $q" — ни один реальный фильм
@@ -58,7 +59,16 @@ class MovieSearchProvider : ContentProvider() {
         try {
             val appContext = context?.applicationContext ?: return cursor
             val sessionGraph = EntryPoints.get(appContext, SessionGraphEntryPoint::class.java).sessionGraph()
-            val movies = runBlocking { sessionGraph.searchMoviesUseCase.execute(q) }.getOrDefault(emptyList())
+            // ФИКС (аудит): query() система дёргает на КАЖДОЕ нажатие клавиши
+            // в системном поиске TV. zenith-backend на Render free tier может
+            // "спать" 15-60с при холодном старте (см. PlaylistSourceRepository) —
+            // без таймаута здесь runBlocking() подвесил бы весь провайдер (и,
+            // скорее всего, получил бы системный ANR) на каждую введённую
+            // букву, пока бэкенд просыпается. 400мс — достаточно для тёплого
+            // бэкенда, но не даёт замереть системному поиску, если он спит.
+            val movies = runBlocking {
+                withTimeoutOrNull(400) { sessionGraph.searchMoviesUseCase.execute(q).getOrDefault(emptyList()) }
+            } ?: emptyList()
             movies.take(20).forEachIndexed { index, movie ->
                 // zenith://detail?id=... — тот же deep-link формат, что уже
                 // обрабатывается MainActivity.kt для zenith://player, просто

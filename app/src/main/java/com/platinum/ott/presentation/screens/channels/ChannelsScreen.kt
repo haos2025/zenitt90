@@ -55,6 +55,12 @@ fun ChannelsScreen(
     var mergeTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     var deleteTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
 
+    // ФИКС (аудит): тот же паттерн, что в SourcesScreen.kt/SettingsScreen.kt —
+    // ChannelsViewModel грузит список один раз в init{}, без этого канал,
+    // появившийся после обновления источника на другом экране, не покажется
+    // без полного выхода и повторного входа.
+    LaunchedEffect(Unit) { viewModel.load() }
+
     val channels = (uiState as? ChannelsUiState.Success)?.channels.orEmpty()
 
     Column(

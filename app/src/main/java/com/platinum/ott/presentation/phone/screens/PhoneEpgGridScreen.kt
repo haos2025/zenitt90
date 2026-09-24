@@ -49,6 +49,9 @@ fun PhoneEpgGridScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // ФИКС (аудит): тот же паттерн, что в TV-версии (EpgGridScreen.kt).
+    LaunchedEffect(Unit) { viewModel.load() }
+
     Scaffold(
         topBar = {
             TopAppBar(

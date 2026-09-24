@@ -40,6 +40,8 @@ fun PhoneSourcesScreen(
     var renameTarget by remember { mutableStateOf<SourceUiItem?>(null) }
     var deleteTarget by remember { mutableStateOf<SourceUiItem?>(null) }
 
+    // ФИКС (аудит): тот же паттерн, что в TV-версии (SourcesScreen.kt).
+    LaunchedEffect(Unit) { viewModel.load() }
     Scaffold(
         topBar = {
             TopAppBar(

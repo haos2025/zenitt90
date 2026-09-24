@@ -41,12 +41,14 @@ fun Movie.matchesFilter(filter: HomeContentFilter): Boolean = when (filter) {
     // здесь и есть практическое определение "Фильмы".
     HomeContentFilter.MOVIES -> seriesId == null
     HomeContentFilter.SERIES -> seriesId != null
-    // "Канал" как отдельный тип контента ещё не существует в проекте —
-    // Channel/ChannelStream (EXECUTION_ORDER.md, Группа 4,
-    // PROMPT_IPTV_FOUNDATION.md) не реализованы. Вкладка в UI уже есть
-    // заранее (решение 5 промта), но честно ничего не находит — придумывать
-    // эвристику на несуществующем поле хуже, чем показать пустой список.
-    // Как только появится Channel-модель, здесь появится реальная проверка.
+    // ФИКС (аудит): Channel/ChannelStream теперь реализованы, но это не
+    // Movie — засовывать канал в фильтр этого списка means either false
+    // (было раньше, вкладка гарантированно пустая) либо неверная эвристика.
+    // Правильное решение — HomeScreen.kt перехватывает клик по этой вкладке
+    // ДО того, как selectedFilter вообще станет CHANNELS, и ведёт на
+    // отдельный экран "channels" с настоящими данными. Эта ветка поэтому
+    // недостижима в обычном потоке — оставлена как safe-default на случай,
+    // если кто-то выставит фильтр в этот кейс в обход HomeScreen.kt.
     HomeContentFilter.CHANNELS -> false
 }
 

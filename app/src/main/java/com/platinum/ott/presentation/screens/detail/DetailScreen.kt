@@ -27,6 +27,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.TmdbImage
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.platform.safeRequestFocus
 import com.platinum.ott.presentation.components.CastRow
 import com.platinum.ott.presentation.components.RecommendationsRow
 import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
@@ -71,7 +72,9 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // "Смотреть" сразу, не дожидаясь, пока пользователь
                 // сам его найдёт, и не давая случайно подгрузившимся
                 // ниже каруселям перетянуть фокус на себя по умолчанию.
-                LaunchedEffect(movieId) { playButtonFocusRequester.requestFocus() }
+                // ФИКС (аудит): safeRequestFocus() вместо голого requestFocus() —
+                // см. FocusUtils.kt про редкую IllegalStateException здесь.
+                LaunchedEffect(movieId) { playButtonFocusRequester.safeRequestFocus() }
                 // Раньше тут не было ни одной картинки — ни постера, ни backdrop'а,
                 // хотя TMDB-метаданные (state.metadata) уже приходили с backdropPath.
                 // Если TMDB backdrop недоступен — падаем на постер из бэкенда/плейлиста,

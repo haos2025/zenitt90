@@ -28,8 +28,11 @@ import com.platinum.ott.data.remote.dto.LocalSyncSettingsDto
 import com.platinum.ott.data.remote.dto.LocalSyncSourceDto
 import com.platinum.ott.data.remote.dto.WatchHistoryDto
 import com.platinum.ott.data.repository.PlaylistSourceRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -65,6 +68,16 @@ class LocalSyncRepository(
     private val notificationPreferences: NotificationPreferences
 ) {
     private val gson = Gson()
+    // ФИКС (аудит): раньше playlistSourceRepository.refreshAll() ждали
+    // прямо внутри applyPayload(), а onPayloadReceived (см. startTvServer)
+    // оборачивает весь applyPayload() в runBlocking ПЕРЕД тем, как
+    // NanoHTTPD отдаст HTTP-ответ телефону. refreshAll() обновляет
+    // источники строго последовательно — при 2-3 источниках это легко
+    // дольше 15-секундного readTimeout на телефоне, и телефон получал
+    // SocketTimeoutException/"не удалось", хотя TV всё уже сохранил.
+    // Используем этот scope, чтобы обновление контента шло уже ПОСЛЕ
+    // ответа, не блокируя его.
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val interfacePreferences by lazy { InterfacePreferences(appContext) }
     private val qualityPreferences by lazy { QualityPreferences(appContext) }
     private val subtitlePreferences by lazy { SubtitlePreferences(appContext) }
@@ -251,9 +264,11 @@ class LocalSyncRepository(
                     )
                 )
             }
-            // Подтягиваем контент новых/обновлённых источников сразу, а не
-            // ждём случайного следующего TTL-обновления ленты.
-            playlistSourceRepository.refreshAll()
+            // Подтягиваем контент новых/обновлённых источников — но НЕ
+            // ждём здесь (см. комментарий у backgroundScope выше): это
+            // именно applyPayload(), от которого зависит, когда TV
+            // ответит на HTTP-запрос телефона.
+            backgroundScope.launch { playlistSourceRepository.refreshAll() }
         }
 
         // Плагины — по решению из PROMPT_LOCAL_SYNC_V1.md: URL есть —

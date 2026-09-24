@@ -31,7 +31,6 @@ class PluginRepository(
         private const val DEFAULT_CATALOG = "https://zenith-plugins.example.com/catalog.json"
     }
 
-    private val client = PluginApi.sharedClient
     private val gson = Gson()
 
     /** Запись каталога плагинов */
@@ -55,7 +54,7 @@ class PluginRepository(
             try {
                 if (!isValidUrl(catalogUrl)) return@withContext Result.failure(Exception("Invalid catalog URL"))
                 val req = Request.Builder().url(catalogUrl).build()
-                client.newCall(req).execute().use { resp ->
+                pluginApi.executeValidatingRedirects(req).use { resp ->
                     if (!resp.isSuccessful) return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                     val body = resp.body?.string() ?: "[]"
                     val type = object : TypeToken<List<CatalogEntry>>() {}.type
@@ -75,7 +74,7 @@ class PluginRepository(
             try {
                 if (!isValidUrl(entry.downloadUrl)) return@withContext Result.failure(Exception("Invalid download URL"))
                 val req = Request.Builder().url(entry.downloadUrl).build()
-                client.newCall(req).execute().use { resp ->
+                pluginApi.executeValidatingRedirects(req).use { resp ->
                     if (!resp.isSuccessful) return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                     val script = resp.body?.string()
                         ?: return@withContext Result.failure(Exception("Пустой ответ"))
@@ -122,7 +121,7 @@ class PluginRepository(
             try {
                 if (!isValidUrl(url)) return@withContext Result.failure(Exception("Invalid URL"))
                 val req = Request.Builder().url(url).build()
-                client.newCall(req).execute().use { resp ->
+                pluginApi.executeValidatingRedirects(req).use { resp ->
                     if (!resp.isSuccessful) return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                     val script = resp.body?.string()
                         ?: return@withContext Result.failure(Exception("Пустой ответ"))

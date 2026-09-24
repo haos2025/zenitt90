@@ -13,6 +13,9 @@ import com.platinum.ott.data.playlist.XtreamEpgClient
 import com.platinum.ott.data.playlist.XtreamLiveStreamInfo
 import com.platinum.ott.data.playlist.XtreamVodClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -210,8 +213,16 @@ class PlaylistSourceRepository(
         sourceDao.deleteById(sourceId)
     }
 
+    // ФИКС (аудит): раньше — sourceDao.getEnabled().forEach { refresh(...) },
+    // строго по очереди. Источники независимы (каждый пишет только в свои
+    // строки по sourceId), поэтому при нескольких источниках это была
+    // самостоятельная причина "IPTV долго обновляется" — M3U/Xtream VOD/
+    // live/EPG одного источника ждали своей очереди, пока полностью не
+    // закончит предыдущий. Параллелим через async/awaitAll.
     suspend fun refreshAll() = withContext(Dispatchers.IO) {
-        sourceDao.getEnabled().forEach { refresh(it.id, forceRefresh = false) }
+        coroutineScope {
+            sourceDao.getEnabled().map { source -> async { refresh(source.id, forceRefresh = false) } }.awaitAll()
+        }
     }
 
     suspend fun refresh(sourceId: String, forceRefresh: Boolean = true): Unit = withContext(Dispatchers.IO) {
@@ -267,14 +278,14 @@ class PlaylistSourceRepository(
                     // и возвращает emptyList(), так что уже успешный VOD-фетч
                     // выше этим не роняется.
                     val liveStreams = XtreamVodClient.fetchLiveStreams(client, host, user, pass)
-                    channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
+                    val storedStreams = channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
 
-                    // PROMPT_EPG.md, подзадача 3 — xmltv.php у Xtream не у
-                    // каждой панели есть (это доп. эндпоинт сверх основного
-                    // Xtream Codes API), refreshEpgFromXmltv() сама тихо
-                    // проглатывает 404/сетевую ошибку, тем же принципом,
-                    // что и fetchLiveStreams() выше для панелей без live.
-                    refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
+                    // ФИКС (аудит): xmltv.php есть не у каждой Xtream-панели —
+                    // если он не дал ни одной программы, используем per-channel
+                    // fallback (get_short_epg), который раньше был реализован,
+                    // но никогда не вызывался.
+                    val xmltvOk = refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
+                    if (!xmltvOk) refreshEpgFromShortEpgFallback(host, user, pass, storedStreams)
                 }
                 else -> {}
             }
@@ -343,8 +354,8 @@ class PlaylistSourceRepository(
      * окажется на порядок больше "десятков МБ" из PROMPT_EPG.md, стоит
      * перепроверить отдельно, здесь это не тестировалось.
      */
-    private suspend fun refreshEpgFromXmltv(url: String) {
-        try {
+    private suspend fun refreshEpgFromXmltv(url: String): Boolean {
+        return try {
             val now = System.currentTimeMillis()
             val windowStart = now - TimeUnit.HOURS.toMillis(2)
             val windowEnd = now + TimeUnit.HOURS.toMillis(48)
@@ -353,7 +364,7 @@ class PlaylistSourceRepository(
                 if (!resp.isSuccessful) return@use emptyList()
                 resp.body?.byteStream()?.use { stream -> XmltvSaxParser.parse(stream, windowStart, windowEnd) } ?: emptyList()
             }
-            if (programs.isEmpty()) return
+            if (programs.isEmpty()) return false
             programs.groupBy { "ch_tvg_${it.channelId}" }.forEach { (channelId, channelPrograms) ->
                 val entities = channelPrograms.map { p ->
                     EpgProgramEntity(
@@ -368,10 +379,44 @@ class PlaylistSourceRepository(
                 }
                 epgProgramRepository.replaceProgramsForChannel(channelId, entities)
             }
+            true
         } catch (_: Exception) {
             // См. комментарий в KDoc функции — источник без EPG/с битым
             // XMLTV не должен мешать основному контенту обновиться.
+            false
         }
+    }
+
+    /**
+     * ФИКС (аудит): раньше это был единственный способ получить EPG для
+     * Xtream, и его молчаливый провал (панель без xmltv.php — это НЕ
+     * редкость, отдельный опциональный эндпоинт сверх основной Xtream
+     * Codes API) означал, что канал остаётся без расписания насовсем,
+     * хотя get_short_epg/get_epg (XtreamEpgClient) для него уже был
+     * реализован — просто нигде не вызывался. Здесь — по каждому каналу
+     * с известным externalStreamId, чанками по 4 параллельно (тот же
+     * принцип, что в ChannelHealthChecker, не бьём панель одним махом
+     * и не ждём все каналы строго по очереди).
+     */
+    private suspend fun refreshEpgFromShortEpgFallback(
+        host: String, user: String, pass: String, streams: List<com.platinum.ott.data.local.entity.ChannelStreamEntity>
+    ) {
+        streams.filter { it.externalStreamId != null }
+            .chunked(4)
+            .forEach { chunk ->
+                coroutineScope {
+                    chunk.map { stream ->
+                        async(Dispatchers.IO) {
+                            try {
+                                val programs = XtreamEpgClient.getShortEpg(client, host, user, pass, stream.externalStreamId!!)
+                                epgProgramRepository.upsertFromXtream(stream.channelId, programs)
+                            } catch (_: Exception) {
+                                // Один недоступный канал не должен останавливать fallback для остальных.
+                            }
+                        }
+                    }.awaitAll()
+                }
+            }
     }
 
     /**

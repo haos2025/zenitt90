@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.platform.safeRequestFocus
 import com.platinum.ott.core.subtitles.AiSource
 import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.domain.model.StreamVariant
@@ -87,7 +88,8 @@ fun PlaybackMenuOverlay(
     // Переносится на MenuTabButton текущей активной вкладки — см. Row с
     // четырьмя MenuTabButton ниже и комментарий в шапке файла.
     val activeTabFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { activeTabFocusRequester.requestFocus() }
+    // ФИКС (аудит): safeRequestFocus() — см. FocusUtils.kt.
+    LaunchedEffect(Unit) { activeTabFocusRequester.safeRequestFocus() }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
 
