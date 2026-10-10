@@ -24,9 +24,11 @@ import com.platinum.ott.presentation.screens.sync.SyncPairingScreen
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
 import com.platinum.ott.presentation.screens.plugins.PluginDetailScreen
-import com.platinum.ott.presentation.screens.channels.ChannelsScreen
+import com.platinum.ott.presentation.screens.channels.ChannelsBrowseScreen
+import com.platinum.ott.presentation.screens.channels.ChannelsManageScreen
 import com.platinum.ott.presentation.screens.epg.EpgGridScreen
-import com.platinum.ott.presentation.phone.screens.PhoneChannelsScreen
+import com.platinum.ott.presentation.phone.screens.PhoneChannelsBrowseScreen
+import com.platinum.ott.presentation.phone.screens.PhoneChannelsManageScreen
 import com.platinum.ott.presentation.phone.screens.PhoneEpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneHomeScreen
 import com.platinum.ott.presentation.phone.screens.PhoneDetailScreen

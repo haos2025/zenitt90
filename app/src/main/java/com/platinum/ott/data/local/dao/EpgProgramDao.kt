@@ -35,6 +35,13 @@ interface EpgProgramDao {
     )
     suspend fun getCurrentForChannel(channelId: String, nowMillis: Long): EpgProgramEntity?
 
+    // Поиск передач по названию (поле поиска в EPG-сетке) — только ещё не закончившиеся.
+    @Query(
+        "SELECT * FROM epg_programs WHERE title LIKE '%' || :query || '%' " +
+            "AND endTimeMillis > :nowMillis ORDER BY startTimeMillis ASC LIMIT :limit"
+    )
+    suspend fun searchByTitle(query: String, nowMillis: Long, limit: Int): List<EpgProgramEntity>
+
     // Полная замена расписания канала одним свежим фетчем: старые слоты,
     // которых больше нет в новом XMLTV/Xtream-ответе (сетка передач могла
     // измениться), REPLACE по upsertAll не удалит сам по себе — только

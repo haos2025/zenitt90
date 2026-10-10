@@ -20,6 +20,9 @@ class EpgProgramRepository(
     suspend fun getForChannelInRange(channelId: String, fromMillis: Long, toMillis: Long): List<EpgProgramEntity> =
         withContext(Dispatchers.IO) { epgProgramDao.getForChannelInRange(channelId, fromMillis, toMillis) }
 
+    suspend fun searchByTitle(query: String, nowMillis: Long = System.currentTimeMillis(), limit: Int = 50): List<EpgProgramEntity> =
+        withContext(Dispatchers.IO) { epgProgramDao.searchByTitle(query, nowMillis, limit) }
+
     suspend fun getCurrentForChannel(channelId: String, nowMillis: Long = System.currentTimeMillis()): EpgProgramEntity? =
         withContext(Dispatchers.IO) { epgProgramDao.getCurrentForChannel(channelId, nowMillis) }
 

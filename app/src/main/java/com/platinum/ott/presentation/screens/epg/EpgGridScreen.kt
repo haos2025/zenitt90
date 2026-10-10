@@ -208,7 +208,7 @@ private fun EpgCategoryRow(title: String, count: Int, selected: Boolean, onClick
 }
 
 @Composable
-private fun SearchResultsList(results: List<EpgSearchResult>, onResultClick: (EpgSearchResult) -> Unit) {
+private fun ColumnScope.SearchResultsList(results: List<EpgSearchResult>, onResultClick: (EpgSearchResult) -> Unit) {
     if (results.isEmpty()) {
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
             Text("Ничего не найдено", color = Color.White.copy(alpha = 0.5f))

@@ -11,6 +11,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -58,6 +60,8 @@ sealed interface EpgSlot {
     data class GapSlot(override val weightMinutes: Float) : EpgSlot
 }
 
+data class EpgSearchResult(val channel: ChannelUiItem, val program: EpgProgramEntity)
+
 data class EpgChannelRow(val channel: ChannelUiItem, val slots: List<EpgSlot>)
 
 sealed interface EpgGridUiState {
@@ -79,6 +83,10 @@ class EpgGridViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<EpgGridUiState>(EpgGridUiState.Loading)
     val uiState: StateFlow<EpgGridUiState> = _uiState.asStateFlow()
 
+    private val _searchResults = MutableStateFlow<List<EpgSearchResult>>(emptyList())
+    val searchResults: StateFlow<List<EpgSearchResult>> = _searchResults.asStateFlow()
+    private var searchJob: Job? = null
+
     private var windowStart = initialWindowStart()
 
     init { load() }
@@ -93,6 +101,28 @@ class EpgGridViewModel @Inject constructor(
 
     fun jumpToNow() {
         windowStart = initialWindowStart()
+        viewModelScope.launch { reload() }
+    }
+
+    fun search(query: String) {
+        searchJob?.cancel()
+        val q = query.trim()
+        if (q.isEmpty()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(250)
+            val channelsById = channelRepository.getSubscribed().associateBy { it.id }
+            _searchResults.value = epgProgramRepository.searchByTitle(q).mapNotNull { p ->
+                channelsById[p.channelId]?.let { EpgSearchResult(it, p) }
+            }
+        }
+    }
+
+    /** Переносит окно сетки так, чтобы программа с началом startMillis была в его начале. */
+    fun jumpToProgram(startMillis: Long) {
+        windowStart = startMillis - (startMillis % WINDOW_STEP_MS)
         viewModelScope.launch { reload() }
     }
 
