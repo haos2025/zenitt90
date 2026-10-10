@@ -93,6 +93,20 @@ class ChannelRepository(
         channelDao.getSubscribedByNumber(number)?.let { toUiItems(listOf(it)).firstOrNull() }
     }
 
+    // НОВОЕ (заппинг стрелками вверх/вниз во время просмотра): следующий/
+    // предыдущий подписанный канал по channelNumber, с закольцовкой (после
+    // последнего — снова первый, и наоборот). Тот же принцип, что и у
+    // getSubscribedByNumber() выше — переиспользует toUiItems(), не строит
+    // ChannelUiItem вручную.
+    suspend fun getAdjacentSubscribed(currentChannelId: String, forward: Boolean): ChannelUiItem? = withContext(Dispatchers.IO) {
+        val sorted = toUiItems(channelDao.getSubscribed()).sortedBy { it.channelNumber }
+        if (sorted.isEmpty()) return@withContext null
+        val currentIndex = sorted.indexOfFirst { it.id == currentChannelId }
+        if (currentIndex == -1) return@withContext sorted.firstOrNull()
+        val nextIndex = if (forward) (currentIndex + 1) % sorted.size else (currentIndex - 1 + sorted.size) % sorted.size
+        sorted[nextIndex]
+    }
+
     suspend fun getSubscribedCount(): Int = withContext(Dispatchers.IO) { channelDao.getSubscribed().size }
 
     suspend fun setSubscribed(channelId: String, isSubscribed: Boolean) = withContext(Dispatchers.IO) {

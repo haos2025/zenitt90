@@ -29,6 +29,7 @@ class HomeViewModel @Inject constructor(
     private val tmdbRepository = sessionGraph.tmdbRepository
     private val watchHistoryUseCase = sessionGraph.watchHistoryUseCase
     private val favoritesUseCase = sessionGraph.favoritesUseCase
+    private val seriesTrackerUseCase = sessionGraph.seriesTrackerUseCase
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
 
@@ -43,6 +44,13 @@ class HomeViewModel @Inject constructor(
     val continueWatching: StateFlow<List<WatchHistoryEntity>> =
         watchHistoryUseCase.getRecentDeduped(15)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // НОВОЕ (Home-полоса вместо HeroBanner, "Вариант 2" — с блоком "Новая
+    // серия"): см. SeriesTrackerUseCase.getRecentlyAired()/
+    // SeriesScheduleDao.getMostRecentlyAired().
+    val recentlyAiredEpisode: StateFlow<com.platinum.ott.data.local.entity.SeriesScheduleEntity?> =
+        seriesTrackerUseCase.getRecentlyAired()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Решение 3 — персонализация по жанрам без ML: простой счётчик, какие
     // жанры чаще встречаются в истории просмотра/избранном пользователя,
@@ -146,10 +154,7 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = HomeUiState.Success(
                     movies = allMovies,
                     page = it.currentPage,
-                    totalPages = it.totalPages,
-                    // Только backend-страница, не плейлист — см. комментарий
-                    // у heroMovies в HomeUiState.kt.
-                    heroMovies = it.movies.take(8)
+                    totalPages = it.totalPages
                 )
                 computeGenrePriority(allMovies)
             }.onFailure { error ->

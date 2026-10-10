@@ -25,7 +25,15 @@ data class SourceUiItem(
     val lastRefreshedAt: Long?,
     val lastRefreshStatus: String?,
     val isFirst: Boolean,
-    val isLast: Boolean
+    val isLast: Boolean,
+    // НОВОЕ (подключение reimportFile() к UI): "file://" — локальный
+    // снапшот, скопированный один раз при добавлении (см. комментарий у
+    // PlaylistSourceEntity.url) — единственный способ обновить такой
+    // источник, если исходный файл на диске изменился, это заново выбрать
+    // файл и вызвать reimportFile(), обычный "Обновить" перечитает тот же
+    // старый снапшот. У источников по ссылке (http/https) этой кнопки нет —
+    // refresh() и так перекачивает свежее.
+    val isFileSource: Boolean
 )
 
 sealed interface SourcesUiState {
@@ -68,7 +76,8 @@ class SourcesViewModel @Inject constructor(
                 lastRefreshedAt = s.lastRefreshedAt,
                 lastRefreshStatus = s.lastRefreshStatus,
                 isFirst = index == 0,
-                isLast = index == sources.lastIndex
+                isLast = index == sources.lastIndex,
+                isFileSource = s.url?.startsWith("file://") == true
             )
         }
     }
@@ -101,5 +110,17 @@ class SourcesViewModel @Inject constructor(
 
     fun delete(sourceId: String) {
         viewModelScope.launch { repository.delete(sourceId); load() }
+    }
+
+    // НОВОЕ — подключение repository.reimportFile() к UI (см. комментарий
+    // у SourceUiItem.isFileSource). Файл уже прочитан в UI-слое, тот же
+    // принцип, что и у AddSourceViewModel.addM3uFile().
+    fun reimportFile(sourceId: String, fileContent: String) {
+        viewModelScope.launch {
+            _refreshingIds.value = _refreshingIds.value + sourceId
+            repository.reimportFile(sourceId, fileContent)
+            _refreshingIds.value = _refreshingIds.value - sourceId
+            load()
+        }
     }
 }

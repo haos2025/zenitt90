@@ -47,6 +47,25 @@ enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
 // onTracksChanged, так что устаревшей ссылки быть не может.
 data class TrackOption(val trackGroup: TrackGroup, val trackIndexInGroup: Int, val label: String, val isSelected: Boolean)
 
+/**
+ * РЕДИЗАЙН (разбор IPTV с нуля — заппинг): показывается на несколько
+ * секунд при переключении живого канала (стрелками вверх/вниз или
+ * набором номера) — классический "channel change banner" со спутниковых/
+ * кабельных приставок. currentProgramProgress — доля ВРЕМЕНИ ТЕКУЩЕЙ
+ * ПРОГРАММЫ (не позиция видео!) от её начала до конца, null если EPG для
+ * этого канала сейчас нет вообще (не мешает переключению — баннер просто
+ * покажет название канала без программы передач).
+ */
+data class ZapBannerInfo(
+    val channelId: String,
+    val channelName: String,
+    val channelLogo: String?,
+    val channelNumber: Int,
+    val currentProgramTitle: String?,
+    val currentProgramProgress: Float?,
+    val nextProgramTitle: String?
+)
+
 sealed interface PlayerUiState {
     object Loading : PlayerUiState
     data class Ready(
@@ -96,10 +115,13 @@ class PlayerViewModel @Inject constructor(
     // seasonNumber/episodeNumber), отдельного use case заводить не стали
     // ради одного вызова.
     private val playlistRepository = sessionGraph.playlistRepository
-    // PROMPT_EPG.md, подзадача 6 — только для поиска канала по номеру
-    // (zapToChannelNumber() ниже), больше ничего из этого репозитория
-    // здесь не нужно.
+    // РЕДИЗАЙН (заппинг стрелками вверх/вниз + мини-EPG баннер): раньше
+    // channelRepository был нужен только для поиска канала по номеру
+    // (zapToChannelNumber()), теперь также для соседнего канала
+    // (getAdjacentSubscribed(), см. ниже) — и epgProgramRepository для
+    // "что сейчас идёт" на баннере переключения.
     private val channelRepository = sessionGraph.channelRepository
+    private val epgProgramRepository = sessionGraph.epgProgramRepository
     // PROMPT_SUBTITLES.md, подзадача 6 — оркестратор сам решает
     // OpenSubtitles/облако/локальный Whisper по приоритету; PlayerViewModel
     // только даёт ему контекст (URL/заголовки/позицию) и слушает состояние.
@@ -231,6 +253,9 @@ class PlayerViewModel @Inject constructor(
         const val MAX_ARCHIVE_MIRROR_ATTEMPTS = 2
         const val MAX_GENERIC_RETRY_ATTEMPTS = 1
         const val GENERIC_RETRY_DELAY_MS = 1500L
+        // РЕДИЗАЙН (заппинг) — сколько показывать мини-EPG баннер после
+        // переключения канала, если не пришло новое переключение раньше.
+        const val ZAP_BANNER_DURATION_MS = 4000L
     }
 
     init {
@@ -595,6 +620,59 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val channel = channelRepository.getSubscribedByNumber(number) ?: return@launch
             if (channel.id != currentMovieId) loadMovie(channel.id)
+            showZapBanner(channel)
+        }
+    }
+
+    // РЕДИЗАЙН (заппинг стрелками вверх/вниз): Key.DirectionUp/Down раньше
+    // не были ничем заняты во время просмотра живого канала (см.
+    // PlayerScreen.kt) — Left/Right уже заняты перемоткой/сменой серии.
+    // getAdjacentSubscribed() сам закольцовывает список — на последнем
+    // канале forward=true уводит на первый, и наоборот, как на обычном ТВ.
+    fun zapToNextChannel() = zap(forward = true)
+    fun zapToPreviousChannel() = zap(forward = false)
+
+    private fun zap(forward: Boolean) {
+        if (!currentMovieId.startsWith("ch_")) return
+        viewModelScope.launch {
+            val channel = channelRepository.getAdjacentSubscribed(currentMovieId, forward) ?: return@launch
+            if (channel.id != currentMovieId) loadMovie(channel.id)
+            showZapBanner(channel)
+        }
+    }
+
+    private val _zapBanner = MutableStateFlow<ZapBannerInfo?>(null)
+    val zapBanner: StateFlow<ZapBannerInfo?> = _zapBanner
+
+    // Отдельная Job — быстрый повторный заппинг (удержание/несколько
+    // нажатий подряд, обычное дело при пролистывании каналов) должен
+    // каждый раз сбрасывать таймер показа заново, а не плодить несколько
+    // одновременных "сам себя погасит через N сек" копий поверх друг друга.
+    private var zapBannerJob: Job? = null
+
+    private fun showZapBanner(channel: com.platinum.ott.data.repository.ChannelUiItem) {
+        zapBannerJob?.cancel()
+        zapBannerJob = viewModelScope.launch {
+            val current = epgProgramRepository.getCurrentForChannel(channel.id)
+            val next = current?.let {
+                epgProgramRepository.getForChannelInRange(channel.id, it.endTimeMillis, it.endTimeMillis + TimeUnit.HOURS.toMillis(6))
+                    .firstOrNull()
+            }
+            val progress = current?.let {
+                val total = (it.endTimeMillis - it.startTimeMillis).toFloat()
+                if (total <= 0f) null else ((System.currentTimeMillis() - it.startTimeMillis) / total).coerceIn(0f, 1f)
+            }
+            _zapBanner.value = ZapBannerInfo(
+                channelId = channel.id,
+                channelName = channel.canonicalName,
+                channelLogo = channel.logo,
+                channelNumber = channel.channelNumber,
+                currentProgramTitle = current?.title,
+                currentProgramProgress = progress,
+                nextProgramTitle = next?.title
+            )
+            delay(ZAP_BANNER_DURATION_MS)
+            _zapBanner.value = null
         }
     }
 

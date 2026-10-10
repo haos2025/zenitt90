@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,11 +11,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +43,16 @@ fun PhoneSourcesScreen(
     val refreshingIds by viewModel.refreshingIds.collectAsStateWithLifecycle()
     var renameTarget by remember { mutableStateOf<SourceUiItem?>(null) }
     var deleteTarget by remember { mutableStateOf<SourceUiItem?>(null) }
+    val context = LocalContext.current
+    var reimportTargetId by remember { mutableStateOf<String?>(null) }
+    val reimportFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val sourceId = reimportTargetId
+        reimportTargetId = null
+        if (uri == null || sourceId == null) return@rememberLauncherForActivityResult
+        runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() }
+            .getOrNull()
+            ?.let { content -> viewModel.reimportFile(sourceId, content) }
+    }
 
     // ФИКС (аудит): тот же паттерн, что в TV-версии (SourcesScreen.kt).
     LaunchedEffect(Unit) { viewModel.load() }
@@ -85,7 +99,11 @@ fun PhoneSourcesScreen(
                             onRename = { renameTarget = item },
                             onMoveUp = { viewModel.moveUp(item.id) },
                             onMoveDown = { viewModel.moveDown(item.id) },
-                            onDelete = { deleteTarget = item }
+                            onDelete = { deleteTarget = item },
+                            onReimportFile = {
+                                reimportTargetId = item.id
+                                reimportFilePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*"))
+                            }
                         )
                     }
                 }
@@ -118,7 +136,8 @@ private fun PhoneSourceCard(
     onRename: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onReimportFile: () -> Unit
 ) {
     var showMenu by remember(item.id) { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -159,6 +178,9 @@ private fun PhoneSourceCard(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp).padding(start = ZenithDimens.paddingS), strokeWidth = 2.dp)
             } else {
                 IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Обновить") }
+            }
+            if (item.isFileSource) {
+                IconButton(onClick = onReimportFile) { Icon(Icons.Default.UploadFile, "Переимпортировать файл") }
             }
 
             Box {

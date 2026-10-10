@@ -8,7 +8,11 @@ import kotlinx.coroutines.flow.Flow
 class FavoritesUseCase(private val dao: FavoritesDao) {
     fun getAllFavorites(): Flow<List<FavoriteEntity>> = dao.getAllFavorites()
     fun getByType(type: String): Flow<List<FavoriteEntity>> = dao.getFavoritesByType(type)
-    fun getByFolder(folderId: Long): Flow<List<FavoriteEntity>> = dao.getFavoritesByFolder(folderId)
+    // ФИКС (сканирование "реализовано без UI"): getByFolder() убран — 0
+    // вызовов где-либо в проекте. Фильтрация по папкам на экране "Избранное"
+    // уже полностью реализована другим путём — клиентским фильтром поверх
+    // getAllFavorites() (см. FavoritesScreen.kt) — эта функция была
+    // параллельным, но неиспользуемым способом сделать то же самое.
     fun getAllFolders(): Flow<List<FolderEntity>> = dao.getAllFolders()
     suspend fun isFavorite(contentId: String) = dao.isFavorite(contentId)
     suspend fun getByContentId(contentId: String) = dao.getFavoriteByContentId(contentId)

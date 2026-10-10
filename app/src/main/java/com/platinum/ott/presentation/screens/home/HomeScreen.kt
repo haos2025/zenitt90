@@ -17,7 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.presentation.components.CatalogRow
-import com.platinum.ott.presentation.components.HeroBanner
+import com.platinum.ott.presentation.components.HomeInfoStrip
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.components.NavSidebar
 import com.platinum.ott.presentation.components.SkeletonCatalog
@@ -33,6 +33,7 @@ import com.platinum.ott.presentation.components.SkeletonCatalog
 fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit, modifier: Modifier = Modifier, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
+    val recentlyAiredEpisode by viewModel.recentlyAiredEpisode.collectAsStateWithLifecycle()
     var selectedFilter by remember { mutableStateOf(HomeContentFilter.ALL) }
 
     Row(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -82,7 +83,6 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                         filteredMovies.groupBy { it.genre.ifBlank { "Каталог" } }
                             .entries.sortedByDescending { viewModel.genrePriority[it.key] ?: 0 }
                     }
-                    val heroMovies = state.heroMovies
                     val listState = rememberLazyListState()
 
                     // PROMPT_HOME_LOADING_FIX.md, п.1 — плейлист уже показан
@@ -103,7 +103,7 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                     // триггер подгрузки считает реальное количество
                     // элементов (headerOffset + жанровые ряды), а не только
                     // grouped.size, как раньше.
-                    val headerOffset = (if (heroMovies.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
+                    val headerOffset = (if (recentlyAiredEpisode != null || continueWatching.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
                     val totalItems = headerOffset + grouped.size
 
                     LaunchedEffect(listState, totalItems) {
@@ -116,12 +116,14 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                     }
 
                     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
-                        if (heroMovies.isNotEmpty()) {
-                            item(key = "hero") {
-                                HeroBanner(
-                                    movies = heroMovies, onMovieClick = onMovieClick,
-                                    resolvedPosters = viewModel.resolvedPosters,
-                                    onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
+                        if (continueWatching.isNotEmpty() || recentlyAiredEpisode != null) {
+                            item(key = "info_strip") {
+                                HomeInfoStrip(
+                                    continueWatching = continueWatching.firstOrNull(),
+                                    recentlyAired = recentlyAiredEpisode,
+                                    onContinueClick = onMovieClick,
+                                    onNewEpisodeClick = { seriesId -> navController.navigate("series/$seriesId") },
+                                    modifier = Modifier.padding(horizontal = ZenithDimens.tvOverscanPadding)
                                 )
                             }
                         }

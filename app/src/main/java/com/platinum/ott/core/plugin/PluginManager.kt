@@ -57,7 +57,22 @@ class PluginManager(
             if (scriptContent.length > 1_048_576) return@withContext Result.failure(Exception("Too large"))
             File(pluginsDir, "$safeId.js").writeText(scriptContent)
             val entity = PluginEntity(id = safeId, name = manifest.name, version = manifest.version, installedVersion = manifest.version, description = manifest.description, author = manifest.author, pluginType = manifest.type.key, iconUrl = manifest.icon, repoUrl = repoUrl, scriptContent = scriptContent)
-            pluginDao.upsert(entity); loadPlugin(entity)
+            pluginDao.upsert(entity)
+            // ФИКС (сканирование "реализовано без UI"): loadPlugin() сам
+            // молча ничего не делает, если plugin.id уже в loadedPlugins
+            // (обычный guard от повторной загрузки того же самого) — но
+            // именно поэтому обновление уже установленного плагина через
+            // эту функцию раньше НЕ перезагружало код: строка в БД и файл
+            // на диске обновлялись, а в памяти продолжал работать старый
+            // QuickJS с прежним скриптом до перезапуска приложения или
+            // ручного выключения/включения тумблером (тот путь работал
+            // правильно — setEnabled() сам делает unloadPlugin+loadPlugin).
+            // Здесь эта же пара нужна явно: unloadPlugin() безопасно
+            // не делает ничего, если плагин и не был загружен (первая
+            // установка), поэтому вызывать его безусловно — правильно и
+            // для install, и для update одним и тем же путём.
+            unloadPlugin(safeId)
+            loadPlugin(entity)
             Log.i(TAG, "Installed: ${manifest.name} v${manifest.version}"); Result.success(manifest)
         } catch (e: Exception) { Log.e(TAG, "Install error", e); Result.failure(e) }
     }

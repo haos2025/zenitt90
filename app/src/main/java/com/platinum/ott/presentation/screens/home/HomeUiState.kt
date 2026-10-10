@@ -15,14 +15,7 @@ sealed interface HomeUiState {
         // "спать" 15-60с) ещё грузится". HomeScreen/PhoneHomeScreen рисуют по
         // этому флагу лёгкий индикатор поверх уже видимого списка, а не
         // полноэкранный Loading — сам список должен остаться на месте.
-        val isBackendLoading: Boolean = false,
-        // Решение 1 (PROMPT_HOME_FEED_REDESIGN.md): ротация НЕДАВНО
-        // ДОБАВЛЕННОГО контента для hero-баннера — заполняется в
-        // HomeViewModel из первой страницы backend-каталога (тот уже отдаёт
-        // свежее первым; отдельного поля "дата добавления" на Movie нет и
-        // не заводится ради этого). Не меняется в loadMore() — баннер не
-        // должен перетасовываться при подгрузке следующих страниц.
-        val heroMovies: List<Movie> = emptyList()
+        val isBackendLoading: Boolean = false
     ) : HomeUiState
     data class Error(val message: String) : HomeUiState
 }

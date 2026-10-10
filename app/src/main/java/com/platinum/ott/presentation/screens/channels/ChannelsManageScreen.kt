@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -31,10 +30,17 @@ import com.platinum.ott.data.repository.ChannelUiItem
 import com.platinum.ott.ui.theme.*
 
 /**
- * PROMPT_IPTV_FOUNDATION.md, подзадача "UI слияния каналов" — второй
- * уровень навигации внутри Настроек, тот же паттерн, что и SourcesScreen.kt
- * (обычная кнопка "Назад", без NavSidebar — тот только для верхнеуровневых
- * экранов, см. SourcesScreen.kt).
+ * РЕДИЗАЙН (по запросу Shadow, разбор IPTV с нуля — вариант B, "просмотр
+ * отдельно от управления"): раньше ChannelsScreen.kt был и точкой входа
+ * "посмотреть канал" (кнопка Play в каждой строке, кнопка "Программа
+ * передач"), и панелью администрирования (переименовать/слить/удалить/
+ * подписка/health-check) одновременно — отсюда и жалоба "управление IPTV
+ * не устраивает". Экран для просмотра — теперь отдельно, ChannelsBrowseScreen.kt
+ * (сетка логотипов по категориям, быстрый play). Этот экран остаётся ТОЛЬКО
+ * административным — вызывается из Настроек, не с главного пути "посмотреть
+ * телевизор", поэтому смело показывает вообще все каналы, включая ещё не
+ * подписанные, и убрана кнопка Play/переход в EPG — это больше не тот путь,
+ * которым сюда попадают.
  *
  * Список показывает ВСЕ каналы (и подписанные, и ещё нет) — подписка это
  * фильтр "показывать в разделе Каналы", а не факт существования записи:
@@ -43,10 +49,8 @@ import com.platinum.ott.ui.theme.*
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ChannelsScreen(
+fun ChannelsManageScreen(
     onBackPressed: () -> Unit,
-    onPlayChannel: (String) -> Unit,
-    onOpenEpgGrid: () -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -70,7 +74,7 @@ fun ChannelsScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Каналы", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Управление каналами", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
             // Кнопка сама уважает бэкофф ChannelHealthChecker (isDue()) —
             // это не "перепроверить всё немедленно", а "не ждать до
             // ближайшего запуска ChannelHealthCheckWorker", см. комментарий
@@ -78,11 +82,6 @@ fun ChannelsScreen(
             OutlinedButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                 Text(if (isChecking) "Проверка..." else "Проверить сейчас")
             }
-            Spacer(Modifier.width(ZenithDimens.paddingS))
-            // PROMPT_EPG.md, подзадача 4 — сетка не отсюда управляет
-            // подпиской, только показывает уже подписанные, поэтому это
-            // просто переход, а не часть состояния этого экрана.
-            OutlinedButton(onClick = onOpenEpgGrid) { Text("Программа передач") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
@@ -107,8 +106,7 @@ fun ChannelsScreen(
                         onRename = { renameTarget = item },
                         onMerge = { mergeTarget = item },
                         onDelete = { deleteTarget = item },
-                        onCheckNow = { viewModel.checkOne(item.id) },
-                        onPlay = { onPlayChannel(item.id) }
+                        onCheckNow = { viewModel.checkOne(item.id) }
                     )
                 }
             }
@@ -147,8 +145,7 @@ private fun ChannelCard(
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
-    onCheckNow: () -> Unit,
-    onPlay: () -> Unit
+    onCheckNow: () -> Unit
 ) {
     var showMenu by remember(item.id) { mutableStateOf(false) }
     // Декоративный Box, не Surface с onClick — тот же вывод, что и в
@@ -211,10 +208,6 @@ private fun ChannelCard(
             // же причина, что и у декоративного Box выше: клик на весь ряд
             // сделал бы Switch/меню недостижимыми пультом (D-pad идёт по
             // фокусируемым элементам последовательно, а не "тап в область").
-            if (item.streamCount > 0) {
-                ChannelIconButton(onClick = onPlay, contentDescription = "Смотреть", icon = Icons.Default.PlayArrow)
-                Spacer(Modifier.width(ZenithDimens.paddingS))
-            }
             Switch(checked = item.isSubscribed, onCheckedChange = onToggleSubscribed)
             Spacer(Modifier.width(ZenithDimens.paddingS))
 

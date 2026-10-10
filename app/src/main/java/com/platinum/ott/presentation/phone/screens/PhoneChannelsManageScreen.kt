@@ -33,17 +33,16 @@ import com.platinum.ott.ui.theme.ZenithShapeMedium
 import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 /**
- * Телефон-версия ChannelsScreen.kt (TV) — тот же ChannelsViewModel и те же
- * общие диалоги (ChannelDialogs.kt), только список/карточка в
- * material3-стиле вместо tv-material3 (тот же принцип разделения, что и у
- * PhoneSourcesScreen.kt/SourcesScreen.kt).
+ * РЕДИЗАЙН (разбор IPTV с нуля — "вариант B"): тот же сплит, что и на TV
+ * (см. ChannelsManageScreen.kt/ChannelsBrowseScreen.kt) — просмотр
+ * отдельно от управления. Этот экран остался ТОЛЬКО административным
+ * (переименовать/слить/удалить/подписка/health-check), вызывается из
+ * Настроек. За просмотр каналов теперь отвечает PhoneChannelsBrowseScreen.kt.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneChannelsScreen(
+fun PhoneChannelsManageScreen(
     onBackPressed: () -> Unit,
-    onPlayChannel: (String) -> Unit,
-    onOpenEpgGrid: () -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,11 +57,9 @@ fun PhoneChannelsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Каналы") },
+                title = { Text("Управление каналами") },
                 navigationIcon = { IconButton(onClick = onBackPressed) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") } },
                 actions = {
-                    // PROMPT_EPG.md, подзадача 4
-                    IconButton(onClick = onOpenEpgGrid) { Icon(Icons.Filled.DateRange, contentDescription = "Программа передач") }
                     IconButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                         if (isChecking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         else Icon(Icons.Default.Refresh, contentDescription = "Проверить сейчас")
@@ -93,8 +90,7 @@ fun PhoneChannelsScreen(
                         onRename = { renameTarget = item },
                         onMerge = { mergeTarget = item },
                         onDelete = { deleteTarget = item },
-                        onCheckNow = { viewModel.checkOne(item.id) },
-                        onPlay = { onPlayChannel(item.id) }
+                        onCheckNow = { viewModel.checkOne(item.id) }
                     )
                 }
             }
@@ -132,17 +128,11 @@ private fun PhoneChannelCard(
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
-    onCheckNow: () -> Unit,
-    onPlay: () -> Unit
+    onCheckNow: () -> Unit
 ) {
     var showMenu by remember(item.id) { mutableStateOf(false) }
-    // onClick прямо на Surface — на телефоне это не проблема (тач, не
-    // D-pad-фокус построчно, как на TV в ChannelsScreen.kt), Switch/меню
-    // внутри останавливают свой собственный клик через consumeClick-семантику
-    // material3-компонентов, не пропуская его наверх на родительский Surface.
     Surface(
-        shape = ZenithShapeMedium, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth(),
-        onClick = onPlay, enabled = item.streamCount > 0
+        shape = ZenithShapeMedium, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()
     ) {
         Row(Modifier.padding(ZenithDimens.paddingM).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(

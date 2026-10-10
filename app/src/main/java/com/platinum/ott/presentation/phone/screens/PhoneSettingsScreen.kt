@@ -101,7 +101,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         NavCard(
             title = "Каналы",
             status = if (channelsCount == 0) "Нет подписок" else "$channelsCount в списке",
-            onClick = { navController.navigate("channels") }
+            onClick = { navController.navigate("channels_manage") }
         )
         Spacer(Modifier.height(ZenithDimens.paddingS))
         // Синхронизация — независимая система (пара по 6-значному коду,

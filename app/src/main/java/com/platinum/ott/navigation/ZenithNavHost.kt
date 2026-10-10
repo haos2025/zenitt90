@@ -67,12 +67,33 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // Настроек (см. SettingsScreen.kt), не из NavSidebar/PhoneBottomBar
         // (те же соображения, что и у "sources" — нишевая функция, не
         // основная навигация).
+        // РЕДИЗАЙН (разбор IPTV с нуля, вариант B — просмотр отдельно от
+        // управления): "channels" теперь ведёт на ChannelsBrowseScreen —
+        // это основной путь "посмотреть телевизор" (сетка логотипов по
+        // категориям), а не нишевая функция из Настроек, как раньше.
+        // Административная часть (переименовать/слить/удалить/подписка) —
+        // отдельный route "channels_manage", туда ведёт кнопка "Управление"
+        // прямо с этого экрана, а также SettingsScreen.kt.
         composable("channels") {
-            if (isTV) ChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onOpenEpgGrid = { navController.navigate("epg_grid") })
-            else PhoneChannelsScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onOpenEpgGrid = { navController.navigate("epg_grid") })
+            if (isTV) ChannelsBrowseScreen(
+                onBackPressed = { navController.popBackStack() },
+                onPlayChannel = { navController.navigate("player/$it") },
+                onOpenEpgGrid = { navController.navigate("epg_grid") },
+                onManageClick = { navController.navigate("channels_manage") }
+            )
+            else PhoneChannelsBrowseScreen(
+                onBackPressed = { navController.popBackStack() },
+                onPlayChannel = { navController.navigate("player/$it") },
+                onOpenEpgGrid = { navController.navigate("epg_grid") },
+                onManageClick = { navController.navigate("channels_manage") }
+            )
+        }
+        composable("channels_manage") {
+            if (isTV) ChannelsManageScreen(onBackPressed = { navController.popBackStack() })
+            else PhoneChannelsManageScreen(onBackPressed = { navController.popBackStack() })
         }
         // PROMPT_EPG.md, подзадача 4 — тот же уровень вложенности, что и
-        // "channels" выше (обычная кнопка "Назад", достижим из ChannelsScreen,
+        // "channels" выше (обычная кнопка "Назад", достижим из ChannelsBrowseScreen,
         // не из NavSidebar/PhoneBottomBar — та же логика "нишевый экран",
         // что и у "channels"/"sources").
         composable("epg_grid") {
@@ -148,7 +169,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd, onBackPressed = { navController.popBackStack() })
             else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd)
         }
-        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onChannelsClick = { navController.navigate("channels") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onChannelsClick = { navController.navigate("channels_manage") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.

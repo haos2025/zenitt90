@@ -17,8 +17,6 @@ interface FavoritesDao {
     fun getAllFavorites(): Flow<List<FavoriteEntity>>
     @Query("SELECT * FROM favorites WHERE contentType = :type ORDER BY addedAt DESC")
     fun getFavoritesByType(type: String): Flow<List<FavoriteEntity>>
-    @Query("SELECT * FROM favorites WHERE folderId = :folderId ORDER BY addedAt DESC")
-    fun getFavoritesByFolder(folderId: Long): Flow<List<FavoriteEntity>>
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE contentId = :contentId)")
     suspend fun isFavorite(contentId: String): Boolean
     @Insert(onConflict = OnConflictStrategy.REPLACE)

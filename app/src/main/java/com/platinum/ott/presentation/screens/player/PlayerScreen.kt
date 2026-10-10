@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -17,11 +18,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
@@ -143,6 +147,11 @@ fun PlayerScreen(
         zapBuffer.toIntOrNull()?.let { viewModel.zapToChannelNumber(it) }
         zapBuffer = ""
     }
+    // РЕДИЗАЙН (заппинг стрелками вверх/вниз + мини-EPG баннер) — отдельно
+    // от zapBuffer выше: тот показывает набираемые ЦИФРЫ (до переключения),
+    // этот — результат уже СОСТОЯВШЕГОСЯ переключения (стрелками или по
+    // номеру), с названием канала и текущей программой из EPG.
+    val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
 
     // Растущий прогресс-бар (PlayerController.ProgressBar, isSeekActive) —
     // seekPulseNonce увеличивается на каждое реальное нажатие
@@ -287,6 +296,18 @@ fun PlayerScreen(
                             viewModel.seekBackward()
                         }
                         true
+                    }
+                    // РЕДИЗАЙН (заппинг): Up/Down раньше не были заняты ничем
+                    // во время просмотра — Left/Right уже заняты перемоткой/
+                    // сменой серии выше. Только для живых каналов (та же
+                    // проверка внутри zapToNextChannel()/zapToPreviousChannel()
+                    // в PlayerViewModel — здесь просто не мешаем обычной
+                    // D-pad-навигации по фокусируемым элементам для VOD).
+                    Key.DirectionUp -> {
+                        if (movieId.startsWith("ch_")) { viewModel.zapToNextChannel(); true } else false
+                    }
+                    Key.DirectionDown -> {
+                        if (movieId.startsWith("ch_")) { viewModel.zapToPreviousChannel(); true } else false
                     }
                     // Key.Menu и Key.Back обработаны выше безусловно (см.
                     // комментарии там) — сюда доходят, только если
@@ -449,6 +470,63 @@ fun PlayerScreen(
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {
                 Text(text = "Канал: $zapBuffer", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+        }
+        // РЕДИЗАЙН (заппинг) — сам баннер переключения, с логотипом/номером,
+        // текущей программой и её прогрессом (по времени ПРОГРАММЫ, не
+        // видео), и следующей программой, если EPG для канала есть.
+        AnimatedVisibility(
+            visible = zapBannerInfo != null,
+            enter = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+            exit = fadeOut(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
+            modifier = Modifier.align(Alignment.TopStart)
+        ) {
+            zapBannerInfo?.let { info ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(ZenithDimens.paddingL)
+                        .width(380.dp)
+                        .clip(ZenithShapeMedium)
+                        .background(ZenithSurface.copy(alpha = 0.92f))
+                        .padding(ZenithDimens.paddingM)
+                ) {
+                    Box(
+                        modifier = Modifier.size(52.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (info.channelLogo != null) {
+                            AsyncImage(
+                                model = info.channelLogo, contentDescription = null, contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(0.75f)
+                            )
+                        } else {
+                            Text("${info.channelNumber}", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                        }
+                    }
+                    Spacer(Modifier.width(ZenithDimens.paddingM))
+                    Column(Modifier.weight(1f)) {
+                        Text(info.channelName, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (info.currentProgramTitle != null) {
+                            Text(info.currentProgramTitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (info.currentProgramProgress != null) {
+                                LinearProgressIndicator(
+                                    progress = { info.currentProgramProgress },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(3.dp)
+                                )
+                            }
+                            if (info.nextProgramTitle != null) {
+                                Text(
+                                    "Далее: ${info.nextProgramTitle}",
+                                    style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else {
+                            Text("Нет данных о программе передач", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                        }
+                    }
+                }
             }
         }
     }

@@ -21,8 +21,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.components.HomeInfoStrip
 import com.platinum.ott.presentation.phone.components.PhoneCatalogRow
-import com.platinum.ott.presentation.phone.components.PhoneHeroBanner
 import com.platinum.ott.presentation.components.SkeletonCatalog
 import com.platinum.ott.presentation.screens.home.HomeContentFilter
 import com.platinum.ott.presentation.screens.home.HomeUiState
@@ -50,6 +50,7 @@ import com.platinum.ott.presentation.screens.home.matchesFilter
 fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
+    val recentlyAiredEpisode by viewModel.recentlyAiredEpisode.collectAsStateWithLifecycle()
     var selectedFilter by remember { mutableStateOf(HomeContentFilter.ALL) }
 
     Scaffold(
@@ -112,10 +113,9 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                             filteredMovies.groupBy { it.genre.ifBlank { "Каталог" } }
                                 .entries.sortedByDescending { viewModel.genrePriority[it.key] ?: 0 }
                         }
-                        val heroMovies = state.heroMovies
                         val listState = rememberLazyListState()
 
-                        val headerOffset = (if (heroMovies.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
+                        val headerOffset = (if (recentlyAiredEpisode != null || continueWatching.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
                         val totalItems = headerOffset + grouped.size
 
                         LaunchedEffect(listState, totalItems) {
@@ -128,12 +128,14 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                         }
 
                         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM), contentPadding = PaddingValues(top = ZenithDimens.paddingS, bottom = ZenithDimens.paddingM)) {
-                            if (heroMovies.isNotEmpty()) {
-                                item(key = "hero") {
-                                    PhoneHeroBanner(
-                                        movies = heroMovies, onMovieClick = { navController.navigate("detail/$it") },
-                                        resolvedPosters = viewModel.resolvedPosters,
-                                        onResolvePoster = { movie, widthPx -> viewModel.resolvePosterIfNeeded(movie, widthPx) }
+                            if (continueWatching.isNotEmpty() || recentlyAiredEpisode != null) {
+                                item(key = "info_strip") {
+                                    HomeInfoStrip(
+                                        continueWatching = continueWatching.firstOrNull(),
+                                        recentlyAired = recentlyAiredEpisode,
+                                        onContinueClick = { navController.navigate("detail/$it") },
+                                        onNewEpisodeClick = { seriesId -> navController.navigate("series/$seriesId") },
+                                        modifier = Modifier.padding(horizontal = ZenithDimens.paddingM)
                                     )
                                 }
                             }
