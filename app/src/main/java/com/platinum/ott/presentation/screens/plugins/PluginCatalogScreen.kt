@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.presentation.components.PluginIcon
 import androidx.compose.ui.unit.sp
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -338,10 +339,14 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
     // фокусируемая цель рядом с карточкой, а не внутри неё.
     Box(Modifier.fillMaxWidth().height(120.dp)) {
         Surface(onClick = onClick, modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.padding(ZenithDimens.paddingSM)) {
-                Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                Text(plugin.pluginType, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.padding(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
+                PluginIcon(plugin.iconUrl, plugin.name, 40.dp)
+                Spacer(Modifier.width(ZenithDimens.paddingS))
+                Column {
+                    Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text(plugin.pluginType, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
         Switch(
@@ -357,10 +362,14 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
 private fun CatalogPluginCard(entry: PluginRepository.CatalogEntry, onInstall: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth().height(140.dp)) {
         Column(Modifier.padding(ZenithDimens.paddingSM), verticalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                Text(entry.description, color = Color.White.copy(0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+            Row(verticalAlignment = Alignment.Top) {
+                PluginIcon(entry.icon, entry.name, 40.dp)
+                Spacer(Modifier.width(ZenithDimens.paddingS))
+                Column {
+                    Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text(entry.description, color = Color.White.copy(0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                }
             }
             Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text("Установить") }
         }

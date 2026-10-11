@@ -2,7 +2,9 @@ package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import com.platinum.ott.presentation.components.PluginIcon
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,8 +48,14 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
             Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM),
             verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)
         ) {
-            Text(current.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Text("v${current.installedVersion}", color = MaterialTheme.colorScheme.primary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PluginIcon(current.iconUrl, current.name, 56.dp)
+                Spacer(Modifier.width(ZenithDimens.paddingSM))
+                Column {
+                    Text(current.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                    Text("v${current.installedVersion}", color = MaterialTheme.colorScheme.primary)
+                }
+            }
             Spacer(Modifier.height(ZenithDimens.paddingS))
 
             DetailItem("ID", current.id)

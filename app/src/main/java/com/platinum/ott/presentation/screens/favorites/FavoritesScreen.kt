@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -65,7 +65,13 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                 FilterChip(selectedFolderId == null, onClick = { selectedFolderId = null }) { Text("Все папки") }
                 FilterChip(selectedFolderId == NO_FOLDER_SENTINEL, onClick = { selectedFolderId = if (selectedFolderId == NO_FOLDER_SENTINEL) null else NO_FOLDER_SENTINEL }) { Text("Без папки") }
                 folders.forEach { folder ->
-                    FilterChip(selectedFolderId == folder.id, onClick = { selectedFolderId = if (selectedFolderId == folder.id) null else folder.id }) { Text(folder.name) }
+                    FilterChip(selectedFolderId == folder.id, onClick = { selectedFolderId = if (selectedFolderId == folder.id) null else folder.id }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FolderDot(folder.color)
+                            Spacer(Modifier.width(ZenithDimens.paddingXS))
+                            Text(folder.name)
+                        }
+                    }
                 }
                 OutlinedButton(onClick = { showFolderManager = true }) { Text("+ Папка") }
             }
@@ -88,7 +94,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                 }
 
             LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                items(filtered, key = { it.contentId }) { fav ->
+                itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
                             MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) })
@@ -104,6 +110,8 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                                 modifier = Modifier.align(Alignment.TopEnd)
                             ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
+                                if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
                                 DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
                                 DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
                                 DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
@@ -120,6 +128,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
             folders = folders,
             onCreate = viewModel::createFolder,
             onDelete = viewModel::deleteFolder,
+            onChangeColor = viewModel::setFolderColor,
             onDismiss = { showFolderManager = false }
         )
     }

@@ -7,6 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.platinum.ott.presentation.components.PluginIcon
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +32,8 @@ fun PluginDetailScreen(
         }
         Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                PluginIcon(current.iconUrl, current.name, 56.dp)
+                Spacer(Modifier.width(ZenithDimens.paddingM))
                 Text(current.name, style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onBackPressed) { Text("Назад") }
             }

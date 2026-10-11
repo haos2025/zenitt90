@@ -13,9 +13,9 @@ interface FavoritesDao {
     suspend fun deleteFavorite(fav: FavoriteEntity)
     @Query("DELETE FROM favorites WHERE contentId = :contentId")
     suspend fun deleteByContentId(contentId: String): Int
-    @Query("SELECT * FROM favorites ORDER BY addedAt DESC")
+    @Query("SELECT * FROM favorites ORDER BY sortOrder ASC, addedAt DESC")
     fun getAllFavorites(): Flow<List<FavoriteEntity>>
-    @Query("SELECT * FROM favorites WHERE contentType = :type ORDER BY addedAt DESC")
+    @Query("SELECT * FROM favorites WHERE contentType = :type ORDER BY sortOrder ASC, addedAt DESC")
     fun getFavoritesByType(type: String): Flow<List<FavoriteEntity>>
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE contentId = :contentId)")
     suspend fun isFavorite(contentId: String): Boolean
@@ -49,6 +49,21 @@ interface FavoritesDao {
     // удалять и её содержимое (не переносить в "без папки"). @Transaction
     // на default-методе интерфейса — стандартный паттерн Room для нескольких
     // запросов, которые должны либо оба применяться, либо ни один.
+    // Ручной порядок избранного. updatedAt обновляется, чтобы новый порядок
+    // попал в инкрементальную синхронизацию (SyncRepositoryImpl берёт getSince(updatedAt)).
+    @Query("UPDATE favorites SET sortOrder = :sortOrder, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateSortOrderAt(id: Long, sortOrder: Int, updatedAt: Long): Int
+
+    // Перенумерация всего списка 0..n-1 в заданном порядке id — одной транзакцией.
+    @Transaction
+    suspend fun setOrder(ids: List<Long>) {
+        val now = System.currentTimeMillis()
+        ids.forEachIndexed { index, id -> updateSortOrderAt(id, index, now) }
+    }
+
+    @Query("UPDATE folders SET color = :color WHERE id = :id")
+    suspend fun setFolderColor(id: Long, color: String): Int
+
     @Transaction
     suspend fun deleteFolderWithContents(folder: FolderEntity) {
         deleteFavoritesInFolder(folder.id)

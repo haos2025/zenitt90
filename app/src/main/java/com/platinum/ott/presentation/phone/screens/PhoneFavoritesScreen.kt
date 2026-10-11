@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +28,7 @@ import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.screens.favorites.FolderDot
 import com.platinum.ott.presentation.screens.favorites.FolderManagerDialog
 import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 
@@ -69,7 +70,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             FilterChip(selected = selectedFolderId == null, onClick = { selectedFolderId = null }, label = { Text("Все папки") })
             FilterChip(selected = selectedFolderId == NO_FOLDER_SENTINEL, onClick = { selectedFolderId = if (selectedFolderId == NO_FOLDER_SENTINEL) null else NO_FOLDER_SENTINEL }, label = { Text("Без папки") })
             folders.forEach { folder ->
-                FilterChip(selected = selectedFolderId == folder.id, onClick = { selectedFolderId = if (selectedFolderId == folder.id) null else folder.id }, label = { Text(folder.name) })
+                FilterChip(selected = selectedFolderId == folder.id, onClick = { selectedFolderId = if (selectedFolderId == folder.id) null else folder.id }, label = { Row(verticalAlignment = Alignment.CenterVertically) { FolderDot(folder.color); Spacer(Modifier.width(ZenithDimens.paddingXS)); Text(folder.name) } })
             }
             IconButton(onClick = { showFolderManager = true }) { Icon(Icons.Default.CreateNewFolder, "Управление папками") }
         }
@@ -91,7 +92,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             }
 
         LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            items(filtered, key = { it.contentId }) { fav ->
+            itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
                 Box {
                     MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") })
                     // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
@@ -104,6 +105,8 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingS).clip(CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
                     ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
+                        if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
                         DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
                         DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
                         DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
@@ -119,6 +122,7 @@ if (showFolderManager) {
         folders = folders,
         onCreate = viewModel::createFolder,
         onDelete = viewModel::deleteFolder,
+        onChangeColor = viewModel::setFolderColor,
         onDismiss = { showFolderManager = false }
     )
 }

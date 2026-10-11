@@ -4,9 +4,11 @@ import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import com.platinum.ott.presentation.components.PluginIcon
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -163,6 +165,8 @@ private fun PhoneInstalledTab(plugins: List<PluginEntity>, navController: NavHos
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
+                    PluginIcon(plugin.iconUrl, plugin.name, 44.dp)
+                    Spacer(Modifier.width(ZenithDimens.paddingSM))
                     Column(Modifier.weight(1f)) {
                         Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                         Text("v${plugin.installedVersion} • ${plugin.pluginType}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
@@ -194,6 +198,8 @@ private fun PhoneCatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginV
                 items(uiState.catalog, key = { it.id }) { entry ->
                     Card(Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
+                            PluginIcon(entry.icon, entry.name, 44.dp)
+                            Spacer(Modifier.width(ZenithDimens.paddingSM))
                             Column(Modifier.weight(1f)) {
                                 Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FolderEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -15,9 +16,29 @@ class FavoritesViewModel @Inject constructor(
     val favorites = sessionGraph.favoritesUseCase.getAllFavorites()
     val folders = sessionGraph.favoritesUseCase.getAllFolders()
 
-    fun createFolder(name: String) {
+    fun createFolder(name: String, color: String) {
         if (name.isBlank()) return
-        viewModelScope.launch { sessionGraph.favoritesUseCase.createFolder(FolderEntity(name = name.trim())) }
+        viewModelScope.launch { sessionGraph.favoritesUseCase.createFolder(FolderEntity(name = name.trim(), color = color)) }
+    }
+
+    fun setFolderColor(folder: FolderEntity, color: String) {
+        viewModelScope.launch { sessionGraph.favoritesUseCase.setFolderColor(folder.id, color) }
+    }
+
+    /**
+     * Меняет местами элемент и его соседа по ТЕКУЩЕМУ отображаемому списку
+     * (с учётом фильтров) и перенумеровывает весь список избранного — так
+     * порядок остаётся целостным и для скрытых фильтром элементов.
+     */
+    fun moveFavorite(contentId: String, neighborContentId: String) {
+        viewModelScope.launch {
+            val list = sessionGraph.favoritesUseCase.getAllFavorites().first().toMutableList()
+            val a = list.indexOfFirst { it.contentId == contentId }
+            val b = list.indexOfFirst { it.contentId == neighborContentId }
+            if (a < 0 || b < 0) return@launch
+            java.util.Collections.swap(list, a, b)
+            sessionGraph.favoritesUseCase.reorder(list.map { it.id })
+        }
     }
 
     // Решено с пользователем: удаление папки удаляет и содержимое папки

@@ -27,6 +27,8 @@ class FavoritesUseCase(private val dao: FavoritesDao) {
     suspend fun setAnime(contentId: String, isAnime: Boolean) = dao.setAnime(contentId, isAnime)
     suspend fun moveToFolder(contentId: String, folderId: Long?) = dao.moveToFolder(contentId, folderId)
     suspend fun createFolder(folder: FolderEntity) = dao.insertFolder(folder)
+    suspend fun reorder(ids: List<Long>) = dao.setOrder(ids)
+    suspend fun setFolderColor(folderId: Long, color: String) = dao.setFolderColor(folderId, color)
     // Решено с пользователем: удаление папки удаляет и её содержимое
     // (не переносит в "без папки") — см. deleteFolderWithContents в DAO.
     suspend fun deleteFolder(folder: FolderEntity) = dao.deleteFolderWithContents(folder)
