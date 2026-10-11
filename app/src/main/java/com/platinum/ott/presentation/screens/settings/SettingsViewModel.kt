@@ -3,6 +3,8 @@ package com.platinum.ott.presentation.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.AuthPreferences
+import com.platinum.ott.core.InterfacePreferences
+import com.platinum.ott.core.PlayerOverlaySettings
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.di.ThemeManager
 import com.platinum.ott.domain.usecase.OtaUpdateUseCase
@@ -22,7 +24,8 @@ class SettingsViewModel @Inject constructor(
     // тот же аргумент, что уже был в SyncPairingViewModel) — берём его напрямую
     // Hilt-синглтоном, а не через sessionGraph, только чтобы прочитать
     // lastSyncTimestamp для статуса строки "Синхронизация" (см. ниже).
-    private val authPreferences: AuthPreferences
+    private val authPreferences: AuthPreferences,
+    private val interfacePreferences: InterfacePreferences
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Idle)
     val uiState: StateFlow<SettingsUiState> = _uiState
@@ -45,6 +48,17 @@ class SettingsViewModel @Inject constructor(
     val darkThemeFlow: StateFlow<Boolean> = themeManager.darkThemeFlow
 
     fun setDarkTheme(enabled: Boolean) { themeManager.setDarkTheme(enabled) }
+
+    // Оверлей плеера (TV и телефон): тот же источник — InterfacePreferences.
+    private val _playerOverlay = MutableStateFlow(interfacePreferences.playerOverlaySettings())
+    val playerOverlay: StateFlow<PlayerOverlaySettings> = _playerOverlay
+
+    fun setControlsHideDelayMs(ms: Int) { interfacePreferences.controlsHideDelayMs = ms; refreshOverlay() }
+    fun setShowProgressStrip(enabled: Boolean) { interfacePreferences.showProgressStrip = enabled; refreshOverlay() }
+    fun setProgressStripDp(dp: Int) { interfacePreferences.progressStripDp = dp; refreshOverlay() }
+    fun setKeepControlsWhenPaused(enabled: Boolean) { interfacePreferences.keepControlsWhenPaused = enabled; refreshOverlay() }
+    fun setShowBuffered(enabled: Boolean) { interfacePreferences.showBuffered = enabled; refreshOverlay() }
+    private fun refreshOverlay() { _playerOverlay.value = interfacePreferences.playerOverlaySettings() }
 
     // PROMPT_SETTINGS_UPGRADE.md п.5 — секции "Источники"/"Синхронизация"
     // стали навигационными строками со статусом вместо голого заголовка.

@@ -105,6 +105,8 @@ fun PlayerController(
     // это единственный источник правды о том, держит ли пользователь
     // сейчас DirectionLeft/DirectionRight.
     isSeekActive: Boolean = false,
+    // Прогруженная вперёд позиция (0 — не показывать: выключено в настройках или live).
+    bufferedPositionMs: Long = 0L,
     // Состояние для подсветки активных иконок справа — то же самое, что
     // уже частично было на телефоне (subtitlesEnabled), плюс скорость.
     // Для аудио/качества устойчивого понятия "активно" нет (нет
@@ -166,7 +168,7 @@ fun PlayerController(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
                     Spacer(Modifier.width(ZenithDimens.paddingS))
-                    ProgressBar(currentMs = currentPositionMs, durationMs = durationMs, isActive = isSeekActive, modifier = Modifier.weight(1f))
+                    ProgressBar(currentMs = currentPositionMs, bufferedMs = bufferedPositionMs, durationMs = durationMs, isActive = isSeekActive, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
                 }
@@ -324,7 +326,7 @@ private fun MenuIconButton(
 }
 
 @Composable
-private fun ProgressBar(currentMs: Long, durationMs: Long, isActive: Boolean, modifier: Modifier = Modifier) {
+private fun ProgressBar(currentMs: Long, bufferedMs: Long, durationMs: Long, isActive: Boolean, modifier: Modifier = Modifier) {
     val progress = if (durationMs > 0L) (currentMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // 4dp в покое → 10dp пока идёт перемотка (isActive выставляется
     // снаружи по частоте DirectionLeft/DirectionRight), 150ms ease-out —
@@ -338,6 +340,8 @@ private fun ProgressBar(currentMs: Long, durationMs: Long, isActive: Boolean, mo
     Box(
         modifier = modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.15f))
     ) {
+        val buffered = if (durationMs > 0L) (bufferedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+        if (buffered > progress) Box(modifier = Modifier.fillMaxWidth(buffered).fillMaxHeight().clip(ZenithShapePill).background(Color.White.copy(alpha = 0.3f)))
         Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().clip(ZenithShapePill).background(MaterialTheme.colorScheme.primary))
     }
 }

@@ -19,6 +19,8 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.platinum.ott.core.QualityPreferences
+import com.platinum.ott.core.InterfacePreferences
+import com.platinum.ott.core.PlayerOverlaySettings
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.core.player.ArchiveOrgMirrorResolver
@@ -105,8 +107,11 @@ sealed interface PlayerUiState {
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     application: Application,
-    sessionGraph: SessionGraph
+    sessionGraph: SessionGraph,
+    private val interfacePreferences: InterfacePreferences
 ) : AndroidViewModel(application) {
+    /** Читается один раз при открытии плеера (настройка меняется только в Настройках). */
+    val overlaySettings: PlayerOverlaySettings = interfacePreferences.playerOverlaySettings()
     private val getPlayableUrl = sessionGraph.getPlayableUrlUseCase
     private val getMovie = sessionGraph.getMovieByIdUseCase
     private val watchHistory = sessionGraph.watchHistoryUseCase

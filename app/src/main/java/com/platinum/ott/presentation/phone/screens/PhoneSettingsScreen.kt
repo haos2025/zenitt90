@@ -35,6 +35,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.CONTROLS_HIDE_DELAY_OPTIONS_MS
+import com.platinum.ott.core.PROGRESS_STRIP_DP_OPTIONS
+import com.platinum.ott.core.formatControlsHideDelay
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -283,6 +286,51 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Тёмная тема", color = Color.White, modifier = Modifier.weight(1f))
                 Switch(checked = darkTheme, onCheckedChange = { viewModel.setDarkTheme(it) })
+            }
+            CardDivider()
+            val overlay by viewModel.playerOverlay.collectAsState()
+            var delayMenu by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Автоскрытие управления плеера", color = Color.White, modifier = Modifier.weight(1f))
+                Box {
+                    TextButton(onClick = { delayMenu = true }) { Text(formatControlsHideDelay(overlay.hideDelayMs ?: 3000)) }
+                    DropdownMenu(expanded = delayMenu, onDismissRequest = { delayMenu = false }) {
+                        CONTROLS_HIDE_DELAY_OPTIONS_MS.forEach { ms ->
+                            DropdownMenuItem(
+                                text = { Text(formatControlsHideDelay(ms)) },
+                                onClick = { viewModel.setControlsHideDelayMs(ms); delayMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
+            CardDivider()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Не скрывать на паузе", color = Color.White, modifier = Modifier.weight(1f))
+                Switch(checked = overlay.keepControlsWhenPaused, onCheckedChange = { viewModel.setKeepControlsWhenPaused(it) })
+            }
+            CardDivider()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Полоска прогресса", color = Color.White, modifier = Modifier.weight(1f))
+                Switch(checked = overlay.showProgressStrip, onCheckedChange = { viewModel.setShowProgressStrip(it) })
+            }
+            CardDivider()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Показывать прогрузку", color = Color.White, modifier = Modifier.weight(1f))
+                Switch(checked = overlay.showBuffered, onCheckedChange = { viewModel.setShowBuffered(it) })
+            }
+            if (overlay.showProgressStrip) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Толщина", color = Color.White, modifier = Modifier.weight(1f))
+                    PROGRESS_STRIP_DP_OPTIONS.forEach { dp ->
+                        FilterChip(
+                            selected = overlay.progressStripDp == dp,
+                            onClick = { viewModel.setProgressStripDp(dp) },
+                            label = { Text("$dp") },
+                            modifier = Modifier.padding(start = ZenithDimens.paddingXS)
+                        )
+                    }
+                }
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

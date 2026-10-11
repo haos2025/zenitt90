@@ -1,5 +1,10 @@
 package com.platinum.ott.presentation.screens.settings
 
+import com.platinum.ott.core.CONTROLS_HIDE_DELAY_OPTIONS_MS
+import com.platinum.ott.core.PROGRESS_STRIP_DP_OPTIONS
+import com.platinum.ott.core.formatControlsHideDelay
+import com.platinum.ott.core.nextAfter
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -206,6 +211,30 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 // большая задача, не в этом заходе.
                 val darkTheme by viewModel.darkThemeFlow.collectAsState()
                 CycleSetting("Тема", if (darkTheme) "Тёмная" else "Светлая") { viewModel.setDarkTheme(!darkTheme) }
+                SettingsDivider()
+                val overlay by viewModel.playerOverlay.collectAsState()
+                val hideDelay = overlay.hideDelayMs ?: 0
+                CycleSetting("Автоскрытие управления плеера", formatControlsHideDelay(hideDelay)) {
+                    viewModel.setControlsHideDelayMs(CONTROLS_HIDE_DELAY_OPTIONS_MS.nextAfter(hideDelay))
+                }
+                SettingsDivider()
+                CycleSetting("Не скрывать на паузе", if (overlay.keepControlsWhenPaused) "Да" else "Нет") {
+                    viewModel.setKeepControlsWhenPaused(!overlay.keepControlsWhenPaused)
+                }
+                SettingsDivider()
+                CycleSetting("Полоска прогресса", if (overlay.showProgressStrip) "Вкл" else "Выкл") {
+                    viewModel.setShowProgressStrip(!overlay.showProgressStrip)
+                }
+                SettingsDivider()
+                CycleSetting("Показывать прогрузку", if (overlay.showBuffered) "Да" else "Нет") {
+                    viewModel.setShowBuffered(!overlay.showBuffered)
+                }
+                if (overlay.showProgressStrip) {
+                    SettingsDivider()
+                    CycleSetting("Толщина полоски", "${overlay.progressStripDp} dp") {
+                        viewModel.setProgressStripDp(PROGRESS_STRIP_DP_OPTIONS.nextAfter(overlay.progressStripDp))
+                    }
+                }
                 SettingsDivider()
                 SettingsItem("Язык", "Скоро")
             }

@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
+import com.platinum.ott.presentation.components.PlayerProgressStrip
 import com.platinum.ott.presentation.screens.player.PlayerUiState
 import com.platinum.ott.presentation.screens.player.PlayerViewModel
 import com.platinum.ott.ui.theme.ZenithShapeMedium
@@ -103,8 +104,15 @@ fun PhonePlayerScreen(
         }
     }
 
-    LaunchedEffect(lastInteraction, showControls) {
-        if (showControls) { delay(3000); showControls = false }
+    // Автоскрытие управления — настройки из Настроек → Интерфейс (общие с TV).
+    // 0 = выключено; null (не выбрано) — прежние 3 с.
+    val overlaySettings = remember { viewModel.overlaySettings }
+    val hideDelayMs = overlaySettings.hideDelayMs ?: 3000
+    val holdForPause = overlaySettings.keepControlsWhenPaused && !isPlaying
+    val isLive = movieId.startsWith("ch_")
+    val shownBufferedMs = if (overlaySettings.showBuffered && !isLive) bufferedPositionMs else 0L
+    LaunchedEffect(lastInteraction, showControls, hideDelayMs, holdForPause) {
+        if (showControls && hideDelayMs > 0 && !holdForPause) { delay(hideDelayMs.toLong()); showControls = false }
     }
     LaunchedEffect(uiState) {
         while (uiState is PlayerUiState.Ready) {
@@ -151,12 +159,21 @@ fun PhonePlayerScreen(
                             lastInteraction = System.currentTimeMillis()
                             gestureScope.launch { delay(600); gestureIndicator = null }
                         },
+                        // Систему может перехватить жест (смахивание шторки/панелей у
+                        // края, Назад) — без этого индикатор жеста застревал на экране,
+                        // а режим не сбрасывался. Перемотка при отмене НЕ применяется.
+                        onDragCancel = {
+                            mode = null
+                            gestureScope.launch { delay(600); gestureIndicator = null }
+                        },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val horizontalWins = abs(dragAmount.x) > abs(dragAmount.y) * 1.5f
+                            // Live-канал: длительности нет, перематывать нечего — горизонтальный
+                            // свайп не должен превращаться ни в перемотку, ни в яркость/громкость.
                             when (mode) {
-                                GestureMode.PENDING_LEFT -> mode = if (horizontalWins) GestureMode.SEEK else GestureMode.BRIGHTNESS
-                                GestureMode.PENDING_RIGHT -> mode = if (horizontalWins) GestureMode.SEEK else GestureMode.VOLUME
+                                GestureMode.PENDING_LEFT -> mode = if (horizontalWins) (if (isLive) null else GestureMode.SEEK) else GestureMode.BRIGHTNESS
+                                GestureMode.PENDING_RIGHT -> mode = if (horizontalWins) (if (isLive) null else GestureMode.SEEK) else GestureMode.VOLUME
                                 else -> {}
                             }
                             when (mode) {
@@ -255,13 +272,37 @@ fun PhonePlayerScreen(
                 }
             }
             is PlayerUiState.Ready -> {
+                if (!showControls && overlaySettings.showProgressStrip) {
+                    val durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L)
+                    if (isLive || durationMs <= 0L) {
+                        PlayerProgressStrip(
+                            positionMs = currentPositionMs,
+                            durationMs = durationMs,
+                            thickness = overlaySettings.progressStripDp.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            bufferedMs = shownBufferedMs,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    } else {
+                        PhoneScrubStrip(
+                            positionMs = currentPositionMs,
+                            bufferedMs = shownBufferedMs,
+                            durationMs = durationMs,
+                            thicknessDp = overlaySettings.progressStripDp,
+                            title = state.title,
+                            onInteraction = { lastInteraction = System.currentTimeMillis() },
+                            onSeekTo = { viewModel.seekTo(it); lastInteraction = System.currentTimeMillis() },
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    }
+                }
                 PhonePlayerController(
                     isVisible = showControls,
                     isPlaying = isPlaying,
                     title = state.title,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
-                    bufferedPositionMs = bufferedPositionMs,
+                    bufferedPositionMs = shownBufferedMs,
                     variants = state.variants,
                     currentVariant = state.currentVariant,
                     audioTracks = state.audioTracks,

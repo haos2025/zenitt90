@@ -29,6 +29,8 @@ import coil.compose.AsyncImage
 import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.core.platform.safeRequestFocus
+import com.platinum.ott.presentation.components.PlayerProgressStrip
 import com.platinum.ott.core.subtitles.AutoSubtitleState
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.ui.theme.ZenithDurationMedium
@@ -116,6 +118,7 @@ fun PlayerScreen(
     val autoSubtitleCues by viewModel.autoSubtitleCues.collectAsStateWithLifecycle()
 
     var currentPositionMs by remember { mutableStateOf(0L) }
+    var bufferedPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
 
     // Кнопки перемотки/эпизодов в капсуле — decorative (см.
@@ -171,6 +174,19 @@ fun PlayerScreen(
         }
     }
 
+    // Оверлей: автоскрытие капсулы (настройка "Автоскрытие управления
+    // плеера"). interactionNonce растёт на любое нажатие клавиши (см.
+    // onPreviewKeyEvent ниже) — перезапускает таймер. Таймер НЕ тикает, пока
+    // клавиша перемотки физически зажата (isDpadSeekActive), открыто меню
+    // воспроизведения или QR телефона-компаньона — иначе капсула гасла бы
+    // посреди удержания перемотки (см. комментарий вверху файла, 4-й раунд).
+    val overlaySettings = remember { viewModel.overlaySettings }
+    val hideDelayMs = overlaySettings.hideDelayMs ?: 0  // TV: по умолчанию не скрывать
+    // У live-каналов буфер — единицы секунд, подложка не несёт смысла.
+    val showBuffered = overlaySettings.showBuffered && !movieId.startsWith("ch_")
+    var controlsVisible by remember { mutableStateOf(true) }
+    var interactionNonce by remember { mutableStateOf(0) }
+
     // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) —
     // сервер живёт ровно пока открыт этот оверлей, не дольше: DisposableEffect
     // на showCompanionQr стартует его при открытии и гарантированно
@@ -205,11 +221,25 @@ fun PlayerScreen(
     LaunchedEffect(uiState) {
         while (uiState is PlayerUiState.Ready) {
             currentPositionMs = viewModel.exoPlayer.currentPosition.coerceAtLeast(0L)
+            bufferedPositionMs = viewModel.exoPlayer.bufferedPosition.coerceAtLeast(0L)
             delay(500)
         }
     }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    val menuOpen = (uiState as? PlayerUiState.Ready)?.showPlaybackMenu == true
+    val holdForPause = overlaySettings.keepControlsWhenPaused && !isPlaying
+    LaunchedEffect(hideDelayMs, interactionNonce, isDpadSeekActive, menuOpen, showCompanionQr, holdForPause, uiState is PlayerUiState.Ready) {
+        controlsVisible = true
+        if (hideDelayMs <= 0 || uiState !is PlayerUiState.Ready) return@LaunchedEffect
+        if (isDpadSeekActive || menuOpen || showCompanionQr || holdForPause) return@LaunchedEffect
+        delay(hideDelayMs.toLong())
+        controlsVisible = false
+        // Если фокус был на кнопке капсулы, она исчезает вместе с капсулой —
+        // возвращаем фокус на корень, чтобы хоткеи (Left/Right/OK) продолжили работать.
+        focusRequester.safeRequestFocus()
+    }
 
     // Раньше Center/Left/Right обрабатывались здесь безусловно — даже когда
     // (после четвёртого раунда) фокус реально стоял на настоящей
@@ -237,6 +267,10 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onFocusChanged { rootHasFocus = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) interactionNonce++
+                false
+            }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val ready = uiState as? PlayerUiState.Ready ?: return@onKeyEvent false
@@ -268,6 +302,17 @@ fun PlayerScreen(
                     return@onKeyEvent true
                 }
                 if (event.key == Key.Menu) { viewModel.togglePlaybackMenu(); return@onKeyEvent true }
+                // Медиа-клавиши и CH+/CH− пультов — работают независимо от того,
+                // где сейчас фокус (капсула/видео), поэтому до проверки rootHasFocus.
+                when (event.key) {
+                    Key.MediaPlay -> { viewModel.exoPlayer.play(); return@onKeyEvent true }
+                    Key.MediaPause -> { viewModel.exoPlayer.pause(); return@onKeyEvent true }
+                    Key.MediaFastForward -> { if (movieId.startsWith("ch_")) return@onKeyEvent false; viewModel.seekForward(); seekToast = "+10 сек"; return@onKeyEvent true }
+                    Key.MediaRewind -> { if (movieId.startsWith("ch_")) return@onKeyEvent false; viewModel.seekBackward(); seekToast = "-10 сек"; return@onKeyEvent true }
+                    Key.ChannelUp -> { if (movieId.startsWith("ch_")) { viewModel.zapToNextChannel(); return@onKeyEvent true } else return@onKeyEvent false }
+                    Key.ChannelDown -> { if (movieId.startsWith("ch_")) { viewModel.zapToPreviousChannel(); return@onKeyEvent true } else return@onKeyEvent false }
+                    else -> {}
+                }
                 if (!rootHasFocus) return@onKeyEvent false
 
                 when (event.key) {
@@ -303,12 +348,10 @@ fun PlayerScreen(
                     // проверка внутри zapToNextChannel()/zapToPreviousChannel()
                     // в PlayerViewModel — здесь просто не мешаем обычной
                     // D-pad-навигации по фокусируемым элементам для VOD).
-                    Key.DirectionUp -> {
-                        if (movieId.startsWith("ch_")) { viewModel.zapToNextChannel(); true } else false
-                    }
-                    Key.DirectionDown -> {
-                        if (movieId.startsWith("ch_")) { viewModel.zapToPreviousChannel(); true } else false
-                    }
+                    // Решение Shadow (вариант Б): Up/Down НЕ заняты заппингом — они
+                    // двигают фокус по капсуле (субтитры/качество/скорость). Каналы
+                    // переключаются CH+/CH− (см. выше) и цифрами (ниже).
+                    Key.DirectionUp, Key.DirectionDown -> false
                     // Key.Menu и Key.Back обработаны выше безусловно (см.
                     // комментарии там) — сюда доходят, только если
                     // rootHasFocus, для остальных необработанных клавиш
@@ -351,7 +394,7 @@ fun PlayerScreen(
                     // Раньше — showControls, гасший через 3с бездействия
                     // (см. комментарий вверху файла, четвёртый раунд). Теперь
                     // капсула видна постоянно, пока экран в Ready.
-                    isVisible = true,
+                    isVisible = controlsVisible,
                     isPlaying = isPlaying,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
@@ -363,11 +406,24 @@ fun PlayerScreen(
                     onPreviousEpisode = { viewModel.playPreviousEpisode() },
                     onConnectPhone = { showCompanionQr = true },
                     isSeekActive = isDpadSeekActive,
+                    bufferedPositionMs = if (showBuffered) bufferedPositionMs else 0L,
                     subtitlesEnabled = state.subtitlesEnabled,
                     playbackSpeed = state.playbackSpeed,
                     onOpenMenuTab = { viewModel.openPlaybackMenu(it) },
                     modifier = Modifier.fillMaxSize()
                 )
+                // Тонкая полоска прогресса — видна только пока капсула спрятана
+                // (при постоянной капсуле у неё есть собственный прогресс-бар).
+                if (!controlsVisible && overlaySettings.showProgressStrip) {
+                    PlayerProgressStrip(
+                        positionMs = currentPositionMs,
+                        durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
+                        thickness = overlaySettings.progressStripDp.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        bufferedMs = if (showBuffered) bufferedPositionMs else 0L,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
                 if (state.showPlaybackMenu) {
                     PlaybackMenuOverlay(
                         tab = state.menuTab,
