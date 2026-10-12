@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
@@ -254,7 +255,7 @@ fun PhonePlayerScreen(
             ) {
                 Text(
                     text = activeAutoSubtitleText,
-                    color = Color.White,
+                    color = ZenithOnSurface,
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
@@ -370,18 +371,18 @@ private fun GestureIndicatorOverlay(indicator: GestureIndicator, modifier: Modif
     ) {
         when (indicator) {
             is GestureIndicator.Brightness -> {
-                Icon(Icons.Default.BrightnessHigh, null, tint = Color.White)
+                Icon(Icons.Default.BrightnessHigh, null, tint = ZenithOnSurface)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
-                Text("${(indicator.value * 100).roundToInt()}%", color = Color.White)
+                Text("${(indicator.value * 100).roundToInt()}%", color = ZenithOnSurface)
             }
             is GestureIndicator.Volume -> {
-                Icon(Icons.Default.VolumeUp, null, tint = Color.White)
+                Icon(Icons.Default.VolumeUp, null, tint = ZenithOnSurface)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
-                Text("${(indicator.value * 100).roundToInt()}%", color = Color.White)
+                Text("${(indicator.value * 100).roundToInt()}%", color = ZenithOnSurface)
             }
             is GestureIndicator.Seek -> {
                 val sign = if (indicator.deltaMs >= 0) "+" else "-"
-                Text("$sign${formatSeekMs(abs(indicator.deltaMs))}  →  ${formatSeekMs(indicator.targetMs)}", color = Color.White)
+                Text("$sign${formatSeekMs(abs(indicator.deltaMs))}  →  ${formatSeekMs(indicator.targetMs)}", color = ZenithOnSurface)
             }
         }
     }

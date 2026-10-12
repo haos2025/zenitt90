@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.cache
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -42,7 +43,7 @@ fun CacheManagementScreen(
             .verticalScroll(rememberScrollState())
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Управление кэшем", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Управление кэшем", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
@@ -96,7 +97,7 @@ private fun CacheCategoryRow(label: String, valueText: String, enabled: Boolean,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, color = Color.White)
+            Text(label, color = ZenithOnSurface)
             Text(valueText, color = ZenithPrimaryMuted, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.width(ZenithDimens.paddingSM))

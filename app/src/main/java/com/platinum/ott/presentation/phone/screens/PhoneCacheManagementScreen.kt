@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -95,7 +96,7 @@ private fun CacheCategoryCard(label: String, valueText: String, enabled: Boolean
         ) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.titleMedium)
-                Text(valueText, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text(valueText, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             Spacer(Modifier.width(ZenithDimens.paddingSM))
             OutlinedButton(onClick = onClear, enabled = enabled) { Text("Очистить") }

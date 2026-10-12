@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.sync
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Image
@@ -89,7 +91,7 @@ fun SyncPairingScreen(
         ) {
             Text(
                 "Подключите ещё одно своё устройство, чтобы видеть одно и то же избранное и историю просмотра на обоих.",
-                color = Color.White.copy(0.8f)
+                color = ZenithOnSurface.copy(0.8f)
             )
             Spacer(Modifier.height(ZenithDimens.paddingSM))
             // Раньше единственным индикатором того, что синхронизация вообще
@@ -101,12 +103,12 @@ fun SyncPairingScreen(
                 if (lastSyncedAtMs > 0)
                     "Последняя синхронизация: ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(lastSyncedAtMs))}"
                 else "Синхронизация ещё ни разу не выполнялась на этом устройстве",
-                color = if (lastSyncedAtMs > 0) ZenithSuccess else Color.Gray,
+                color = if (lastSyncedAtMs > 0) ZenithSuccess else ZenithOnSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(ZenithDimens.paddingS))
             when (val ms = manualSyncState) {
-                is RedeemUiState.Loading -> Text("Синхронизация...", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                is RedeemUiState.Loading -> Text("Синхронизация...", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 is RedeemUiState.Success -> Text("Синхронизировано только что", color = ZenithSuccess, style = MaterialTheme.typography.bodySmall)
                 is RedeemUiState.Error -> Text(ms.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 is RedeemUiState.Idle -> {}
@@ -116,9 +118,9 @@ fun SyncPairingScreen(
             }
             Spacer(Modifier.height(20.dp))
 
-            Text("На новом устройстве", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("На новом устройстве", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text("Введите код, показанный на уже настроенном устройстве:", color = Color.Gray)
+            Text("Введите код, показанный на уже настроенном устройстве:", color = ZenithOnSurfaceVariant)
             Spacer(Modifier.height(ZenithDimens.paddingS))
             OutlinedTextField(
                 value = enteredCode,
@@ -165,9 +167,9 @@ fun SyncPairingScreen(
             HorizontalDivider(color = Color.DarkGray)
             Spacer(Modifier.height(40.dp))
 
-            Text("На уже настроенном устройстве", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("На уже настроенном устройстве", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text("Покажите код здесь и введите его на новом устройстве:", color = Color.Gray)
+            Text("Покажите код здесь и введите его на новом устройстве:", color = ZenithOnSurfaceVariant)
             Spacer(Modifier.height(ZenithDimens.paddingM))
 
             when (val state = pairingState) {
@@ -179,7 +181,7 @@ fun SyncPairingScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text("Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}", color = Color.Gray)
+                    Text("Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}", color = ZenithOnSurfaceVariant)
                 }
                 is PairingUiState.Loading -> CircularProgressIndicator()
                 is PairingUiState.Error -> {
@@ -199,11 +201,11 @@ fun SyncPairingScreen(
             // между устройствами по локальной сети, без бэкенда, зато
             // переносит больше (настройки, плагины, список источников), не
             // только избранное и историю, как секции выше.
-            Text("Локальная синхронизация (без интернета)", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Локальная синхронизация (без интернета)", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(ZenithDimens.paddingS))
             Text(
                 "Избранное, история, настройки, источники и плагины — напрямую между устройствами в одной Wi-Fi сети. Оба устройства должны быть физически рядом.",
-                color = Color.Gray, style = MaterialTheme.typography.bodySmall
+                color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(ZenithDimens.paddingM))
 
@@ -219,20 +221,20 @@ fun SyncPairingScreen(
                         Spacer(Modifier.height(ZenithDimens.paddingS))
                         Text(
                             "Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}",
-                            color = Color.Gray
+                            color = ZenithOnSurfaceVariant
                         )
                         Spacer(Modifier.height(ZenithDimens.paddingM))
                         val bitmap = remember(state.qrContent) { generateLocalSyncQrBitmap(state.qrContent, 260) }
                         if (bitmap != null) {
                             Image(
                                 bitmap.asImageBitmap(), contentDescription = "QR-код",
-                                modifier = Modifier.size(260.dp).background(Color.White).padding(ZenithDimens.paddingS)
+                                modifier = Modifier.size(260.dp).background(ZenithOnSurface).padding(ZenithDimens.paddingS)
                             )
                         }
                         Spacer(Modifier.height(ZenithDimens.paddingM))
                         Text(
                             "На телефоне: «Синхронизация устройств» → «Сканировать QR с TV», затем введите код выше вручную.",
-                            color = Color.Gray, style = MaterialTheme.typography.bodySmall
+                            color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(Modifier.height(ZenithDimens.paddingS))
                         OutlinedButton(onClick = { localSyncViewModel.stopTv() }) { Text("Отмена") }
@@ -253,7 +255,7 @@ fun SyncPairingScreen(
                     }
                 }
             } else {
-                Text("Отсканируйте QR-код, показанный на TV в этом же разделе.", color = Color.Gray)
+                Text("Отсканируйте QR-код, показанный на TV в этом же разделе.", color = ZenithOnSurfaceVariant)
                 Spacer(Modifier.height(ZenithDimens.paddingS))
                 Button(onClick = onOpenLocalSyncScan) { Text("Сканировать QR с TV") }
             }

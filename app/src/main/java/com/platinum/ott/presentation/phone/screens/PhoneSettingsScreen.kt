@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.BorderStroke
@@ -69,7 +71,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     LaunchedEffect(Unit) { viewModel.refreshStatusRows() }
 
     Column(Modifier.padding(padding).background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM).verticalScroll(rememberScrollState())) {
-        Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+        Text("Настройки", style = MaterialTheme.typography.headlineLarge, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingL))
 
         SectionHeader("Плагины", Icons.Outlined.Extension)
@@ -165,7 +167,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
             var selectedQuality by remember { mutableStateOf(qualityPrefs.getSelectedQuality() ?: "Авто") }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Качество по умолчанию", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Качество по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Button(onClick = {
                     val next = qualityOptions[(qualityOptions.indexOf(selectedQuality) + 1) % qualityOptions.size]
                     if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
@@ -176,7 +178,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             val subtitlePrefs = remember { SubtitlePreferences(context) }
             var showSubsByDefault by remember { mutableStateOf(subtitlePrefs.getShowByDefault()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Субтитры по умолчанию", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Субтитры по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = showSubsByDefault, onCheckedChange = {
                     showSubsByDefault = it
                     subtitlePrefs.setShowByDefault(it)
@@ -188,10 +190,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             var preferAccuracy by remember { mutableStateOf(subtitlePrefs.getPreferLocalAccuracy()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Автосубтитры (офлайн)", color = Color.White)
+                    Text("Автосубтитры (офлайн)", color = ZenithOnSurface)
                     Text(
                         if (preferAccuracy) "Точность" else "Скорость",
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = ZenithOnSurface.copy(alpha = 0.6f),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -214,25 +216,25 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             val notifPrefs = remember { com.platinum.ott.core.NotificationPreferences(context) }
             var newEpisodesEnabled by remember { mutableStateOf(notifPrefs.isNewEpisodesEnabled()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Новые серии (избранные сериалы)", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Новые серии (избранные сериалы)", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = newEpisodesEnabled, onCheckedChange = { newEpisodesEnabled = it; notifPrefs.setNewEpisodesEnabled(it) })
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Новый контент", color = Color.Gray, modifier = Modifier.weight(1f))
-                Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text("Новый контент", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("Скоро", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             CardDivider()
             var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
             var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
             var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Тихий режим", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Тихий режим", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = quietEnabled, onCheckedChange = { quietEnabled = it; notifPrefs.setQuietHoursEnabled(it) })
             }
             if (quietEnabled) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$quietStart:00–$quietEnd:00", color = Color.Gray, modifier = Modifier.weight(1f))
+                    Text("$quietStart:00–$quietEnd:00", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
@@ -251,7 +253,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             val timeoutOptions = listOf(10, 15, 20, 30)
             var timeoutSeconds by remember { mutableStateOf(networkPrefs.getTimeoutSeconds()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Таймаут запроса", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Таймаут запроса", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Button(onClick = {
                     val idx = timeoutOptions.indexOf(timeoutSeconds).let { if (it == -1) 0 else it }
                     timeoutSeconds = timeoutOptions[(idx + 1) % timeoutOptions.size]
@@ -263,7 +265,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
             var maxMobileQuality by remember { mutableStateOf(qualityPrefsNet.getMaxQualityOnMobile()) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Макс. качество на моб. данных", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Макс. качество на моб. данных", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Button(onClick = {
                     val idx = mobileQualityOptions.indexOf(maxMobileQuality).let { if (it == -1) 0 else it }
                     maxMobileQuality = mobileQualityOptions[(idx + 1) % mobileQualityOptions.size]
@@ -282,16 +284,10 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // проекте) — отдельная большая задача, не в этом заходе.
         SectionHeader("Интерфейс", Icons.Outlined.Palette)
         SettingsCard {
-            val darkTheme by viewModel.darkThemeFlow.collectAsState()
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Тёмная тема", color = Color.White, modifier = Modifier.weight(1f))
-                Switch(checked = darkTheme, onCheckedChange = { viewModel.setDarkTheme(it) })
-            }
-            CardDivider()
             val overlay by viewModel.playerOverlay.collectAsState()
             var delayMenu by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Автоскрытие управления плеера", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Автоскрытие управления плеера", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Box {
                     TextButton(onClick = { delayMenu = true }) { Text(formatControlsHideDelay(overlay.hideDelayMs ?: 3000)) }
                     DropdownMenu(expanded = delayMenu, onDismissRequest = { delayMenu = false }) {
@@ -306,22 +302,22 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Не скрывать на паузе", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Не скрывать на паузе", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = overlay.keepControlsWhenPaused, onCheckedChange = { viewModel.setKeepControlsWhenPaused(it) })
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Полоска прогресса", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Полоска прогресса", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = overlay.showProgressStrip, onCheckedChange = { viewModel.setShowProgressStrip(it) })
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Показывать прогрузку", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Показывать прогрузку", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 Switch(checked = overlay.showBuffered, onCheckedChange = { viewModel.setShowBuffered(it) })
             }
             if (overlay.showProgressStrip) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Толщина", color = Color.White, modifier = Modifier.weight(1f))
+                    Text("Толщина", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                     PROGRESS_STRIP_DP_OPTIONS.forEach { dp ->
                         FilterChip(
                             selected = overlay.progressStripDp == dp,
@@ -334,8 +330,8 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
             }
             CardDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Язык", color = Color.Gray, modifier = Modifier.weight(1f))
-                Text("Скоро", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text("Язык", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("Скоро", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
@@ -348,7 +344,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // первое — уже отдельный экран выше ("Кэш"), второе — понятие
         // одного аккаунта удалено вместе с AuthRepository, см.
         // SettingsViewModel.kt.
-        Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = Color.Gray, letterSpacing = 1.5.sp)
+        Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         OutlinedButton(
             onClick = { viewModel.runOtaUpdate() },
@@ -417,7 +413,7 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = ZenithShapeMedium,
         colors = CardDefaults.cardColors(containerColor = ZenithSurfaceVariant.copy(alpha = 0.5f)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(1.dp, ZenithOnSurface.copy(alpha = 0.08f))
     ) {
         Column(Modifier.padding(ZenithDimens.paddingM), content = content)
     }
@@ -425,7 +421,7 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun CardDivider() {
-    HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = ZenithDimens.paddingSM))
+    HorizontalDivider(color = ZenithOnSurface.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = ZenithDimens.paddingSM))
 }
 
 // Карточка-переход (Плагины/Источники/Синхронизация/Телефон-компаньон/Кэш) —
@@ -440,14 +436,14 @@ private fun NavCard(title: String, status: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = ZenithShapeMedium,
         colors = CardDefaults.cardColors(containerColor = ZenithSurfaceVariant.copy(alpha = 0.5f)),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(1.dp, ZenithOnSurface.copy(alpha = 0.08f))
     ) {
         Row(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                Text(status, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+                Text(status, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray)
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ZenithOnSurfaceVariant)
         }
     }
 }

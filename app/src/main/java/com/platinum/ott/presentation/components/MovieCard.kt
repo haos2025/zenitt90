@@ -1,8 +1,13 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -17,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -27,61 +33,61 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.domain.model.Movie
+import com.platinum.ott.presentation.screens.home.isPlaylistSourced
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.ui.theme.ZenithDurationShort
 import com.platinum.ott.ui.theme.ZenithEasingStandard
-import com.platinum.ott.ui.theme.ZenithFocusContainerActive
+import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 @Composable
 fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    MovieCard(title = movie.title, poster = movie.poster, year = movie.year, onClick = onClick, modifier = modifier)
+    MovieCard(
+        title = movie.title, poster = movie.poster, year = movie.year, onClick = onClick, modifier = modifier,
+        rating = movie.rating.takeIf { it > 0.0 },
+        // Логотипы из плейлистов (широкие/квадратные) вписываем целиком, настоящие постеры — по карточке.
+        contentScale = if (movie.isPlaylistSourced) ContentScale.Fit else ContentScale.Crop
+    )
 }
 
+/**
+ * Карточка фильма. РЕДИЗАЙН: постер целиком, без постоянной чёрной плашки.
+ * На TV подпись (название, год, рейтинг) показывается только в фокусе, вокруг
+ * — акцентная рамка; на телефоне фокуса нет, поэтому подпись видна всегда, но
+ * мягким градиентом, а не сплошной плашкой. Без постера подпись всегда видна.
+ * progress (0..1) — тонкая полоса просмотра внизу ("Продолжить просмотр").
+ */
 @Composable
-fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun MovieCard(
+    title: String, poster: String, year: Int, onClick: () -> Unit, modifier: Modifier = Modifier,
+    rating: Double? = null, progress: Float? = null, contentScale: ContentScale = ContentScale.Crop
+) {
     val cardWidth = ZenithDimens.cardWidth
     val cardHeight = ZenithDimens.cardHeight
     val context = LocalContext.current
     val density = LocalDensity.current
+    val isTv = remember { isTV(context) }
 
-    // Переводим dp карточки в физические пиксели под плотность ЭТОГО экрана
-    // (телефон, планшет, TV на 1080p/4K — везде своя плотность) и просим у Coil
-    // именно такой размер, а не полагаемся только на неявный resolver.
-    // Coil сам подберёт ближайший подходящий downsample при декодировании —
-    // важно для сеточных списков на TV, где одновременно на экране десятки карточек.
+    // Запрашиваем у Coil размер под физические пиксели этого экрана — важно
+    // для сеток на TV, где одновременно десятки карточек.
     val widthPx = with(density) { cardWidth.roundToPx() }
     val heightPx = with(density) { cardHeight.roundToPx() }
-
     val request = remember(poster, widthPx, heightPx) {
-        ImageRequest.Builder(context)
-            .data(poster)
-            .size(widthPx, heightPx)
-            .crossfade(true)
-            .build()
+        ImageRequest.Builder(context).data(poster).size(widthPx, heightPx).crossfade(true).build()
     }
 
-    // PROMPT_DESIGN_SYSTEM.md, подзадача 3. Раньше у этой карточки не
-    // было вообще никакой D-pad-подсветки на TV (ни смены фона, ни
-    // чего-либо ещё) — MovieCard использует обычный
-    // androidx.compose.material3.Card, который сам по себе ничего не
-    // подсвечивает при фокусе пультом. Добавляю оба эффекта сразу
-    // (решение согласовано с Shadow): скейл 1f→1.06f — новый эффект,
-    // плюс полупрозрачная подсветка ZenithFocusContainerActive — тот же
-    // паттерн, что уже используется в ChannelsScreen.kt/EpgGridScreen.kt/
-    // SourcesScreen.kt и других экранах. Токены длительности/easing —
-    // из Motion.kt (подзадача 2), а не новое магическое число.
-    //
-    // Компонент общий для TV и телефона (см. CatalogRow.kt/
-    // PhoneCatalogRow.kt и другие места использования) — на телефоне
-    // isFocused обычным тапом не выставляется (там нет фокуса пультом),
-    // так что оба эффекта на практике проявляются только на TV.
     var isFocused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.06f else 1f,
         animationSpec = tween(ZenithDurationShort, easing = ZenithEasingStandard),
         label = "movieCardFocusScale"
     )
+    val ringAlpha by animateFloatAsState(
+        targetValue = if (isFocused) 1f else 0f,
+        animationSpec = tween(ZenithDurationShort, easing = ZenithEasingStandard),
+        label = "movieCardFocusRing"
+    )
+    val showCaption = !isTv || isFocused || poster.isBlank()
 
     Card(
         onClick = onClick,
@@ -97,31 +103,36 @@ fun MovieCard(title: String, poster: String, year: Int, onClick: () -> Unit, mod
             AsyncImage(
                 model = request,
                 contentDescription = title,
-                // Раньше здесь был Crop — для настоящих постеров фильмов
-                // (портретное соотношение сторон, как и у самой карточки)
-                // разницы с Fit не видно вообще. А для широких/квадратных
-                // лого каналов из M3U/Xtream (Kiss Kiss TV HD, CHD-TV Rock
-                // HD и т.п.) Crop обрезал текст лого по обоим краям —
-                // видно на скриншоте. Fit показывает лого целиком, с
-                // отступами по бокам на фоне карточки, вместо нечитаемого
-                // обрезанного текста.
-                contentScale = ContentScale.Fit,
+                contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
             )
-            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(8.dp)) {
-                Column {
-                    Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (year > 0) Text("$year", color = Color.Gray)
+            AnimatedVisibility(
+                visible = showCaption,
+                enter = fadeIn(tween(ZenithDurationShort)),
+                exit = fadeOut(tween(ZenithDurationShort)),
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                        .padding(start = 8.dp, end = 8.dp, top = 24.dp, bottom = 10.dp)
+                ) {
+                    Column {
+                        Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = if (isTv) 2 else 1, overflow = TextOverflow.Ellipsis)
+                        val meta = listOfNotNull(year.takeIf { it > 0 }?.toString(), rating?.let { "★ %.1f".format(it) }).joinToString("  ·  ")
+                        if (meta.isNotEmpty()) Text(meta, color = ZenithOnSurface.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
-            // Подсветка фокуса поверх всей карточки (включая постер и
-            // плашку с названием) — рисуется последней, чтобы быть видной
-            // и там, где AsyncImage непрозрачен, а не только по краям.
-            if (isFocused) {
-                Box(Modifier.fillMaxSize().background(ZenithFocusContainerActive))
+            if (progress != null && progress > 0f) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(ZenithOnSurface.copy(alpha = 0.25f))) {
+                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+                }
             }
+            // Акцентная рамка фокуса — поверх всей карточки, плавно появляется.
+            Box(Modifier.fillMaxSize().border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = ringAlpha), ZenithShapeSmall))
         }
     }
 }

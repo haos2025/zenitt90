@@ -1,9 +1,14 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -95,19 +100,26 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                     )
                     Spacer(Modifier.height(ZenithDimens.paddingM))
                 }
-                Text(state.movie.title, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                Text(state.movie.title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = ZenithOnSurface)
                 state.metadata?.let { m ->
-                    // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1,
-                    // тот же приём, что в DetailScreen.kt (TV): пропускаем
-                    // пустые части, duration у части источников — пустая
-                    // строка по умолчанию.
-                    val metaLine = listOfNotNull(
+                    // Год / длительность / рейтинг / жанры — «таблетки», как на TV
+                    // (DetailScreen.kt). Пустые части пропускаем; ряд прокручивается
+                    // по горизонтали, чтобы длинный список жанров не ломал экран.
+                    val pills = listOfNotNull(
                         state.movie.year.takeIf { it > 0 }?.toString(),
-                        state.movie.duration.takeIf { it.isNotBlank() },
-                        m.genres?.takeIf { it.isNotBlank() }
-                    ).joinToString(" · ")
-                    if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
-                    m.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
+                        state.movie.duration.takeIf { it.isNotBlank() }
+                    )
+                    val genres = m.genres.orEmpty().split(',', '/').map { it.trim() }.filter { it.isNotEmpty() }.take(4)
+                    if (pills.isNotEmpty() || m.voteAverage != null || genres.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.padding(top = ZenithDimens.paddingS).horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+                        ) {
+                            m.voteAverage?.let { PhoneDetailPill("★ $it", ZenithWarning, ZenithWarning.copy(alpha = 0.16f)) }
+                            pills.forEach { PhoneDetailPill(it, ZenithOnSurface, ZenithSurfaceVariant) }
+                            genres.forEach { PhoneDetailPill(it, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) }
+                        }
+                    }
                     m.overview?.let { overview ->
                         // Тот же паттерн, что и в DetailScreen.kt (TV) —
                         // клэмп в 4 строки + "Показать полностью"/"Свернуть",
@@ -119,7 +131,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                         var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
                         Text(
                             overview,
-                            color = Color.White.copy(0.8f),
+                            color = ZenithOnSurface.copy(0.8f),
                             modifier = Modifier.padding(top = ZenithDimens.paddingS),
                             maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
                             overflow = TextOverflow.Ellipsis,
@@ -178,4 +190,19 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
             }
         }
     }
+}
+
+/** Таблетка метаданных на экране фильма (год, длительность, рейтинг, жанр). */
+@Composable
+private fun PhoneDetailPill(text: String, textColor: Color, background: Color) {
+    Text(
+        text,
+        color = textColor,
+        maxLines = 1,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(background)
+            .padding(horizontal = 12.dp, vertical = 5.dp)
+    )
 }

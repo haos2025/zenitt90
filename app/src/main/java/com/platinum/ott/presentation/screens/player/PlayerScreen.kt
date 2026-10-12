@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.player
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -378,7 +379,7 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
         when (val state = uiState) {
-            is PlayerUiState.Loading -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)), Alignment.Center) { Text("Подготовка...", color = Color.White) }
+            is PlayerUiState.Loading -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)), Alignment.Center) { Text("Подготовка...", color = ZenithOnSurface) }
             is PlayerUiState.Error -> Box(Modifier.fillMaxSize().background(Color.Black.copy(0.8f)), Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
@@ -483,7 +484,7 @@ fun PlayerScreen(
             ) {
                 Text(
                     text = activeAutoSubtitleText,
-                    color = Color.White,
+                    color = ZenithOnSurface,
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
@@ -507,7 +508,7 @@ fun PlayerScreen(
                     .background(ZenithSurface.copy(alpha = 0.85f))
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {
-                Text(text = seekToast ?: "", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(text = seekToast ?: "", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
             }
         }
         // PROMPT_EPG.md, подзадача 6 — набираемый номер канала, тот же
@@ -525,7 +526,7 @@ fun PlayerScreen(
                     .background(ZenithSurface.copy(alpha = 0.85f))
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {
-                Text(text = "Канал: $zapBuffer", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text(text = "Канал: $zapBuffer", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
             }
         }
         // РЕДИЗАЙН (заппинг) — сам баннер переключения, с логотипом/номером,
@@ -548,7 +549,7 @@ fun PlayerScreen(
                         .padding(ZenithDimens.paddingM)
                 ) {
                     Box(
-                        modifier = Modifier.size(52.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
+                        modifier = Modifier.size(52.dp).clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (info.channelLogo != null) {
@@ -557,14 +558,14 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxSize(0.75f)
                             )
                         } else {
-                            Text("${info.channelNumber}", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Text("${info.channelNumber}", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
                         }
                     }
                     Spacer(Modifier.width(ZenithDimens.paddingM))
                     Column(Modifier.weight(1f)) {
-                        Text(info.channelName, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(info.channelName, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (info.currentProgramTitle != null) {
-                            Text(info.currentProgramTitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(info.currentProgramTitle, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (info.currentProgramProgress != null) {
                                 LinearProgressIndicator(
                                     progress = { info.currentProgramProgress },
@@ -574,12 +575,12 @@ fun PlayerScreen(
                             if (info.nextProgramTitle != null) {
                                 Text(
                                     "Далее: ${info.nextProgramTitle}",
-                                    style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f),
                                     maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }
                         } else {
-                            Text("Нет данных о программе передач", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                            Text("Нет данных о программе передач", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
                         }
                     }
                 }

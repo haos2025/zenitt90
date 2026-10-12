@@ -33,9 +33,6 @@ interface ChannelStreamDao {
     @Query("SELECT * FROM channel_streams WHERE channelId IN (:channelIds) ORDER BY priority ASC")
     suspend fun getByChannelIds(channelIds: List<String>): List<ChannelStreamEntity>
 
-    @Query("SELECT COUNT(*) FROM channel_streams WHERE channelId = :channelId")
-    suspend fun countByChannelId(channelId: String): Int
-
     @Query("SELECT * FROM channel_streams WHERE sourceId = :sourceId")
     suspend fun getBySourceId(sourceId: String): List<ChannelStreamEntity>
 

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.sources
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -81,7 +82,7 @@ fun SourcesScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Источники", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Источники", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
@@ -90,7 +91,7 @@ fun SourcesScreen(
 
         if (sources.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("Пока нет ни одного источника", color = Color.White.copy(alpha = 0.6f))
+                Text("Пока нет ни одного источника", color = ZenithOnSurface.copy(alpha = 0.6f))
             }
         } else {
             LazyColumn(
@@ -188,18 +189,18 @@ private fun SourceCard(
 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.label, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    Text(item.label, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     Text(
                         if (item.type == "m3u") "M3U" else "Xtream",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.5f)
+                        color = ZenithOnSurface.copy(alpha = 0.5f)
                     )
                 }
                 Text(
                     "${item.contentCount} в каталоге • ${formatLastRefreshed(item.lastRefreshedAt)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f)
+                    color = ZenithOnSurface.copy(alpha = 0.5f)
                 )
                 if (item.lastRefreshStatus != null && item.lastRefreshStatus != "ok") {
                     Text("⚠ ${item.lastRefreshStatus}", style = MaterialTheme.typography.bodySmall, color = ZenithError)
@@ -238,7 +239,7 @@ private fun SourceCard(
 }
 
 private fun statusColor(enabled: Boolean, lastRefreshStatus: String?): Color = when {
-    !enabled -> Color.White.copy(alpha = 0.3f)
+    !enabled -> ZenithOnSurface.copy(alpha = 0.3f)
     lastRefreshStatus == null -> ZenithWarning
     lastRefreshStatus == "ok" -> ZenithSuccess
     else -> ZenithError
@@ -268,6 +269,6 @@ private fun TvIconButton(onClick: () -> Unit, contentDescription: String, icon: 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription, tint = Color.White)
+        Icon(icon, contentDescription, tint = ZenithOnSurface)
     }
 }

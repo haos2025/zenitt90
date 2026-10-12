@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.history
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +46,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
         NavSidebar(navController)
         Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("История просмотров", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+                Text("История просмотров", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 // Кнопка видима всегда (даже на пустой истории её проще спрятать
                 // за history.isNotEmpty(), но пульту TV нужна предсказуемая
                 // раскладка фокуса — на пустом списке она просто не нужна,
@@ -63,7 +65,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                 // Тот же принцип пустого состояния, что уже сделан в
                 // SeriesListScreen.kt для пустого списка сериалов — обычный
                 // серый Text, без отдельного компонента.
-                Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = Color.Gray)
+                Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = ZenithOnSurfaceVariant)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     items(history, key = { it.contentId }) { entry ->
@@ -104,8 +106,8 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                                 )
                                 Spacer(Modifier.width(ZenithDimens.paddingSM))
                                 Column(Modifier.weight(1f)) {
-                                    Text(entry.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                    Text(if (entry.completed) "Просмотрено" else "Прогресс: ${(progress * 100).toInt()}%", color = Color.Gray)
+                                    Text(entry.title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
+                                    Text(if (entry.completed) "Просмотрено" else "Прогресс: ${(progress * 100).toInt()}%", color = ZenithOnSurfaceVariant)
                                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS))
                                 }
                             }

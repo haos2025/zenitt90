@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,7 +60,7 @@ fun CatalogRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = if (isPlaylistRow) ZenithSecondary else Color.White
+                color = if (isPlaylistRow) ZenithSecondary else ZenithOnSurface
             )
         }
 
@@ -80,7 +81,9 @@ fun CatalogRow(
                     title    = movie.title,
                     year     = movie.year,
                     poster = resolvedPosters[movie.id] ?: movie.poster,
-                    onClick  = { onMovieClick(movie.id) }
+                    onClick  = { onMovieClick(movie.id) },
+                    rating = movie.rating.takeIf { it > 0.0 },
+                    contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop
                 )
             }
         }

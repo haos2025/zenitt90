@@ -17,11 +17,6 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): ChannelEntity?
 
-    // Для автосопоставления по tvg-id при обработке нового/обновлённого
-    // источника — см. подзадачу "Сопоставление".
-    @Query("SELECT * FROM channels WHERE tvgId = :tvgId LIMIT 1")
-    suspend fun getByTvgId(tvgId: String): ChannelEntity?
-
     // PROMPT_EPG.md, подзадача 6 (заппинг по номерам) — только среди
     // подписанных: набирая номер на пульте, пользователь дозванивается до
     // канала из СВОЕГО списка, не до любого канала каталога панели.

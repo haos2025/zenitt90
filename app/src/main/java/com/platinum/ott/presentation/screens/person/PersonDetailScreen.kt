@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.person
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -101,12 +103,12 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                         error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
                                     )
                                 } else {
-                                    Icon(Icons.Default.Person, contentDescription = profile.name, tint = Color.Gray,
+                                    Icon(Icons.Default.Person, contentDescription = profile.name, tint = ZenithOnSurfaceVariant,
                                         modifier = Modifier.align(Alignment.Center).size(96.dp))
                                 }
                             }
                             Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), modifier = Modifier.weight(1f)) {
-                                Text(profile.name, style = MaterialTheme.typography.displaySmall, color = Color.White)
+                                Text(profile.name, style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
                                 // Категоризированная инфа — каждое поле своей
                                 // строкой, а не одной "простынёй" через " · ",
                                 // как metaLine у фильма: у актёра это разнородные
@@ -115,9 +117,9 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                 profile.department?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                                 profile.birthday?.let { birthday ->
                                     val line = if (profile.deathday != null) "$birthday — ${profile.deathday}" else birthday
-                                    Text("Дата рождения: $line", color = Color.White.copy(0.8f))
+                                    Text("Дата рождения: $line", color = ZenithOnSurface.copy(0.8f))
                                 }
-                                profile.placeOfBirth?.let { Text("Место рождения: $it", color = Color.White.copy(0.8f)) }
+                                profile.placeOfBirth?.let { Text("Место рождения: $it", color = ZenithOnSurface.copy(0.8f)) }
                                 profile.biography?.let { bio ->
                                     // Тот же line-clamp паттерн, что у overview
                                     // фильма (подзадача 3) — 6 строк вместо 4:
@@ -127,7 +129,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                     var isBioExpanded by remember(personId) { mutableStateOf(false) }
                                     var isBioExpandable by remember(personId) { mutableStateOf(false) }
                                     Text(
-                                        bio, color = Color.White.copy(0.8f), style = MaterialTheme.typography.bodyLarge,
+                                        bio, color = ZenithOnSurface.copy(0.8f), style = MaterialTheme.typography.bodyLarge,
                                         maxLines = if (isBioExpanded) Int.MAX_VALUE else 6,
                                         overflow = TextOverflow.Ellipsis,
                                         onTextLayout = { if (!isBioExpanded) isBioExpandable = it.hasVisualOverflow }

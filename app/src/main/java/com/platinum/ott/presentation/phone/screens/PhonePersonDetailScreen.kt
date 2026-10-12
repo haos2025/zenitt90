@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,23 +87,23 @@ fun PhonePersonDetailScreen(personId: Int, navController: NavHostController, vie
                             error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
                         )
                     } else {
-                        Icon(Icons.Default.Person, contentDescription = profile.name, tint = Color.Gray,
+                        Icon(Icons.Default.Person, contentDescription = profile.name, tint = ZenithOnSurfaceVariant,
                             modifier = Modifier.align(Alignment.Center).size(72.dp))
                     }
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
-                Text(profile.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                Text(profile.name, style = MaterialTheme.typography.headlineLarge, color = ZenithOnSurface)
                 profile.department?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 profile.birthday?.let { birthday ->
                     val line = if (profile.deathday != null) "$birthday — ${profile.deathday}" else birthday
-                    Text("Дата рождения: $line", color = Color.White.copy(0.8f))
+                    Text("Дата рождения: $line", color = ZenithOnSurface.copy(0.8f))
                 }
-                profile.placeOfBirth?.let { Text("Место рождения: $it", color = Color.White.copy(0.8f)) }
+                profile.placeOfBirth?.let { Text("Место рождения: $it", color = ZenithOnSurface.copy(0.8f)) }
                 profile.biography?.let { bio ->
                     var isBioExpanded by remember(personId) { mutableStateOf(false) }
                     var isBioExpandable by remember(personId) { mutableStateOf(false) }
                     Text(
-                        bio, color = Color.White.copy(0.8f),
+                        bio, color = ZenithOnSurface.copy(0.8f),
                         modifier = Modifier.padding(top = ZenithDimens.paddingS),
                         maxLines = if (isBioExpanded) Int.MAX_VALUE else 6,
                         overflow = TextOverflow.Ellipsis,

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -33,8 +34,8 @@ private fun rememberShimmerBrush(): Brush {
         animationSpec = infiniteRepeatable(animation = tween(1100, easing = LinearEasing), repeatMode = RepeatMode.Restart),
         label = "skeleton-translate"
     )
-    val base = Color.White.copy(alpha = 0.06f)
-    val highlight = Color.White.copy(alpha = 0.16f)
+    val base = ZenithOnSurface.copy(alpha = 0.06f)
+    val highlight = ZenithOnSurface.copy(alpha = 0.16f)
     return Brush.linearGradient(
         colors = listOf(base, highlight, base),
         start = Offset(translate - 300f, 0f),

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -120,14 +121,14 @@ private fun ContinueWatchingCell(entry: WatchHistoryEntity, onClick: () -> Unit,
                 )
                 Spacer(Modifier.width(ZenithDimens.paddingS))
                 Column(Modifier.weight(1f)) {
-                    Text("Продолжить просмотр", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                    Text(entry.title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Продолжить просмотр", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.7f))
+                    Text(entry.title, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (entry.durationMs > 0) {
                         LinearProgressIndicator(
                             progress = { (entry.positionMs.toFloat() / entry.durationMs.toFloat()).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(3.dp),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = Color.White.copy(alpha = 0.2f)
+                            trackColor = ZenithOnSurface.copy(alpha = 0.2f)
                         )
                     }
                 }
@@ -156,11 +157,11 @@ private fun NewEpisodeCell(schedule: SeriesScheduleEntity, onClick: () -> Unit, 
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().padding(ZenithDimens.paddingS), verticalArrangement = Arrangement.Center) {
                 Text("Новая серия", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Text(schedule.seriesName, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(schedule.seriesName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     "Сезон ${schedule.seasonNum}, серия ${schedule.episodeNum}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = ZenithOnSurface.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

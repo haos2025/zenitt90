@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -60,17 +62,17 @@ fun PhoneLocalSyncScreen(navController: NavHostController, viewModel: LocalSyncV
     Column(Modifier.fillMaxSize().background(Color.Black), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         when (val s = state) {
             is ScanState.Scanning -> {
-                Text("Сканирование QR-кода", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                Text("Сканирование QR-кода", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(16.dp))
-                Text("Наведите камеру на QR-код на экране TV", color = Color.Gray)
+                Text("Наведите камеру на QR-код на экране TV", color = ZenithOnSurfaceVariant)
             }
             is ScanState.Connected -> {
                 var code by remember { mutableStateOf("") }
                 when (val ps = phoneState) {
                     is LocalSyncPhoneState.Idle, is LocalSyncPhoneState.Error -> {
-                        Text("TV найден", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                        Text("TV найден", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                         Spacer(Modifier.height(8.dp))
-                        Text("Введите код, показанный на TV рядом с QR-кодом:", color = Color.Gray)
+                        Text("Введите код, показанный на TV рядом с QR-кодом:", color = ZenithOnSurfaceVariant)
                         Spacer(Modifier.height(16.dp))
                         OutlinedTextField(
                             value = code,
@@ -93,15 +95,15 @@ fun PhoneLocalSyncScreen(navController: NavHostController, viewModel: LocalSyncV
                     is LocalSyncPhoneState.Connecting -> {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(16.dp))
-                        Text("Синхронизация...", color = Color.Gray)
+                        Text("Синхронизация...", color = ZenithOnSurfaceVariant)
                     }
                     is LocalSyncPhoneState.Success -> {
-                        Text("✓ Готово", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                        Text("✓ Готово", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                         Spacer(Modifier.height(16.dp))
                         Text(
                             "Перенесено: ${ps.summary.favorites} избранного, ${ps.summary.history} записей истории, " +
                                 "${ps.summary.sources} источников, ${ps.summary.plugins} плагинов.",
-                            color = Color.Gray
+                            color = ZenithOnSurfaceVariant
                         )
                         Spacer(Modifier.height(24.dp))
                         Button(onClick = { navController.popBackStack() }) { Text("Готово") }

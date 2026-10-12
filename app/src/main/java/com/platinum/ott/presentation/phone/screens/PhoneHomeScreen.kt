@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
@@ -173,7 +174,7 @@ private fun PhoneContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick:
         Text(
             text = "Продолжить просмотр",
             style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
+            color = ZenithOnSurface,
             modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
         )
         LazyRow(
@@ -182,7 +183,10 @@ private fun PhoneContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick:
             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
         ) {
             items(entries, key = { it.contentId }) { entry ->
-                MovieCard(title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) })
+                MovieCard(
+                    title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) },
+                    progress = if (entry.durationMs > 0) (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f) else null
+                )
             }
         }
     }

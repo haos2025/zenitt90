@@ -9,8 +9,6 @@ import kotlinx.coroutines.flow.Flow
 interface FavoritesDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavorite(fav: FavoriteEntity)
-    @Delete
-    suspend fun deleteFavorite(fav: FavoriteEntity)
     @Query("DELETE FROM favorites WHERE contentId = :contentId")
     suspend fun deleteByContentId(contentId: String): Int
     @Query("SELECT * FROM favorites ORDER BY sortOrder ASC, addedAt DESC")
@@ -27,10 +25,6 @@ interface FavoritesDao {
     fun getAllFolders(): Flow<List<FolderEntity>>
     @Query("UPDATE favorites SET folderId = :folderId WHERE contentId = :contentId")
     suspend fun moveToFolder(contentId: String, folderId: Long?): Int
-    @Query("UPDATE favorites SET sortOrder = :sortOrder WHERE id = :id")
-    suspend fun updateSortOrder(id: Long, sortOrder: Int): Int
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAllFavorites(favs: List<FavoriteEntity>)
     @Query("SELECT * FROM favorites WHERE contentId = :contentId LIMIT 1")
     suspend fun getFavoriteByContentId(contentId: String): FavoriteEntity?
     // ФИКС (аудит): SyncRepositoryImpl.sync() раньше отправлял ВСЁ
@@ -45,10 +39,6 @@ interface FavoritesDao {
     suspend fun setAnime(contentId: String, isAnime: Boolean): Int
     @Query("DELETE FROM favorites WHERE folderId = :folderId")
     suspend fun deleteFavoritesInFolder(folderId: Long): Int
-    // Решено при обсуждении задачи "папки в избранном": при удалении папки
-    // удалять и её содержимое (не переносить в "без папки"). @Transaction
-    // на default-методе интерфейса — стандартный паттерн Room для нескольких
-    // запросов, которые должны либо оба применяться, либо ни один.
     // Ручной порядок избранного. updatedAt обновляется, чтобы новый порядок
     // попал в инкрементальную синхронизацию (SyncRepositoryImpl берёт getSince(updatedAt)).
     @Query("UPDATE favorites SET sortOrder = :sortOrder, updatedAt = :updatedAt WHERE id = :id")
@@ -64,6 +54,10 @@ interface FavoritesDao {
     @Query("UPDATE folders SET color = :color WHERE id = :id")
     suspend fun setFolderColor(id: Long, color: String): Int
 
+    // Решено при обсуждении задачи "папки в избранном": при удалении папки
+    // удалять и её содержимое (не переносить в "без папки"). @Transaction
+    // на default-методе интерфейса — стандартный паттерн Room для нескольких
+    // запросов, которые должны либо оба применяться, либо ни один.
     @Transaction
     suspend fun deleteFolderWithContents(folder: FolderEntity) {
         deleteFavoritesInFolder(folder.id)

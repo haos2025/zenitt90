@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.sources
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -109,7 +110,7 @@ fun AddSourceScreen(
             verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM),
             modifier = Modifier.align(Alignment.Center).width(520.dp)
         ) {
-            Text("Добавить источник", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            Text("Добавить источник", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
 
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 TabButton("M3U Плейлист", sourceType == SourceType.M3U) { sourceType = SourceType.M3U }
@@ -134,7 +135,7 @@ fun AddSourceScreen(
                         }
                         M3uMethod.QR -> {
                             OutlinedButton(onClick = { showCompanionQr = true }, modifier = Modifier.fillMaxWidth()) { Text("Показать QR для телефона") }
-                            if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = Color.White.copy(alpha = 0.5f))
+                            if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = ZenithOnSurface.copy(alpha = 0.5f))
                         }
                     }
                     Row(
@@ -144,11 +145,11 @@ fun AddSourceScreen(
                     ) {
                         Switch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
                         Column {
-                            Text("Это плейлист живых каналов", color = Color.White)
+                            Text("Это плейлист живых каналов", color = ZenithOnSurface)
                             Text(
                                 "Каналы попадут в раздел «Каналы», а не в общий каталог фильмов",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.5f)
+                                color = ZenithOnSurface.copy(alpha = 0.5f)
                             )
                         }
                     }
@@ -201,7 +202,7 @@ private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
             focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive
         )
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = if (selected) Color.White else Color.White.copy(alpha = 0.6f))
+        Text(label, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), color = if (selected) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.6f))
     }
 }
 
@@ -235,7 +236,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
             onClick = { isEditing = true },
             shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color.White.copy(alpha = 0.06f),
+                containerColor = ZenithOnSurface.copy(alpha = 0.06f),
                 focusedContainerColor = ZenithFocusContainerActive
             ),
             modifier = Modifier.fillMaxWidth()
@@ -243,7 +244,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
             val display = if (isPassword && value.isNotEmpty()) "•".repeat(value.length) else value
             Text(
                 if (value.isEmpty()) placeholder else display,
-                color = if (value.isEmpty()) Color.White.copy(alpha = 0.3f) else Color.White,
+                color = if (value.isEmpty()) ZenithOnSurface.copy(alpha = 0.3f) else ZenithOnSurface,
                 style = TextStyle(fontSize = 16.sp),
                 modifier = Modifier.padding(16.dp, 14.dp)
             )
@@ -255,7 +256,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
         }
         BasicTextField(
             value = value, onValueChange = onChange, singleLine = true,
-            textStyle = TextStyle(Color.White, 16.sp),
+            textStyle = TextStyle(ZenithOnSurface, 16.sp),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -263,10 +264,10 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
-                .background(Color.White.copy(alpha = 0.06f), ZenithShapeSmall)
+                .background(ZenithOnSurface.copy(alpha = 0.06f), ZenithShapeSmall)
                 .padding(16.dp, 14.dp)
                 .onFocusChanged { if (!it.isFocused) { isEditing = false; keyboardController?.hide() } },
-            decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(Color.White.copy(alpha = 0.3f), 16.sp)); it() }
+            decorationBox = { if (value.isEmpty()) Text(placeholder, style = TextStyle(ZenithOnSurface.copy(alpha = 0.3f), 16.sp)); it() }
         )
     }
 }

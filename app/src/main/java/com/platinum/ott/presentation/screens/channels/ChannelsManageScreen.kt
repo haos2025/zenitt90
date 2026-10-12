@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.channels
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -74,7 +76,7 @@ fun ChannelsManageScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Управление каналами", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Управление каналами", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             // Кнопка сама уважает бэкофф ChannelHealthChecker (isDue()) —
             // это не "перепроверить всё немедленно", а "не ждать до
             // ближайшего запуска ChannelHealthCheckWorker", см. комментарий
@@ -91,7 +93,7 @@ fun ChannelsManageScreen(
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(
                     "Пока нет каналов — добавьте M3U-источник живых каналов\nили Xtream-панель в Источниках",
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = ZenithOnSurface.copy(alpha = 0.6f)
                 )
             }
         } else {
@@ -162,13 +164,13 @@ private fun ChannelCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(56.dp, 36.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
+                Modifier.size(56.dp, 36.dp).clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (item.logo != null) {
                     AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp))
                 } else {
-                    Text("TV", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.4f))
+                    Text("TV", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.4f))
                 }
                 // Цветная точка health-check в углу превью — тот же приём,
                 // что statusColor в SourceCard (SourcesScreen.kt), только
@@ -187,10 +189,10 @@ private fun ChannelCard(
 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.canonicalName, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    Text(item.canonicalName, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
                     if (item.regionHint != null) {
                         Spacer(Modifier.width(ZenithDimens.paddingS))
-                        Text("(${item.regionHint})", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                        Text("(${item.regionHint})", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
                     }
                 }
                 Text(
@@ -200,7 +202,7 @@ private fun ChannelCard(
                         if (item.isMergeCandidate) append(" • не сопоставлен с другими источниками")
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (item.isMergeCandidate) ZenithWarning else Color.White.copy(alpha = 0.5f)
+                    color = if (item.isMergeCandidate) ZenithWarning else ZenithOnSurface.copy(alpha = 0.5f)
                 )
             }
 
@@ -231,7 +233,7 @@ private fun ChannelCard(
 private fun healthColor(status: String): Color = when (status) {
     "alive" -> ZenithSuccess
     "dead" -> ZenithError
-    else -> Color.Gray
+    else -> ZenithOnSurfaceVariant
 }
 
 // Дублирует TvIconButton из SourcesScreen.kt (тот private) — тот же
@@ -250,6 +252,6 @@ private fun ChannelIconButton(onClick: () -> Unit, contentDescription: String, i
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription, tint = Color.White)
+        Icon(icon, contentDescription, tint = ZenithOnSurface)
     }
 }

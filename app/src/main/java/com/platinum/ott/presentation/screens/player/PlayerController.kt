@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.player
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -143,7 +144,7 @@ fun PlayerController(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = title, style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    Text(text = title, style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface)
                     MenuIconButton(icon = Icons.Default.PhoneAndroid, contentDescription = "Подключить телефон", isActive = false, iconSize = 28.dp, onClick = onConnectPhone)
                 }
             }
@@ -158,7 +159,7 @@ fun PlayerController(
                     .fillMaxWidth(0.8f)
                     .clip(ZenithShapeLarge)
                     .background(ZenithSurface.copy(alpha = 0.92f))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
+                    .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                     .padding(horizontal = ZenithDimens.paddingXL, vertical = ZenithDimens.paddingM),
                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
             ) {
@@ -166,11 +167,11 @@ fun PlayerController(
                 // строкой, время под ним отдельной строкой) — экономит
                 // высоту капсулы на целую строку.
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                    Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.7f))
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     ProgressBar(currentMs = currentPositionMs, bufferedMs = bufferedPositionMs, durationMs = durationMs, isActive = isSeekActive, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(ZenithDimens.paddingS))
-                    Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
+                    Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.4f))
                 }
 
                 // Один ряд: слева — транспорт (play/pause, либо
@@ -261,16 +262,16 @@ private fun IconGlyphButton(
         modifier = Modifier.size(size),
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f),
+            containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else ZenithOnSurface.copy(alpha = 0.1f),
             focusedContainerColor = if (isPrimary) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive,
-            disabledContainerColor = if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.04f)
+            disabledContainerColor = if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else ZenithOnSurface.copy(alpha = 0.04f)
         ),
         // Белая рамка на фокусе — единственная смена фона (как у
         // MenuIconButton) была бы малозаметна на primary-заливке play/pause,
         // рамка работает одинаково на обоих вариантах кнопки.
         border = ClickableSurfaceDefaults.border(
             border = Border.None,
-            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = CircleShape)
+            focusedBorder = Border(BorderStroke(2.dp, ZenithOnSurface), shape = CircleShape)
         ),
         // Тот же приём, что у MenuIconButton — кнопки стоят плотно в ряду
         // капсулы, стандартный pop-эффект скейла может задевать соседнюю
@@ -279,7 +280,7 @@ private fun IconGlyphButton(
     ) {
         Icon(
             icon, contentDescription,
-            tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f),
+            tint = ZenithOnSurface.copy(alpha = if (enabled) 1f else 0.3f),
             modifier = Modifier.align(Alignment.Center).size(size * 0.5f)
         )
     }
@@ -307,7 +308,7 @@ private fun MenuIconButton(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
+            containerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else ZenithOnSurface.copy(alpha = 0.08f),
             focusedContainerColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.38f) else ZenithFocusContainerActive
         ),
         // Реальный аудит пульта (тот же класс бага, что в SettingsScreen.kt/
@@ -319,7 +320,7 @@ private fun MenuIconButton(
     ) {
         Icon(
             icon, contentDescription,
-            tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
+            tint = if (isActive) MaterialTheme.colorScheme.primary else ZenithOnSurface,
             modifier = Modifier.padding(9.dp).size(iconSize)
         )
     }
@@ -338,10 +339,10 @@ private fun ProgressBar(currentMs: Long, bufferedMs: Long, durationMs: Long, isA
         label = "tvProgressBarHeight"
     )
     Box(
-        modifier = modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.15f))
+        modifier = modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.15f))
     ) {
         val buffered = if (durationMs > 0L) (bufferedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-        if (buffered > progress) Box(modifier = Modifier.fillMaxWidth(buffered).fillMaxHeight().clip(ZenithShapePill).background(Color.White.copy(alpha = 0.3f)))
+        if (buffered > progress) Box(modifier = Modifier.fillMaxWidth(buffered).fillMaxHeight().clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.3f)))
         Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().clip(ZenithShapePill).background(MaterialTheme.colorScheme.primary))
     }
 }

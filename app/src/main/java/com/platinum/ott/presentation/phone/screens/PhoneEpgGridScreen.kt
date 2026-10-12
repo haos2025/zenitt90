@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -176,13 +177,13 @@ private fun PhoneProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, play
         Column {
             Text(slot.program.title, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatHm(slot.program.startTimeMillis), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text(formatHm(slot.program.startTimeMillis), style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant)
                 // См. тот же комментарий в EpgGridScreen.kt (TV) — единственная
                 // видимая подсказка, что прошедшую программу можно открыть
                 // из архива.
                 if (slot.isCatchupAvailable) {
                     Spacer(Modifier.width(4.dp))
-                    Text("⟲", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text("⟲", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant)
                 }
             }
         }

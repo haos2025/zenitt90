@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.qr
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Image
@@ -47,16 +49,16 @@ fun QrScanScreen(content: String?, onDismiss: () -> Unit, modifier: Modifier = M
     LaunchedEffect(Unit) { cancelFocusRequester.requestFocus() }
     Box(modifier.background(Color.Black.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Телефон-компаньон", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            Text("Телефон-компаньон", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
             Spacer(Modifier.height(ZenithDimens.paddingS))
             if (content != null) {
-                Text("Отсканируйте QR-код телефоном — оба устройства должны быть в одной сети Wi-Fi", color = Color.Gray)
+                Text("Отсканируйте QR-код телефоном — оба устройства должны быть в одной сети Wi-Fi", color = ZenithOnSurfaceVariant)
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 val bitmap = remember(content) { generateQrBitmap(content, 320) }
                 if (bitmap != null) {
                     Image(
                         bitmap.asImageBitmap(), contentDescription = "QR-код",
-                        modifier = Modifier.size(320.dp).background(Color.White).padding(ZenithDimens.paddingS)
+                        modifier = Modifier.size(320.dp).background(ZenithOnSurface).padding(ZenithDimens.paddingS)
                     )
                 } else {
                     Text("Не удалось сгенерировать QR-код", color = MaterialTheme.colorScheme.error)

@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -70,14 +72,14 @@ fun ChannelTile(item: ChannelUiItem, onClick: () -> Unit, modifier: Modifier = M
                         Text(
                             item.canonicalName.take(2).uppercase(),
                             style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White.copy(alpha = 0.4f)
+                            color = ZenithOnSurface.copy(alpha = 0.4f)
                         )
                     }
                 }
                 Text(
                     item.canonicalName,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
+                    color = ZenithOnSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -86,7 +88,7 @@ fun ChannelTile(item: ChannelUiItem, onClick: () -> Unit, modifier: Modifier = M
             // (ChannelsManageScreen.kt), только в углу плитки, не превью.
             Box(
                 Modifier.align(Alignment.TopEnd).padding(6.dp).size(8.dp).clip(CircleShape)
-                    .background(if (item.healthStatus == "alive") ZenithSuccess else if (item.healthStatus == "dead") ZenithError else Color.Gray)
+                    .background(if (item.healthStatus == "alive") ZenithSuccess else if (item.healthStatus == "dead") ZenithError else ZenithOnSurfaceVariant)
             )
             if (isFocused) Box(Modifier.fillMaxSize().background(ZenithFocusContainerActive))
         }

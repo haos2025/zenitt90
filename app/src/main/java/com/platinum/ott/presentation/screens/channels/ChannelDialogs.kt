@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.channels
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -72,7 +73,7 @@ fun MergeChannelDialog(
         title = { Text("Слить «${source.canonicalName}» с...") },
         text = {
             if (ordered.isEmpty()) {
-                Text("Больше не с чем сливать — это единственный канал в списке.", color = Color.Gray)
+                Text("Больше не с чем сливать — это единственный канал в списке.", color = ZenithOnSurfaceVariant)
             } else {
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 360.dp),
@@ -83,7 +84,7 @@ fun MergeChannelDialog(
                             Column(Modifier.fillMaxWidth()) {
                                 Text(candidate.canonicalName, modifier = Modifier.fillMaxWidth())
                                 if (candidate.isSubscribed) {
-                                    Text("Уже в списке", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                    Text("Уже в списке", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant)
                                 }
                             }
                         }

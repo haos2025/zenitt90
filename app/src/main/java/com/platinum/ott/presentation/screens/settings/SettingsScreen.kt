@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.settings
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.core.CONTROLS_HIDE_DELAY_OPTIONS_MS
 import com.platinum.ott.core.PROGRESS_STRIP_DP_OPTIONS
 import com.platinum.ott.core.formatControlsHideDelay
@@ -85,7 +87,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 .verticalScroll(rememberScrollState())
                 .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
         ) {
-            Text("Настройки", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            Text("Настройки", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
             Spacer(Modifier.height(ZenithDimens.paddingXL))
             // Sections: Playback, Notifications, Network, Interface, Plugins, Sources
             SettingsGroup("Воспроизведение", Icons.Outlined.PlayCircle) {
@@ -161,7 +163,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 }
                 if (quietEnabled) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Диапазон", color = Color.Gray, modifier = Modifier.weight(1f))
+                        Text("Диапазон", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
                         OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
                         Spacer(Modifier.width(ZenithDimens.paddingS))
                         OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
@@ -209,9 +211,6 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 // вынести весь текст интерфейса в string-ресурсы (сейчас 0
                 // использований stringResource во всём проекте) — отдельная
                 // большая задача, не в этом заходе.
-                val darkTheme by viewModel.darkThemeFlow.collectAsState()
-                CycleSetting("Тема", if (darkTheme) "Тёмная" else "Светлая") { viewModel.setDarkTheme(!darkTheme) }
-                SettingsDivider()
                 val overlay by viewModel.playerOverlay.collectAsState()
                 val hideDelay = overlay.hideDelayMs ?: 0
                 CycleSetting("Автоскрытие управления плеера", formatControlsHideDelay(hideDelay)) {
@@ -275,12 +274,12 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             // (PROMPT_REVISION.md), а полноценная очистка по категориям — уже
             // отдельный экран (onCacheManagementClick, см. CacheManagementScreen.kt),
             // эта кнопка теперь просто ведёт туда, а не чистит сама.
-            Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = Color.Gray, letterSpacing = 1.5.sp)
+            Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(ZenithDimens.paddingS))
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }, enabled = uiState !is SettingsUiState.Loading) {
                     if (uiState is SettingsUiState.Loading) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.Gray)
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ZenithOnSurfaceVariant)
                         Spacer(Modifier.width(ZenithDimens.paddingXS))
                     }
                     Text("Обновить парсеры")
@@ -336,17 +335,17 @@ private fun formatLastSynced(ms: Long): String {
                 .fillMaxWidth()
                 .clip(ZenithShapeMedium)
                 .background(ZenithSurfaceVariant.copy(alpha = 0.5f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeMedium)
+                .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeMedium)
                 .padding(vertical = ZenithDimens.paddingXS, horizontal = ZenithDimens.paddingS),
             content = content
         )
     }
 }
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsDivider() {
-    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+    HorizontalDivider(color = ZenithOnSurface.copy(alpha = 0.08f))
 }
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsItem(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)) { Text(label, color = Color.White, modifier = Modifier.weight(1f)); Text(value, color = Color.Gray) }
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)) { Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f)); Text(value, color = ZenithOnSurfaceVariant) }
 }
 // Строка-переход (было: отдельная Button вне секции — SettingsSection(...)
 // рисовала только заголовок, а кнопка "Плагины"/"Источники"/"Синхронизация"
@@ -378,10 +377,10 @@ private fun formatLastSynced(ms: Long): String {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(label, color = Color.White)
-                Text(status, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Text(label, color = ZenithOnSurface)
+                Text(status, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray)
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ZenithOnSurfaceVariant)
         }
     }
 }
@@ -409,7 +408,7 @@ private fun formatLastSynced(ms: Long): String {
             Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, color = Color.White, modifier = Modifier.weight(1f))
+            Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             Text(value, color = ZenithPrimaryMuted)
         }
     }

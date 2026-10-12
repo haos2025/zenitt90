@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
@@ -63,7 +65,7 @@ Scaffold(
         // Тот же принцип, что уже сделан в SeriesListScreen.kt/
         // PhoneSeriesListScreen.kt для пустого списка сериалов.
         Box(Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.TopCenter) {
-            Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+            Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
         }
     } else {
         LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
@@ -116,12 +118,12 @@ Scaffold(
                         )
                         Spacer(Modifier.width(ZenithDimens.paddingSM))
                         Column(Modifier.weight(1f)) {
-                        Text(entry.title, color = Color.White)
+                        Text(entry.title, color = ZenithOnSurface)
                         // Раньше здесь был только прогресс-бар без текста — на ТВ
                         // процент показывается, на телефоне не было вообще.
                         Text(
                             if (entry.completed) "Просмотрено" else "Прогресс: ${(p * 100).toInt()}%",
-                            color = Color.Gray, style = MaterialTheme.typography.bodySmall
+                            color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
                         )
                         LinearProgressIndicator({ p })
                     } } }

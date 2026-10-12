@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,7 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
                 PluginIcon(current.iconUrl, current.name, 56.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingSM))
                 Column {
-                    Text(current.name, style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                    Text(current.name, style = MaterialTheme.typography.headlineLarge, color = ZenithOnSurface)
                     Text("v${current.installedVersion}", color = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -84,6 +85,6 @@ fun PhonePluginDetailScreen(pluginId: String, navController: NavHostController) 
 private fun DetailItem(label: String, value: String) {
     Column {
         Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-        Text(value, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+        Text(value, color = ZenithOnSurface, style = MaterialTheme.typography.bodyLarge)
     }
 }

@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.series
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -36,7 +38,7 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
             Spacer(Modifier.width(ZenithDimens.paddingM))
-            Text("Сериалы", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            Text("Сериалы", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
         when (val state = uiState) {
@@ -47,7 +49,7 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
                     // Честно: если источник — только backend-каталог без
                     // Xtream/M3U с сериалами, здесь и будет пусто — это не
                     // баг, у backend-контента нет понятия "сериал".
-                    Text("Сериалов не найдено. Раздел заполняется из Xtream (get_series) и M3U (по названиям вида S01E02).", color = Color.Gray)
+                    Text("Сериалов не найдено. Раздел заполняется из Xtream (get_series) и M3U (по названиям вида S01E02).", color = ZenithOnSurfaceVariant)
                 } else {
                     LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                         items(state.series, key = { it.seriesId }) { s -> SeriesCard(s, onClick = { onSeriesClick(s.seriesId) }) }
@@ -106,8 +108,8 @@ private fun SeriesCard(series: SeriesSummary, onClick: () -> Unit) {
             AsyncImage(model = request, contentDescription = series.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), placeholder = ColorPainter(MaterialTheme.colorScheme.surface), error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant))
             Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(0.7f)).padding(ZenithDimens.paddingS)) {
                 Column {
-                    Text(series.title, color = Color.White, maxLines = 1)
-                    Text("${series.episodeCount} эп.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text(series.title, color = ZenithOnSurface, maxLines = 1)
+                    Text("${series.episodeCount} эп.", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (isFocused) {

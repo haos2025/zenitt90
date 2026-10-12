@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.epg
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -73,16 +74,16 @@ fun EpgGridScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Программа передач", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Программа передач", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             BasicTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it; viewModel.search(it) },
                 singleLine = true,
-                textStyle = TextStyle(Color.White, 16.sp),
+                textStyle = TextStyle(ZenithOnSurface, 16.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.width(200.dp).background(Color.White.copy(alpha = 0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                modifier = Modifier.width(200.dp).background(ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                 decorationBox = { inner ->
-                    if (searchQuery.isEmpty()) Text("Поиск передачи", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
+                    if (searchQuery.isEmpty()) Text("Поиск передачи", color = ZenithOnSurface.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
                     inner()
                 }
             )
@@ -112,7 +113,7 @@ fun EpgGridScreen(
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         Text(
                             "Нет подписанных каналов — подпишитесь на них в разделе \"Каналы\"",
-                            color = Color.White.copy(alpha = 0.6f)
+                            color = ZenithOnSurface.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -193,7 +194,7 @@ private fun EpgCategoryRow(title: String, count: Int, selected: Boolean, onClick
             .background(
                 when {
                     isFocused -> ZenithFocusContainerActive
-                    selected -> Color.White.copy(alpha = 0.12f)
+                    selected -> ZenithOnSurface.copy(alpha = 0.12f)
                     else -> Color.Transparent
                 }
             )
@@ -202,8 +203,8 @@ private fun EpgCategoryRow(title: String, count: Int, selected: Boolean, onClick
             .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium, color = if (selected) Color.White else Color.White.copy(alpha = 0.75f), maxLines = 1)
-        Text("$count", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = if (selected) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.75f), maxLines = 1)
+        Text("$count", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
     }
 }
 
@@ -211,7 +212,7 @@ private fun EpgCategoryRow(title: String, count: Int, selected: Boolean, onClick
 private fun ColumnScope.SearchResultsList(results: List<EpgSearchResult>, onResultClick: (EpgSearchResult) -> Unit) {
     if (results.isEmpty()) {
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Text("Ничего не найдено", color = Color.White.copy(alpha = 0.5f))
+            Text("Ничего не найдено", color = ZenithOnSurface.copy(alpha = 0.5f))
         }
         return
     }
@@ -233,10 +234,10 @@ private fun ColumnScope.SearchResultsList(results: List<EpgSearchResult>, onResu
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(result.program.title, style = MaterialTheme.typography.bodyMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(result.program.title, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         "${result.channel.canonicalName} · ${formatHm(result.program.startTimeMillis)}–${formatHm(result.program.endTimeMillis)}",
-                        style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f)
                     )
                 }
             }
@@ -253,14 +254,14 @@ private fun ProgramDescriptionPanel(program: EpgProgramEntity) {
             .background(ZenithSurface.copy(alpha = 0.85f))
             .padding(ZenithDimens.paddingM)
     ) {
-        Text(program.title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(program.title, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             "${formatHm(program.startTimeMillis)}–${formatHm(program.endTimeMillis)}",
-            style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f)
+            style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f)
         )
         if (!program.description.isNullOrBlank()) {
             Spacer(Modifier.height(ZenithDimens.paddingXS))
-            Text(program.description, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(program.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.75f), maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -275,7 +276,7 @@ private fun RulerRow(windowStart: Long, windowEnd: Long) {
                 Text(
                     formatHm(t),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = ZenithOnSurface.copy(alpha = 0.5f),
                     modifier = Modifier.weight(1f)
                 )
                 t += EpgGridViewModel.RULER_SEGMENT_MS
@@ -292,17 +293,17 @@ private fun EpgChannelRowView(row: EpgChannelRow, onPlay: () -> Unit, onPlayCatc
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(40.dp, 28.dp).clip(ZenithShapeSmall).background(Color.White.copy(alpha = 0.08f)),
+                Modifier.size(40.dp, 28.dp).clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (row.channel.logo != null) {
                     AsyncImage(model = row.channel.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(2.dp))
                 } else {
-                    Text("TV", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.4f))
+                    Text("TV", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.4f))
                 }
             }
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            Text(row.channel.canonicalName, style = MaterialTheme.typography.labelMedium, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(row.channel.canonicalName, style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             row.slots.forEach { slot ->
@@ -353,13 +354,13 @@ private fun ProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, playable:
                     Box(Modifier.size(6.dp).clip(ZenithShapePill).background(ZenithSuccess))
                     Spacer(Modifier.width(4.dp))
                 }
-                Text(slot.program.title, style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(slot.program.title, style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatHm(slot.program.startTimeMillis), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                Text(formatHm(slot.program.startTimeMillis), style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
                 if (slot.isCatchupAvailable) {
                     Spacer(Modifier.width(4.dp))
-                    Text("⟲", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                    Text("⟲", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
                 }
             }
         }

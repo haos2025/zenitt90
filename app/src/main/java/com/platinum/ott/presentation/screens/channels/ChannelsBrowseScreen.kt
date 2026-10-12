@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.channels
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -82,16 +83,16 @@ fun ChannelsBrowseScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Каналы", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Каналы", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             BasicTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 singleLine = true,
-                textStyle = TextStyle(Color.White, 16.sp),
+                textStyle = TextStyle(ZenithOnSurface, 16.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.width(220.dp).background(Color.White.copy(alpha = 0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                modifier = Modifier.width(220.dp).background(ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                 decorationBox = { inner ->
-                    if (searchQuery.isEmpty()) Text("Поиск", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
+                    if (searchQuery.isEmpty()) Text("Поиск", color = ZenithOnSurface.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
                     inner()
                 }
             )
@@ -108,7 +109,7 @@ fun ChannelsBrowseScreen(
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(
                     "Нет подписанных каналов — зайдите в \"Управление\", чтобы\nподписаться на каналы из уже добавленных источников",
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = ZenithOnSurface.copy(alpha = 0.6f)
                 )
             }
         } else {
@@ -158,7 +159,7 @@ private fun CategoryRow(title: String, count: Int, selected: Boolean, onClick: (
             .background(
                 when {
                     isFocused -> ZenithFocusContainerActive
-                    selected -> Color.White.copy(alpha = 0.12f)
+                    selected -> ZenithOnSurface.copy(alpha = 0.12f)
                     else -> Color.Transparent
                 }
             )
@@ -170,9 +171,9 @@ private fun CategoryRow(title: String, count: Int, selected: Boolean, onClick: (
         Text(
             title,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) Color.White else Color.White.copy(alpha = 0.75f),
+            color = if (selected) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.75f),
             maxLines = 1
         )
-        Text("$count", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+        Text("$count", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
     }
 }

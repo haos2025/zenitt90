@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -71,8 +72,8 @@ fun PhoneScrubStrip(
                     .widthIn(max = 240.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("${formatScrubTime((f * durationMs).toLong())} / ${formatScrubTime(durationMs)}", color = Color.White, style = MaterialTheme.typography.labelLarge)
-                if (title.isNotBlank()) Text(title, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${formatScrubTime((f * durationMs).toLong())} / ${formatScrubTime(durationMs)}", color = ZenithOnSurface, style = MaterialTheme.typography.labelLarge)
+                if (title.isNotBlank()) Text(title, color = ZenithOnSurface.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Box(

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.plugins
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -34,7 +35,7 @@ fun PluginDetailScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PluginIcon(current.iconUrl, current.name, 56.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingM))
-                Text(current.name, style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+                Text(current.name, style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onBackPressed) { Text("Назад") }
             }
             Spacer(Modifier.height(ZenithDimens.paddingS))
@@ -64,6 +65,6 @@ fun PluginDetailScreen(
 private fun DetailRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
         Text("$label: ", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(120.dp))
-        Text(value, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+        Text(value, color = ZenithOnSurface, style = MaterialTheme.typography.bodyLarge)
     }
 }

@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.search
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -164,11 +166,11 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                     value = query,
                     onValueChange = viewModel::onQueryChange,
                     singleLine = true,
-                    textStyle = TextStyle(Color.White, 20.sp),
+                    textStyle = TextStyle(ZenithOnSurface, 20.sp),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                    modifier = Modifier.weight(1f).background(ZenithOnSurface.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                     decorationBox = { inner ->
-                        if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(Color.White.copy(0.3f), 20.sp))
+                        if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(ZenithOnSurface.copy(0.3f), 20.sp))
                         inner()
                     }
                 )
@@ -202,7 +204,7 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                     // показываем последние уникальные запросы (если они есть),
                     // подсказка остаётся только для пустой истории.
                     if (recentSearches.isEmpty()) {
-                        Text("Начните вводить название (минимум 2 символа)", color = Color.Gray)
+                        Text("Начните вводить название (минимум 2 символа)", color = ZenithOnSurfaceVariant)
                     } else {
                         LazyColumn {
                             lazyColumnItems(recentSearches, key = { it }) { entry ->
@@ -222,7 +224,7 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                 is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                 is SearchUiState.Success -> {
                     if (state.results.isEmpty()) {
-                        Text("Ничего не нашлось по запросу «$query»", color = Color.Gray)
+                        Text("Ничего не нашлось по запросу «$query»", color = ZenithOnSurfaceVariant)
                     } else {
                         LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                             items(state.results, key = { it.id }) { movie -> MovieCard(movie = movie, onClick = { onMovieClick(movie.id) }) }
@@ -259,7 +261,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
             ),
             modifier = Modifier.weight(1f)
         ) {
-            Text(text, color = Color.White, modifier = Modifier.padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp))
+            Text(text, color = ZenithOnSurface, modifier = Modifier.padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp))
         }
         Spacer(Modifier.width(ZenithDimens.paddingSM))
         Surface(
@@ -270,7 +272,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
                 focusedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
             )
         ) {
-            Text("✕", color = Color.Gray, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = 14.dp))
+            Text("✕", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = 14.dp))
         }
     }
 }

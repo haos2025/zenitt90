@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,7 +59,7 @@ fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation
     val heightPx = with(density) { posterHeight.roundToPx() }
 
     Column(modifier = modifier) {
-        Text("Смотрите также", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text("Смотрите также", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
             items(items, key = { it.tmdbId }) { rec ->
@@ -86,7 +87,7 @@ fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation
                         }
                     }
                     Spacer(Modifier.height(ZenithDimens.paddingXS))
-                    Text(rec.title, color = Color.White, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(rec.title, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.home
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,8 +40,7 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
     Row(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavSidebar(navController)
         Column(Modifier.weight(1f).fillMaxHeight().padding(top = ZenithDimens.paddingL, bottom = ZenithDimens.paddingL)) {
-            Text("ZENITH", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = ZenithDimens.paddingL))
-            Spacer(Modifier.height(ZenithDimens.paddingM))
+            // Wordmark "ZENITH" убран: знак бренда теперь вверху боковой панели (NavSidebar.kt).
 
             // Решение 5 — вкладки-фильтры сверху, чистый клиентский фильтр
             // уже известного типа контента, ничего не считаем и не
@@ -174,7 +174,7 @@ private fun ContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (Str
         Text(
             text = "Продолжить просмотр",
             style = MaterialTheme.typography.titleLarge,
-            color = androidx.compose.ui.graphics.Color.White,
+            color = androidx.compose.ui.graphics.ZenithOnSurface,
             modifier = Modifier.padding(start = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingSM)
         )
         LazyRow(
@@ -183,7 +183,10 @@ private fun ContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (Str
             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)
         ) {
             items(entries, key = { it.contentId }) { entry ->
-                MovieCard(title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) })
+                MovieCard(
+                    title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) },
+                    progress = if (entry.durationMs > 0) (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f) else null
+                )
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.player
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -100,14 +101,14 @@ fun PlaybackMenuOverlay(
                 .fillMaxHeight(0.82f)
                 .clip(ZenithShapeLarge)
                 .background(ZenithSurface.copy(alpha = 0.96f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
+                .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                 .padding(vertical = ZenithDimens.paddingL)
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM),
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Настройки", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("Настройки", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
                 Surface(
                     onClick = onDismiss,
                     shape = ClickableSurfaceDefaults.shape(ZenithShapePill),
@@ -115,7 +116,7 @@ fun PlaybackMenuOverlay(
                     // См. комментарий у MenuRow ниже — тот же фикс оверфлоу
                     // подсветки за скруглённый край узкой панели (320dp).
                     scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
-                ) { Icon(Icons.Default.Close, "Закрыть", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(8.dp).size(18.dp)) }
+                ) { Icon(Icons.Default.Close, "Закрыть", tint = ZenithOnSurface.copy(alpha = 0.7f), modifier = Modifier.padding(8.dp).size(18.dp)) }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
 
@@ -125,7 +126,7 @@ fun PlaybackMenuOverlay(
             Row(
                 Modifier.padding(horizontal = ZenithDimens.paddingM)
                     .clip(ZenithShapeMedium)
-                    .background(Color.White.copy(alpha = 0.05f))
+                    .background(ZenithOnSurface.copy(alpha = 0.05f))
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
@@ -205,7 +206,7 @@ private fun autoSubtitleStatusLabel(state: AutoSubtitleState): String? = when (s
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun EmptyHint(text: String) {
-    Text(text, color = Color.White.copy(0.4f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(ZenithDimens.paddingM))
+    Text(text, color = ZenithOnSurface.copy(0.4f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(ZenithDimens.paddingM))
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
@@ -226,7 +227,7 @@ private fun MenuTabButton(label: String, selected: Boolean, modifier: Modifier =
         // узкой 320dp-панели. Отключаем масштаб, оставляем только заливку
         // фона как индикатор — тот же фикс, что и у MenuRow ниже.
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
-    ) { Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) }
+    ) { Text(label, style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
@@ -257,14 +258,14 @@ private fun MenuRow(
             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White)
-                subLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.45f)) }
+                Text(label, color = if (isSelected) MaterialTheme.colorScheme.primary else ZenithOnSurface)
+                subLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.45f)) }
             }
             when {
                 // Действие (например "Свой файл по ссылке" → QR), а не
                 // текущий выбор — trailingIcon показывает ЧТО произойдёт,
                 // не помечает строку как "выбранную".
-                trailingIcon != null -> Icon(trailingIcon, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                trailingIcon != null -> Icon(trailingIcon, null, tint = ZenithOnSurface.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                 isSelected -> Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
         }

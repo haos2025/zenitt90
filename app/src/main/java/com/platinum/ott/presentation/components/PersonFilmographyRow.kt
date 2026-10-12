@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,7 +54,7 @@ fun PersonFilmographyRow(title: String, items: List<PersonCreditItem>, onItemCli
     val heightPx = with(density) { posterHeight.roundToPx() }
 
     Column(modifier = modifier) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
             items(items, key = { it.tmdbId.toString() + it.mediaType }) { credit ->
@@ -80,9 +82,9 @@ fun PersonFilmographyRow(title: String, items: List<PersonCreditItem>, onItemCli
                         }
                     }
                     Spacer(Modifier.height(ZenithDimens.paddingXS))
-                    Text(credit.title, color = Color.White, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(credit.title, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     credit.character?.let {
-                        Text(it, color = Color.Gray, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

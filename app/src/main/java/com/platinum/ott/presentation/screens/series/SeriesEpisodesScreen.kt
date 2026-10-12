@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.series
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,7 +57,7 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                 var selectedSeason by remember(seriesId) { mutableStateOf(seasons.firstOrNull()) }
                 val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(state.episodes.firstOrNull()?.seriesTitle ?: "Сериал", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+                    Text(state.episodes.firstOrNull()?.seriesTitle ?: "Сериал", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
                     // Добавление показывает выбор папки, снятие — сразу, без
                     // диалога. Отметка "аниме" убрана с этого экрана — теперь
                     // только в едином меню на карточке в FavoritesScreen
@@ -130,7 +132,7 @@ private fun VariantChoiceDialog(variants: List<StreamVariant>, onSelect: (Stream
 private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)
-    ) { Text(label, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), color = Color.White) }
+    ) { Text(label, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), color = ZenithOnSurface) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
@@ -158,17 +160,17 @@ private fun EpisodeRow(episodeNumber: Int?, title: String, poster: String, descr
                 modifier = Modifier.width(96.dp).height(144.dp).clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
             )
             Spacer(Modifier.width(ZenithDimens.paddingSM))
-            episodeNumber?.let { Text("$it.", color = Color.Gray, modifier = Modifier.padding(end = ZenithDimens.paddingSM)) }
+            episodeNumber?.let { Text("$it.", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(end = ZenithDimens.paddingSM)) }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, color = Color.White, modifier = Modifier.weight(1f, fill = false))
+                    Text(title, color = ZenithOnSurface, modifier = Modifier.weight(1f, fill = false))
                     if (completed) {
                         Spacer(Modifier.width(ZenithDimens.paddingXS))
                         Icon(Icons.Default.CheckCircle, contentDescription = "Просмотрено", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                     }
                 }
                 if (description.isNotBlank()) {
-                    Text(description, color = Color.Gray, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
+                    Text(description, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
                 }
                 // Полоска прогресса — только для начатых, но не досмотренных
                 // (completed уже показан галочкой выше, дублировать не нужно).

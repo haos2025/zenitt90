@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.favorites
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,7 +54,7 @@ private fun FolderColorPicker(selected: String, onSelect: (String) -> Unit) {
             val isSelected = hex.equals(selected, ignoreCase = true)
             Box(
                 Modifier.size(28.dp).clip(CircleShape).background(parseFolderColor(hex))
-                    .then(if (isSelected) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+                    .then(if (isSelected) Modifier.border(2.dp, ZenithOnSurface, CircleShape) else Modifier)
                     .clickable { onSelect(hex) }
             )
         }
@@ -81,7 +83,7 @@ fun FolderManagerDialog(
         text = {
             Column {
                 if (folders.isEmpty()) {
-                    Text("Пока нет ни одной папки", color = Color.Gray)
+                    Text("Пока нет ни одной папки", color = ZenithOnSurfaceVariant)
                 } else {
                     folders.forEach { folder ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -93,7 +95,7 @@ fun FolderManagerDialog(
                             IconButton(onClick = { onDelete(folder) }) { Icon(Icons.Default.Delete, "Удалить папку «${folder.name}»") }
                         }
                     }
-                    Text("Нажмите на цветную точку, чтобы сменить цвет", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                    Text("Нажмите на цветную точку, чтобы сменить цвет", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingS))
                 OutlinedTextField(

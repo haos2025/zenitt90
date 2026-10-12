@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
@@ -154,7 +156,7 @@ private fun PhoneInstallFromScriptRow(installState: PluginViewModel.InstallState
 private fun PhoneInstalledTab(plugins: List<PluginEntity>, navController: NavHostController, viewModel: PluginViewModel) {
     if (plugins.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Нет установленных плагинов", color = Color.Gray)
+            Text("Нет установленных плагинов", color = ZenithOnSurfaceVariant)
         }
         return
     }
@@ -168,10 +170,10 @@ private fun PhoneInstalledTab(plugins: List<PluginEntity>, navController: NavHos
                     PluginIcon(plugin.iconUrl, plugin.name, 44.dp)
                     Spacer(Modifier.width(ZenithDimens.paddingSM))
                     Column(Modifier.weight(1f)) {
-                        Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text("v${plugin.installedVersion} • ${plugin.pluginType}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        Text(plugin.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
+                        Text("v${plugin.installedVersion} • ${plugin.pluginType}", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         if (plugin.description.isNotEmpty()) {
-                            Text(plugin.description, color = Color.White.copy(0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                            Text(plugin.description, color = ZenithOnSurface.copy(0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
                         }
                     }
                     Switch(
@@ -191,7 +193,7 @@ private fun PhoneCatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginV
         is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = MaterialTheme.colorScheme.error) }
         is PluginViewModel.UiState.Success -> {
             if (uiState.catalog.isEmpty()) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = Color.Gray) }
+                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = ZenithOnSurfaceVariant) }
                 return
             }
             LazyColumn(contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
@@ -201,9 +203,9 @@ private fun PhoneCatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginV
                             PluginIcon(entry.icon, entry.name, 44.dp)
                             Spacer(Modifier.width(ZenithDimens.paddingSM))
                             Column(Modifier.weight(1f)) {
-                                Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                                Text(entry.description, color = Color.White.copy(0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                                Text(entry.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
+                                Text("v${entry.version} • ${entry.author}", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                Text(entry.description, color = ZenithOnSurface.copy(0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
                             }
                             Button(onClick = { viewModel.installFromCatalog(entry) }) { Text("Уст.") }
                         }

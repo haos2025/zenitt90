@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.favorites
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -47,7 +48,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavSidebar(navController)
         Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
-            Text("Избранное", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            Text("Избранное", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
             Spacer(Modifier.height(ZenithDimens.paddingS))
 
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
@@ -108,7 +109,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                             IconButton(
                                 onClick = { showMenu = true },
                                 modifier = Modifier.align(Alignment.TopEnd)
-                            ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
+                            ) { Icon(Icons.Default.MoreVert, "Действия", tint = ZenithOnSurface) }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                                 if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
                                 if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })

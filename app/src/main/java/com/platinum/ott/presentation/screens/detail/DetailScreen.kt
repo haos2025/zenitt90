@@ -1,11 +1,16 @@
 package com.platinum.ott.presentation.screens.detail
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -147,101 +152,105 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // замена, не временный компромисс.
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     item {
-                        Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                            Text(state.movie.title, style = MaterialTheme.typography.displaySmall, color = Color.White)
-                            state.metadata?.let { meta ->
-                                // Год/длительность — PROMPT_DETAIL_SCREEN_UPGRADE.md, п.1.
-                                // Поля year/duration есть на Movie и раньше нигде не
-                                // выводились ни на TV, ни на телефоне. duration может
-                                // быть пустой строкой по умолчанию у части источников —
-                                // пропускаем пустые части, чтобы не показать "·" без
-                                // содержимого по обе стороны.
-                                val metaLine = listOfNotNull(
-                                    state.movie.year.takeIf { it > 0 }?.toString(),
-                                    state.movie.duration.takeIf { it.isNotBlank() },
-                                    meta.genres?.takeIf { it.isNotBlank() }
-                                ).joinToString(" · ")
-                                if (metaLine.isNotEmpty()) Text(metaLine, color = Color.Gray)
-                                meta.overview?.let { overview ->
-                                    // Подзадача 3 (стандартизация описания): раньше
-                                    // Text рисовался без maxLines вообще — высота
-                                    // блока прыгала от пары строк до экрана целиком
-                                    // в зависимости от длины overview у конкретного
-                                    // источника (это не наша ошибка в данных, просто
-                                    // у разных фильмов в TMDB описания разной длины —
-                                    // но UI никак это не сглаживал). Клэмп в 4 строки
-                                    // + "Показать полностью"/"Свернуть" — тот же
-                                    // паттерн, что у Netflix/Кинопоиска/Plex.
-                                    // isOverviewExpandable считается через
-                                    // onTextLayout.hasVisualOverflow — тумблер
-                                    // показывается только когда текст реально
-                                    // обрезается на 4 строках, а не всегда (короткое
-                                    // описание — тумблер не нужен, показывать
-                                    // "Показать полностью" при отсутствии обрезки
-                                    // было бы бессмысленно).
-                                    var isOverviewExpanded by remember(movieId) { mutableStateOf(false) }
-                                    var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
-                                    Text(
-                                        overview,
-                                        color = Color.White.copy(0.8f),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
-                                        overflow = TextOverflow.Ellipsis,
-                                        onTextLayout = { if (!isOverviewExpanded) isOverviewExpandable = it.hasVisualOverflow }
+                        // Герой-блок: слева портретный постер TMDB (если он есть;
+                        // сырой скриншот потока от провайдера как постер не
+                        // показываем — см. комментарий про hasRealBackdrop выше),
+                        // справа название, строка метаданных-«таблеток», жанры,
+                        // описание и кнопки. Фокус по-прежнему стартует на «Смотреть».
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
+                            if (tmdbPosterUrl != null) {
+                                AsyncImage(
+                                    model = tmdbPosterUrl,
+                                    contentDescription = state.movie.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .width(200.dp)
+                                        .height(300.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(ZenithSurface)
+                                )
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)
+                            ) {
+                                Text(
+                                    state.movie.title,
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = ZenithOnSurface,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                state.metadata?.let { meta ->
+                                    // Год / длительность — серые таблетки, рейтинг — жёлтая.
+                                    // Пустые части пропускаем, чтобы не рисовать пустых таблеток.
+                                    val pills = listOfNotNull(
+                                        state.movie.year.takeIf { it > 0 }?.toString(),
+                                        state.movie.duration.takeIf { it.isNotBlank() }
                                     )
-                                    if (isOverviewExpandable) {
-                                        Surface(
-                                            onClick = { isOverviewExpanded = !isOverviewExpanded },
-                                            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
-                                            colors = ClickableSurfaceDefaults.colors(
-                                                containerColor = Color.Transparent,
-                                                focusedContainerColor = ZenithFocusContainerActive
-                                            ),
-                                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
-                                        ) {
-                                            Text(
-                                                if (isOverviewExpanded) "Свернуть" else "Показать полностью",
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(horizontal = ZenithDimens.paddingS, vertical = ZenithDimens.paddingXS)
-                                            )
+                                    if (pills.isNotEmpty() || meta.voteAverage != null) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), verticalAlignment = Alignment.CenterVertically) {
+                                            meta.voteAverage?.let { DetailPill("★ $it", ZenithWarning, ZenithWarning.copy(alpha = 0.16f)) }
+                                            pills.forEach { DetailPill(it, ZenithOnSurface, ZenithSurfaceVariant) }
+                                        }
+                                    }
+                                    val genres = meta.genres.orEmpty().split(',', '/').map { it.trim() }.filter { it.isNotEmpty() }.take(4)
+                                    if (genres.isNotEmpty()) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+                                            genres.forEach { DetailPill(it, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) }
+                                        }
+                                    }
+                                    meta.overview?.let { overview ->
+                                        // Клэмп в 4 строки + «Показать полностью»/«Свернуть» —
+                                        // тумблер виден только когда текст реально обрезан
+                                        // (onTextLayout.hasVisualOverflow).
+                                        var isOverviewExpanded by remember(movieId) { mutableStateOf(false) }
+                                        var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
+                                        Text(
+                                            overview,
+                                            color = ZenithOnSurface.copy(0.8f),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
+                                            overflow = TextOverflow.Ellipsis,
+                                            onTextLayout = { if (!isOverviewExpanded) isOverviewExpandable = it.hasVisualOverflow }
+                                        )
+                                        if (isOverviewExpandable) {
+                                            Surface(
+                                                onClick = { isOverviewExpanded = !isOverviewExpanded },
+                                                shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+                                                colors = ClickableSurfaceDefaults.colors(
+                                                    containerColor = Color.Transparent,
+                                                    focusedContainerColor = ZenithFocusContainerActive
+                                                ),
+                                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+                                            ) {
+                                                Text(
+                                                    if (isOverviewExpanded) "Свернуть" else "Показать полностью",
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = ZenithDimens.paddingS, vertical = ZenithDimens.paddingXS)
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                                meta.voteAverage?.let { Text("★ $it", color = ZenithWarning) }
-                            }
-                        }
-                    }
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                            Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
-                            // Добавление показывает выбор папки, снятие — сразу,
-                            // без диалога (см. DetailViewModel.addFavorite/removeFavorite).
-                            // Отметка "аниме" на этом экране убрана — управление
-                            // ей теперь только в едином меню на карточке в
-                            // FavoritesScreen (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                            // Раньше диалог выбора папки открывался всегда, даже
-                            // когда у пользователя ещё нет ни одной папки (реальный
-                            // репорт: "зачем спрашивать про папку, если создавать
-                            // ещё нечего") — диалог в таком виде показывал только
-                            // пункт "Без папки", то есть выбора по факту не было,
-                            // просто лишний шаг. Пока папок нет — сохраняем сразу
-                            // без папки; как только хотя бы одна папка создана
-                            // (через FavoritesScreen), при следующем добавлении
-                            // снова спрашиваем, тут уже есть смысл выбирать.
-                            OutlinedButton(onClick = {
-                                when {
-                                    state.isFavorite -> viewModel.removeFavorite(movieId)
-                                    folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
-                                    else -> showAddFavoriteDialog = true
+                                // Добавление показывает выбор папки только если папки уже
+                                // есть; снятие — сразу (см. DetailViewModel.addFavorite/
+                                // removeFavorite). Системный Back закрывает экран, отдельной
+                                // кнопки «Назад» нет.
+                                Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
+                                    Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
+                                    OutlinedButton(onClick = {
+                                        when {
+                                            state.isFavorite -> viewModel.removeFavorite(movieId)
+                                            folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
+                                            else -> showAddFavoriteDialog = true
+                                        }
+                                    }) {
+                                        Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
+                                    }
                                 }
-                            }) {
-                                Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
                             }
-                            // Кнопка "Назад" убрана (реальный репорт с TV) —
-                            // системная клавиша Back на пульте уже вызывает
-                            // onBackPressed через штатную навигацию, дублирующая
-                            // кнопка в общем ряду только путала фокус и не несла
-                            // отдельной функции.
                         }
                     }
                     // Карусель актёров (п.4) — не рисуется вовсе, если TMDB
@@ -285,4 +294,19 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
             }
         }
     }
+}
+
+/** Таблетка метаданных на экране фильма (год, длительность, рейтинг, жанр). */
+@Composable
+private fun DetailPill(text: String, textColor: Color, background: Color) {
+    Text(
+        text,
+        color = textColor,
+        maxLines = 1,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(background)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    )
 }

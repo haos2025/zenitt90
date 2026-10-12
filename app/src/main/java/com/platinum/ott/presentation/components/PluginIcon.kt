@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -53,7 +54,7 @@ fun PluginIcon(iconUrl: String?, name: String, size: Dp, modifier: Modifier = Mo
     ) {
         BasicText(
             text = name.trim().firstOrNull()?.uppercase() ?: "?",
-            style = TextStyle(color = Color.White.copy(alpha = 0.8f), fontSize = (size.value * 0.45f).sp)
+            style = TextStyle(color = ZenithOnSurface.copy(alpha = 0.8f), fontSize = (size.value * 0.45f).sp)
         )
         safeUrl?.let {
             AsyncImage(model = it, imageLoader = loader, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())

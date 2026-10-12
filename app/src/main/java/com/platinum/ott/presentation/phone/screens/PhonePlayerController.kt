@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -171,8 +173,8 @@ fun PhonePlayerController(
             // Верхняя строка — только "Назад + Название", fullscreen
             // отсюда убран (переехал в капсулу).
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
-                Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = ZenithOnSurface) }
+                Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             }
 
             Column(
@@ -183,14 +185,14 @@ fun PhonePlayerController(
                     Modifier.fillMaxWidth()
                         .clip(ZenithShapeLarge)
                         .background(ZenithSurface.copy(alpha = 0.9f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), ZenithShapeLarge)
+                        .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                         .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
                 ) {
                     // Время слито в один ряд со скраббером (было: слайдер
                     // отдельной строкой, время отдельной строкой под ним).
                     var previewPositionMs by remember { mutableStateOf<Long?>(null) }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(formatMs(previewPositionMs ?: currentPositionMs), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Text(formatMs(previewPositionMs ?: currentPositionMs), color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.width(ZenithDimens.paddingS))
                         ScrubberBar(
                             positionMs = currentPositionMs,
@@ -201,7 +203,7 @@ fun PhonePlayerController(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(ZenithDimens.paddingS))
-                        Text(formatMs(durationMs), color = Color.White.copy(0.5f), style = MaterialTheme.typography.bodySmall)
+                        Text(formatMs(durationMs), color = ZenithOnSurface.copy(0.5f), style = MaterialTheme.typography.bodySmall)
                     }
 
                     // Один ряд: слева — транспортный кластер (play/pause,
@@ -270,7 +272,7 @@ fun PhonePlayerController(
                     }
                 }
                 subtitleTracks.forEach { t -> DialogRow(t.label, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t); menuTab = null } }
-                if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = Color.Gray, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
+                if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
             }
         }
         else -> {}
@@ -337,7 +339,7 @@ private fun MoreSettingsSheet(
                     DialogRow("Скорость") { onSelectCategory(PlaybackMenuTab.SPEED) }
                 }
                 PlaybackMenuTab.AUDIO -> {
-                    if (audioTracks.isEmpty()) Text("Только одна дорожка", color = Color.Gray, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM))
+                    if (audioTracks.isEmpty()) Text("Только одна дорожка", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM))
                     audioTracks.forEach { t -> DialogRow(t.label, t.isSelected) { onSelectAudio(t) } }
                 }
                 PlaybackMenuTab.QUALITY -> {
@@ -369,10 +371,10 @@ private fun TransportButton(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(if (isPrimary) 48.dp else 40.dp)
             .clip(CircleShape)
-            .background(if (isPrimary) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f))
+            .background(if (isPrimary) MaterialTheme.colorScheme.primary else ZenithOnSurface.copy(alpha = 0.1f))
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription, tint = Color.White.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 26.dp else 20.dp))
+            Icon(icon, contentDescription, tint = ZenithOnSurface.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 26.dp else 20.dp))
         }
     }
 }
@@ -397,9 +399,9 @@ private fun SmallMenuIconButton(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(32.dp)
                 .clip(ZenithShapeSmall)
-                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f))
+                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else ZenithOnSurface.copy(alpha = 0.1f))
         ) {
-            Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription, tint = if (isActive) MaterialTheme.colorScheme.primary else ZenithOnSurface, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -483,9 +485,9 @@ private fun ScrubberBar(
 private fun ScrubberTrack(playedFraction: Float, bufferedFraction: Float, height: Dp, isDragging: Boolean) {
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         val trackWidth = maxWidth
-        Box(Modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.2f)))
+        Box(Modifier.fillMaxWidth().height(height).clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.2f)))
         if (bufferedFraction > playedFraction) {
-            Box(Modifier.width(trackWidth * bufferedFraction).height(height).clip(ZenithShapePill).background(Color.White.copy(alpha = 0.4f)))
+            Box(Modifier.width(trackWidth * bufferedFraction).height(height).clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.4f)))
         }
         Box(
             Modifier.width(trackWidth * playedFraction).height(height).clip(ZenithShapePill)

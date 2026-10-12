@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -58,7 +59,7 @@ fun PhoneCatalogRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isPlaylistRow) ZenithSecondary else Color.White
+                color = if (isPlaylistRow) ZenithSecondary else ZenithOnSurface
             )
         }
         LazyRow(
@@ -71,7 +72,9 @@ fun PhoneCatalogRow(
                 MovieCard(
                     title = movie.title, year = movie.year,
                     poster = resolvedPosters[movie.id] ?: movie.poster,
-                    onClick = { onMovieClick(movie.id) }
+                    onClick = { onMovieClick(movie.id) },
+                    rating = movie.rating.takeIf { it > 0.0 },
+                    contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop
                 )
             }
         }

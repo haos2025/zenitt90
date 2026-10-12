@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
@@ -103,7 +104,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                     IconButton(
                         onClick = { showMenu = true },
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingS).clip(CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-                    ) { Icon(Icons.Default.MoreVert, "Действия", tint = Color.White) }
+                    ) { Icon(Icons.Default.MoreVert, "Действия", tint = ZenithOnSurface) }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
                         if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })

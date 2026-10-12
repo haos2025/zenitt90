@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.components
 
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,8 +31,8 @@ fun PlayerProgressStrip(
 ) {
     val played = overrideFraction ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val buffered = if (durationMs > 0) (bufferedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    Box(modifier.fillMaxWidth().height(thickness).background(Color.White.copy(alpha = 0.25f))) {
-        if (buffered > played) Box(Modifier.fillMaxWidth(buffered).fillMaxHeight().background(Color.White.copy(alpha = 0.45f)))
+    Box(modifier.fillMaxWidth().height(thickness).background(ZenithOnSurface.copy(alpha = 0.25f))) {
+        if (buffered > played) Box(Modifier.fillMaxWidth(buffered).fillMaxHeight().background(ZenithOnSurface.copy(alpha = 0.45f)))
         Box(Modifier.fillMaxWidth(played).fillMaxHeight().background(color))
     }
 }

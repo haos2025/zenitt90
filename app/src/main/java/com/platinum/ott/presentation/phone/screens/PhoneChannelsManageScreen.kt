@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -156,7 +157,7 @@ private fun PhoneChannelCard(
                             when (item.healthStatus) {
                                 "alive" -> Color(0xFF4CAF50)
                                 "dead" -> MaterialTheme.colorScheme.error
-                                else -> Color.Gray
+                                else -> ZenithOnSurfaceVariant
                             }
                         )
                 )

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,7 +38,7 @@ fun PhoneSeriesListScreen(navController: NavHostController, viewModel: SeriesLis
                 is SeriesListUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingM))
                 is SeriesListUiState.Success -> {
                     if (state.series.isEmpty()) {
-                        Text("Сериалов не найдено. Раздел заполняется из Xtream и M3U-названий вида S01E02.", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                        Text("Сериалов не найдено. Раздел заполняется из Xtream и M3U-названий вида S01E02.", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
                     } else {
                         LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                             items(state.series, key = { it.seriesId }) { s ->

@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.plugins
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -80,7 +82,7 @@ fun PluginCatalogScreen(
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingXL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Плагины", style = MaterialTheme.typography.displaySmall, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Плагины", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingM))
@@ -152,11 +154,11 @@ private fun InstallFromUrlRow(
                 onValueChange = onUrlChange,
                 singleLine = true,
                 enabled = !installing,
-                textStyle = TextStyle(Color.White, 16.sp),
+                textStyle = TextStyle(ZenithOnSurface, 16.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.weight(1f).background(Color.White.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
+                modifier = Modifier.weight(1f).background(ZenithOnSurface.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
                 decorationBox = { inner ->
-                    if (url.isEmpty()) Text("Ссылка на плагин (URL .js)…", style = TextStyle(Color.White.copy(0.3f), 16.sp))
+                    if (url.isEmpty()) Text("Ссылка на плагин (URL .js)…", style = TextStyle(ZenithOnSurface.copy(0.3f), 16.sp))
                     inner()
                 }
             )
@@ -206,13 +208,13 @@ private fun InstallFromScriptRow(
                 value = script,
                 onValueChange = onScriptChange,
                 enabled = !installing,
-                textStyle = TextStyle(Color.White, 14.sp),
+                textStyle = TextStyle(ZenithOnSurface, 14.sp),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)
-                    .background(Color.White.copy(0.08f), ZenithShapeSmall)
+                    .background(ZenithOnSurface.copy(0.08f), ZenithShapeSmall)
                     .padding(ZenithDimens.paddingM),
                 decorationBox = { inner ->
-                    if (script.isEmpty()) Text("Текст скрипта плагина (.js)…", style = TextStyle(Color.White.copy(0.3f), 14.sp))
+                    if (script.isEmpty()) Text("Текст скрипта плагина (.js)…", style = TextStyle(ZenithOnSurface.copy(0.3f), 14.sp))
                     inner()
                 }
             )
@@ -240,7 +242,7 @@ private fun InstallFromScriptRow(
 private fun InstalledTab(plugins: List<PluginEntity>, onPluginClick: (String) -> Unit, viewModel: PluginViewModel) {
     if (plugins.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Нет установленных плагинов", color = Color.Gray)
+            Text("Нет установленных плагинов", color = ZenithOnSurfaceVariant)
         }
         return
     }
@@ -263,7 +265,7 @@ private fun CatalogTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
         is PluginViewModel.UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("⚠ ${uiState.message}", color = MaterialTheme.colorScheme.error) }
         is PluginViewModel.UiState.Success -> {
             if (uiState.catalog.isEmpty()) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = Color.Gray) }
+                Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Каталог пуст", color = ZenithOnSurfaceVariant) }
                 return
             }
             LazyVerticalGrid(
@@ -311,8 +313,8 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(installed.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                Text("${installed.installedVersion} → ${catalog.version}", color = Color.Gray)
+                                Text(installed.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
+                                Text("${installed.installedVersion} → ${catalog.version}", color = ZenithOnSurfaceVariant)
                             }
                             Button(onClick = { viewModel.updatePlugin(installed.id, catalog) }) { Text("Обновить") }
                         }
@@ -343,8 +345,8 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
                 PluginIcon(plugin.iconUrl, plugin.name, 40.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
                 Column {
-                    Text(plugin.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                    Text("v${plugin.installedVersion}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text(plugin.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("v${plugin.installedVersion}", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     Text(plugin.pluginType, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -366,9 +368,9 @@ private fun CatalogPluginCard(entry: PluginRepository.CatalogEntry, onInstall: (
                 PluginIcon(entry.icon, entry.name, 40.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
                 Column {
-                    Text(entry.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                    Text("v${entry.version} • ${entry.author}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                    Text(entry.description, color = Color.White.copy(0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                    Text(entry.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("v${entry.version} • ${entry.author}", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text(entry.description, color = ZenithOnSurface.copy(0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 }
             }
             Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text("Установить") }

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -197,7 +198,7 @@ private fun PhoneSourceCard(
 }
 
 private fun statusColor(enabled: Boolean, lastRefreshStatus: String?): Color = when {
-    !enabled -> Color.Gray.copy(alpha = 0.4f)
+    !enabled -> ZenithOnSurfaceVariant.copy(alpha = 0.4f)
     lastRefreshStatus == null -> ZenithWarning
     lastRefreshStatus == "ok" -> ZenithSuccess
     else -> ZenithError

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -53,7 +54,7 @@ fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "
             when (val state = uiState) {
                 is SearchUiState.Idle -> {
                     if (recentSearches.isEmpty()) {
-                        Text("Начните вводить название (минимум 2 символа)", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                        Text("Начните вводить название (минимум 2 символа)", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
                     } else {
                         LazyColumn {
                             lazyColumnItems(recentSearches, key = { it }) { entry ->
@@ -80,7 +81,7 @@ fun PhoneSearchScreen(navController: NavHostController, initialQuery: String = "
                 is SearchUiState.Error -> Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(ZenithDimens.paddingM))
                 is SearchUiState.Success -> {
                     if (state.results.isEmpty()) {
-                        Text("Ничего не нашлось по запросу «$query»", color = Color.Gray, modifier = Modifier.padding(ZenithDimens.paddingM))
+                        Text("Ничего не нашлось по запросу «$query»", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
                     } else {
                         LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                             items(state.results, key = { it.id }) { movie -> MovieCard(movie = movie, onClick = { navController.navigate("detail/${movie.id}") }) }

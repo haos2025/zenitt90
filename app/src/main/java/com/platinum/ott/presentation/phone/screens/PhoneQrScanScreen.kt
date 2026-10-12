@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -90,16 +92,16 @@ fun PhoneQrScanScreen(navController: NavHostController) {
     Column(Modifier.fillMaxSize().background(Color.Black), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         when (val s = state) {
             is CompanionState.Scanning -> {
-                Text("Сканирование QR-кода", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                Text("Сканирование QR-кода", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(16.dp))
-                Text("Наведите камеру на QR-код на экране TV", color = Color.Gray)
+                Text("Наведите камеру на QR-код на экране TV", color = ZenithOnSurfaceVariant)
             }
             is CompanionState.Connected -> {
                 var value by remember { mutableStateOf("") }
                 var sending by remember { mutableStateOf(false) }
-                Text("TV найден", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                Text("TV найден", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(s.mode.hint, color = Color.Gray)
+                Text(s.mode.hint, color = ZenithOnSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
                     value = value, onValueChange = { value = it },
@@ -121,16 +123,16 @@ fun PhoneQrScanScreen(navController: NavHostController) {
                 ) { Text(if (sending) "Отправка..." else "Отправить на TV") }
             }
             is CompanionState.Sent -> {
-                Text("✓ Отправлено", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                Text("✓ Отправлено", color = ZenithOnSurface, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(16.dp))
-                Text(s.mode.doneMessage, color = Color.Gray)
+                Text(s.mode.doneMessage, color = ZenithOnSurfaceVariant)
                 Spacer(Modifier.height(24.dp))
                 Button(onClick = { navController.popBackStack() }) { Text("Готово") }
             }
             is CompanionState.Failed -> {
                 Text("⚠ Ошибка", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(s.message, color = Color.Gray)
+                Text(s.message, color = ZenithOnSurfaceVariant)
                 Spacer(Modifier.height(24.dp))
                 Button(onClick = { state = CompanionState.Scanning }) { Text("Отсканировать заново") }
             }

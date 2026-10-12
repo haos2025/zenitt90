@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.phone.screens
 
+import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -115,12 +117,12 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                                                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                                                 modifier = Modifier.width(56.dp).height(84.dp).clip(ZenithShapeSmall)
                                             )
-                                            Icon(Icons.Default.PlayArrow, null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.align(Alignment.Center).size(20.dp))
+                                            Icon(Icons.Default.PlayArrow, null, tint = ZenithOnSurface.copy(alpha = 0.85f), modifier = Modifier.align(Alignment.Center).size(20.dp))
                                         }
                                         Spacer(Modifier.width(ZenithDimens.paddingSM))
                                         Column(Modifier.weight(1f)) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                ep.episodeNumber?.let { Text("Эпизод $it", style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
+                                                ep.episodeNumber?.let { Text("Эпизод $it", style = MaterialTheme.typography.bodySmall, color = ZenithOnSurfaceVariant) }
                                                 if (hist?.completed == true) {
                                                     Spacer(Modifier.width(ZenithDimens.paddingXS))
                                                     Icon(Icons.Default.CheckCircle, contentDescription = "Просмотрено", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
@@ -128,7 +130,7 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                                             }
                                             Text(ep.title)
                                             if (ep.description.isNotBlank()) {
-                                                Text(ep.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
+                                                Text(ep.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
                                             }
                                             if (hist?.completed != true && progress != null && progress > 0f) {
                                                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS))
