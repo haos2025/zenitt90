@@ -5,6 +5,8 @@ import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -150,14 +152,22 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // которой раньше существовал отдельный TV-вариант. Обычный
                 // LazyColumn ниже — это и есть официально рекомендованная
                 // замена, не временный компромисс.
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                // Список прокручивается к началу, когда фокус возвращается в верхний блок
+                // (постер + кнопки): иначе после спуска к актёрам и обратного «вверх»
+                // Compose прокручивает минимально — ровно до кнопки «Смотреть», и постер
+                // с названием остаются наполовину за верхним краем экрана.
+                val listState = rememberLazyListState()
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     item {
                         // Герой-блок: слева портретный постер TMDB (если он есть;
                         // сырой скриншот потока от провайдера как постер не
                         // показываем — см. комментарий про hasRealBackdrop выше),
                         // справа название, строка метаданных-«таблеток», жанры,
                         // описание и кнопки. Фокус по-прежнему стартует на «Смотреть».
-                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL),
+                            modifier = Modifier.onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } }
+                        ) {
                             if (tmdbPosterUrl != null) {
                                 AsyncImage(
                                     model = tmdbPosterUrl,

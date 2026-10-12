@@ -100,8 +100,8 @@ class MainActivity : ComponentActivity() {
             // из ServiceLocator.darkThemeFlow — теперь темой владеет Hilt-синглтон
             // ThemeManager (core/di/ThemeManager.kt), SettingsViewModel пишет и
             // читает тот же инстанс, мост-дублирование через ServiceLocator убран.
-            val darkTheme by themeManager.darkThemeFlow.collectAsState()
-            ZenithTheme(darkTheme = darkTheme) {
+            // Светлую тему убрали — приложение только тёмное (см. Color.kt).
+            ZenithTheme(isTv = isTv) {
                 // ИСПРАВЛЕНО: ZenithTvTheme() существовала в Theme.kt, но
                 // никогда и нигде не вызывалась во всём проекте — TV-экраны
                 // (androidx.tv.material3.MaterialTheme.colorScheme.xxx)
@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
                 // CircularProgressIndicator) — уже получают тему от внешнего
                 // ZenithTheme{}, им отдельная обёртка не нужна.
                 if (isTv) {
-                    ZenithTvTheme(darkTheme = darkTheme) {
+                    ZenithTvTheme {
                         ZenithNavHost(
                             startDestination = startDestination,
                             isTV = isTv,
