@@ -87,7 +87,12 @@ fun MovieCard(
         animationSpec = tween(ZenithDurationShort, easing = ZenithEasingStandard),
         label = "movieCardFocusRing"
     )
-    val showCaption = !isTv || isFocused || poster.isBlank()
+    // ФИКС: ссылка на постер непустая, но картинка не загрузилась (404, мёртвый
+    // скриншот провайдера, таймаут) — раньше на ТВ получалась пустая синяя
+    // карточка без названия (подпись показывалась только в фокусе). При ошибке
+    // загрузки подпись видна всегда, как для карточки без постера.
+    var posterFailed by remember(poster) { mutableStateOf(false) }
+    val showCaption = !isTv || isFocused || poster.isBlank() || posterFailed
 
     Card(
         onClick = onClick,
@@ -106,7 +111,9 @@ fun MovieCard(
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
-                error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
+                error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                onError = { posterFailed = true },
+                onSuccess = { posterFailed = false }
             )
             // Явное имя пакета: внутри Card неявный ColumnScope делал вызов
             // неоднозначным (ошибка сборки "cannot be called with an implicit receiver").

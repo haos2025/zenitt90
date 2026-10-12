@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -120,7 +121,9 @@ fun PhoneEpgGridScreen(
             }
 
             when (val state = uiState) {
-                is EpgGridUiState.Loading -> Unit
+                is EpgGridUiState.Loading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
                 is EpgGridUiState.NoChannels -> {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         Text(
@@ -151,6 +154,25 @@ fun PhoneEpgGridScreen(
                         }
                     }
                     Spacer(Modifier.height(ZenithDimens.paddingXS))
+
+                    // Нет ни одной передачи в видимом окне (EPG не загружен или окно
+                    // сдвинуто за пределы данных) — вместо пустой сетки объясняем, что делать.
+                    val hasPrograms = remember(visibleRows) { visibleRows.any { r -> r.slots.any { it is EpgSlot.ProgramSlot } } }
+                    if (!hasPrograms) {
+                        Box(Modifier.fillMaxWidth().weight(1f).padding(ZenithDimens.paddingL), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Нет данных программы на это время", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                Spacer(Modifier.height(ZenithDimens.paddingXS))
+                                Text(
+                                    "Попробуйте кнопку «Сейчас» или другую категорию. Если пусто везде — обновите источник в Настройках: у провайдера может не быть программы передач.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ZenithOnSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        return@Column
+                    }
 
                     PhoneRulerRow(windowStart = state.windowStart, windowEnd = state.windowEnd)
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -304,8 +326,8 @@ private fun PhoneProgramCell(modifier: Modifier, slot: EpgSlot.ProgramSlot, onCl
             .clip(ZenithShapeSmall)
             .background(
                 when {
-                    slot.isLive -> MaterialTheme.colorScheme.primaryContainer
-                    slot.isCatchupAvailable -> MaterialTheme.colorScheme.secondaryContainer
+                    slot.isLive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+                    slot.isCatchupAvailable -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f)
                     else -> MaterialTheme.colorScheme.surfaceVariant
                 }
             )

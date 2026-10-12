@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -98,7 +100,7 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
                 .background(colors.surface)
                 // hasFocus = фокус на любом из пунктов внутри панели.
                 .onFocusChanged { expanded = it.hasFocus }
-                .padding(vertical = ZenithDimens.paddingL, horizontal = 16.dp),
+                .padding(vertical = ZenithDimens.paddingL, horizontal = 10.dp),
             horizontalAlignment = Alignment.Start
         ) {
             // Знак бренда: на месте и в покое, и в раскрытом виде.
@@ -119,6 +121,13 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
                 }
             }
 
+            // ФИКС: на ТВ с невысоким экраном (720p при плотности 1.33 ≈ 540 dp)
+            // колонка не помещалась по высоте, и закреплённые внизу «Настройки»
+            // уходили за край — выбрать их было нельзя. Пункты меню теперь в
+            // прокручиваемой области (focus сам докручивает до выбранного),
+            // а «Настройки» закреплены под ней и видны всегда.
+            // Горизонтальный запас 6 dp — чтобы увеличенная при фокусе плитка не обрезалась краем прокрутки.
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)) {
             var lastGroup: SidebarGroup? = null
             SidebarItem.values().forEach { item ->
                 if (item.group != lastGroup && item.group.title != null) {
@@ -176,7 +185,7 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            }
 
             // Настройки — отдельно внизу, как на макете.
             val settingsSelected = currentRoute == "settings"
@@ -188,7 +197,7 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
                     focusedContainerColor = colors.primary.copy(alpha = 0.5f)
                 ),
                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
+                modifier = Modifier.padding(top = 6.dp, start = 6.dp, end = 6.dp).fillMaxWidth().height(52.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
