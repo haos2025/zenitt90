@@ -137,6 +137,7 @@ fun PhonePlayerController(
     playbackSpeed: Float,
     onSelectSpeed: (Float) -> Unit,
     onBackPressed: () -> Unit,
+    isLive: Boolean = false,
     hasNextEpisode: Boolean = false,
     hasPreviousEpisode: Boolean = false,
     onNextEpisode: () -> Unit = {},
@@ -217,7 +218,7 @@ fun PhonePlayerController(
                             if (isSeries) {
                                 TransportButton(
                                     icon = Icons.Default.SkipPrevious,
-                                    contentDescription = "Предыдущая серия",
+                                    contentDescription = if (isLive) "Предыдущий канал" else "Предыдущая серия",
                                     enabled = hasPreviousEpisode,
                                     onClick = onPreviousEpisode
                                 )
@@ -233,7 +234,7 @@ fun PhonePlayerController(
                                 Spacer(Modifier.width(ZenithDimens.paddingM))
                                 TransportButton(
                                     icon = Icons.Default.SkipNext,
-                                    contentDescription = "Следующая серия",
+                                    contentDescription = if (isLive) "Следующий канал" else "Следующая серия",
                                     enabled = hasNextEpisode,
                                     onClick = onNextEpisode
                                 )

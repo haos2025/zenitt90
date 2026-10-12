@@ -509,10 +509,14 @@ class PlayerViewModel @Inject constructor(
                 // Название/постер нужны для записи в историю (WatchHistoryEntity
                 // хранит их денормализованно, как и FavoriteEntity) — раньше
                 // PlayerViewModel вообще не знал название фильма, только id.
-                val movie = getMovie.execute(movieId).getOrNull()
-                currentTitle = movie?.title ?: ""
+                // Живой канал ("ch_") — не Movie: бэкенд про него ничего не знает,
+                // название и логотип берём из своей таблицы каналов. Раньше
+                // запись истории получала пустое название и без логотипа.
+                val movie = if (movieId.startsWith("ch_")) null else getMovie.execute(movieId).getOrNull()
+                val liveChannel = if (movieId.startsWith("ch_")) channelRepository.getById(movieId) else null
+                currentTitle = liveChannel?.canonicalName ?: movie?.title ?: ""
                 currentYear = movie?.year ?: 0
-                currentPoster = movie?.poster
+                currentPoster = liveChannel?.logo ?: movie?.poster
                 currentSeriesId = movie?.seriesId
                 // Новый показ — предыдущий результат/процесс автосубтитров
                 // (если был) относился к другому фильму/серии.
@@ -524,7 +528,8 @@ class PlayerViewModel @Inject constructor(
                 // на то что процент был показан честно. Теперь действительно
                 // продолжает, если фильм не был досмотрен (completed == false).
                 val existingHistory = watchHistory.getByContentId(movieId)
-                val resumePositionMs = if (existingHistory != null && !existingHistory.completed) existingHistory.positionMs else 0L
+                // Для живого канала позиция из истории бессмысленна — всегда с «сейчас».
+                val resumePositionMs = if (!movieId.startsWith("ch_") && existingHistory != null && !existingHistory.completed) existingHistory.positionMs else 0L
 
                 val saved = qualityPrefs.getSelectedQuality()
                 // Выбор озвучки/варианта в едином окне сериала

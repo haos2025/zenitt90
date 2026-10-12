@@ -107,6 +107,10 @@ class ChannelRepository(
         sorted[nextIndex]
     }
 
+    suspend fun getById(channelId: String): ChannelUiItem? = withContext(Dispatchers.IO) {
+        channelDao.getById(channelId)?.let { toUiItems(listOf(it)).firstOrNull() }
+    }
+
     suspend fun getSubscribedCount(): Int = withContext(Dispatchers.IO) { channelDao.getSubscribed().size }
 
     suspend fun setSubscribed(channelId: String, isSubscribed: Boolean) = withContext(Dispatchers.IO) {

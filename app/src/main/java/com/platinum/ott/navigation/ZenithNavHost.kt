@@ -3,6 +3,7 @@ package com.platinum.ott.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -115,6 +116,13 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("home") { if (isTV) HomeScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHomeScreen(navController) }
         composable("detail/{movieId}", arguments = listOf(navArgument("movieId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("movieId") ?: return@composable
+            // Живой канал ("ch_") не имеет карточки фильма (бэкенд отвечает 404) —
+            // записи истории/«Продолжить просмотр» ведут сюда же, поэтому одним
+            // перехватом уводим сразу в плеер, не рисуя карточку.
+            if (id.startsWith("ch_")) {
+                LaunchedEffect(id) { navController.navigate("player/$id") { popUpTo("detail/{movieId}") { inclusive = true } } }
+                return@composable
+            }
             if (isTV) DetailScreen(
                 movieId = id,
                 onPlayClick = { navController.navigate("player/$id") },

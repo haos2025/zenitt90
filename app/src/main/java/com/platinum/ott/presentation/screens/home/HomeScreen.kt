@@ -174,7 +174,7 @@ private fun ContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (Str
         Text(
             text = "Продолжить просмотр",
             style = MaterialTheme.typography.titleLarge,
-            color = androidx.compose.ui.graphics.ZenithOnSurface,
+            color = ZenithOnSurface,
             modifier = Modifier.padding(start = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingSM)
         )
         LazyRow(

@@ -108,7 +108,9 @@ fun MovieCard(
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
             )
-            AnimatedVisibility(
+            // Явное имя пакета: внутри Card неявный ColumnScope делал вызов
+            // неоднозначным (ошибка сборки "cannot be called with an implicit receiver").
+            androidx.compose.animation.AnimatedVisibility(
                 visible = showCaption,
                 enter = fadeIn(tween(ZenithDurationShort)),
                 exit = fadeOut(tween(ZenithDurationShort)),

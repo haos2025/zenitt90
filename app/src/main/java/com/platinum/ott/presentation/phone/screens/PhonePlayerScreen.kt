@@ -110,6 +110,8 @@ fun PhonePlayerScreen(
     val overlaySettings = remember { viewModel.overlaySettings }
     val hideDelayMs = overlaySettings.hideDelayMs ?: 3000
     val holdForPause = overlaySettings.keepControlsWhenPaused && !isPlaying
+    // Баннер переключения канала (как на TV): номер, имя, программа сейчас.
+    val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
     val isLive = movieId.startsWith("ch_")
     val shownBufferedMs = if (overlaySettings.showBuffered && !isLive) bufferedPositionMs else 0L
     LaunchedEffect(lastInteraction, showControls, hideDelayMs, holdForPause) {
@@ -331,14 +333,33 @@ fun PhonePlayerScreen(
                     playbackSpeed = state.playbackSpeed,
                     onSelectSpeed = { viewModel.setPlaybackSpeed(it); lastInteraction = System.currentTimeMillis() },
                     onBackPressed = { navController.popBackStack() },
-                    hasNextEpisode = state.nextEpisodeId != null,
-                    hasPreviousEpisode = state.previousEpisodeId != null,
-                    onNextEpisode = { viewModel.playNextEpisode(); lastInteraction = System.currentTimeMillis() },
-                    onPreviousEpisode = { viewModel.playPreviousEpisode(); lastInteraction = System.currentTimeMillis() },
+                    // Живой канал: те же кнопки пред./след. работают как заппинг
+                    // по подписанным каналам (список закольцован, см.
+                    // PlayerViewModel.zap()); для VOD — серии, как раньше.
+                    isLive = isLive,
+                    hasNextEpisode = isLive || state.nextEpisodeId != null,
+                    hasPreviousEpisode = isLive || state.previousEpisodeId != null,
+                    onNextEpisode = { if (isLive) viewModel.zapToNextChannel() else viewModel.playNextEpisode(); lastInteraction = System.currentTimeMillis() },
+                    onPreviousEpisode = { if (isLive) viewModel.zapToPreviousChannel() else viewModel.playPreviousEpisode(); lastInteraction = System.currentTimeMillis() },
                     isFullscreen = isFullscreen,
                     onToggleFullscreen = { isFullscreen = !isFullscreen; lastInteraction = System.currentTimeMillis() },
                     modifier = Modifier.fillMaxSize()
                 )
+                zapBannerInfo?.let { info ->
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = ZenithDimens.paddingXL)
+                            .clip(ZenithShapeMedium)
+                            .background(com.platinum.ott.ui.theme.ZenithSurface.copy(alpha = 0.92f))
+                            .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+                    ) {
+                        Text("${info.channelNumber} · ${info.channelName}", color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        info.currentProgramTitle?.let {
+                            Text(it, color = ZenithOnSurface.copy(alpha = 0.75f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
         }
     }
