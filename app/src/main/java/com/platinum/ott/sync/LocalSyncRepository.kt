@@ -223,10 +223,15 @@ class LocalSyncRepository(
         // SyncRepositoryImpl.kt (contentId не первичный ключ у FavoriteEntity,
         // insertFavorite() с REPLACE сам по себе дедуп не даёт).
         for (dto in payload.favorites) {
+            // Папка / ручной порядок / аниме-флаг есть только локально (в DTO их нет) —
+            // переносим со старой записи, иначе каждая синхронизация их сбрасывала.
+            val existing = favoritesDao.getFavoriteByContentId(dto.contentId)
             favoritesDao.deleteByContentId(dto.contentId)
             favoritesDao.insertFavorite(
                 FavoriteEntity(
                     contentId = dto.contentId, contentType = dto.contentType, title = dto.title,
+                    folderId = existing?.folderId, sortOrder = existing?.sortOrder ?: 0,
+                    isAnime = existing?.isAnime ?: false,
                     poster = dto.poster, addedAt = if (dto.updatedAt > 0) dto.updatedAt else System.currentTimeMillis(),
                     updatedAt = if (dto.updatedAt > 0) dto.updatedAt else System.currentTimeMillis()
                 )

@@ -235,3 +235,15 @@ private fun BrandMark(modifier: Modifier = Modifier) {
         drawPath(play, ZenithOnSurface)
     }
 }
+
+/**
+ * Оборачивает TV-экран, у которого нет собственной боковой панели (Каналы,
+ * Телепрограмма, Сериалы): панель слева, экран справа. Сам экран не меняется.
+ */
+@Composable
+fun TvWithSidebar(navController: NavHostController, content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxSize()) {
+        NavSidebar(navController)
+        Box(Modifier.weight(1f).fillMaxHeight()) { content() }
+    }
+}

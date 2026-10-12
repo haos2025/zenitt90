@@ -36,10 +36,16 @@ class SyncRepositoryImpl(
                 // contentId — список избранного пух с каждым нажатием
                 // "Синхронизировать". Убираем старую запись по contentId перед
                 // вставкой, чтобы insert реально вёл себя как upsert.
+                // Локальные поля, которых нет в DTO (папка, ручной порядок, аниме-флаг),
+                // переносим со старой записи — иначе каждый sync сбрасывал их в
+                // значения по умолчанию.
+                val existing = favDao.getFavoriteByContentId(dto.contentId)
                 favDao.deleteByContentId(dto.contentId)
                 favDao.insertFavorite(
                     FavoriteEntity(
                         contentId = dto.contentId, contentType = dto.contentType,
+                        folderId = existing?.folderId, sortOrder = existing?.sortOrder ?: 0,
+                        isAnime = existing?.isAnime ?: false,
                         title = dto.title, poster = dto.poster,
                         // Раньше addedAt пулленной записи всегда становился
                         // "сейчас" (значение по умолчанию в конструкторе,

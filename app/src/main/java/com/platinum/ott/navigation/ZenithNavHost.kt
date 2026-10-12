@@ -12,6 +12,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.platinum.ott.presentation.screens.home.HomeScreen
+import com.platinum.ott.presentation.components.TvWithSidebar
+import com.platinum.ott.presentation.phone.screens.PhoneWithBottomBar
 import com.platinum.ott.presentation.screens.detail.DetailScreen
 import com.platinum.ott.presentation.screens.person.PersonDetailScreen
 import com.platinum.ott.presentation.screens.player.PlayerScreen
@@ -78,18 +80,22 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // отдельный route "channels_manage", туда ведёт кнопка "Управление"
         // прямо с этого экрана, а также SettingsScreen.kt.
         composable("channels") {
-            if (isTV) ChannelsBrowseScreen(
-                onBackPressed = { navController.popBackStack() },
-                onPlayChannel = { navController.navigate("player/$it") },
-                onOpenEpgGrid = { navController.navigate("epg_grid") },
-                onManageClick = { navController.navigate("channels_manage") }
-            )
-            else PhoneChannelsBrowseScreen(
-                onBackPressed = { navController.popBackStack() },
-                onPlayChannel = { navController.navigate("player/$it") },
-                onOpenEpgGrid = { navController.navigate("epg_grid") },
-                onManageClick = { navController.navigate("channels_manage") }
-            )
+            if (isTV) TvWithSidebar(navController) {
+                ChannelsBrowseScreen(
+                    onBackPressed = { navController.popBackStack() },
+                    onPlayChannel = { navController.navigate("player/$it") },
+                    onOpenEpgGrid = { navController.navigate("epg_grid") },
+                    onManageClick = { navController.navigate("channels_manage") }
+                )
+            }
+            else PhoneWithBottomBar(navController) {
+                PhoneChannelsBrowseScreen(
+                    onBackPressed = { navController.popBackStack() },
+                    onPlayChannel = { navController.navigate("player/$it") },
+                    onOpenEpgGrid = { navController.navigate("epg_grid") },
+                    onManageClick = { navController.navigate("channels_manage") }
+                )
+            }
         }
         composable("channels_manage") {
             if (isTV) ChannelsManageScreen(onBackPressed = { navController.popBackStack() })
@@ -103,8 +109,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             val onPlayCatchup: (String, Long, Long) -> Unit = { channelId, start, end ->
                 navController.navigate("player/$channelId?catchupStart=$start&catchupEnd=$end")
             }
-            if (isTV) EpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup)
-            else PhoneEpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup)
+            if (isTV) TvWithSidebar(navController) { EpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup) }
+            else PhoneWithBottomBar(navController) { PhoneEpgGridScreen(onBackPressed = { navController.popBackStack() }, onPlayChannel = { navController.navigate("player/$it") }, onPlayCatchup = onPlayCatchup) }
         }
         // PROMPT_NAVIGATION_SIDEBAR.md — HomeScreen (TV) больше не получает
         // отдельные onSettingsClick/onFavoritesClick/onHistoryClick/
@@ -205,8 +211,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             else PhoneSearchScreen(navController, initialQuery = q)
         }
         composable("series") {
-            if (isTV) com.platinum.ott.presentation.screens.series.SeriesListScreen(onBackPressed = { navController.popBackStack() }, onSeriesClick = { navController.navigate("series/$it") })
-            else PhoneSeriesListScreen(navController)
+            if (isTV) TvWithSidebar(navController) { com.platinum.ott.presentation.screens.series.SeriesListScreen(onBackPressed = { navController.popBackStack() }, onSeriesClick = { navController.navigate("series/$it") }) }
+            else PhoneWithBottomBar(navController) { PhoneSeriesListScreen(navController) }
         }
         composable("series/{seriesId}", arguments = listOf(navArgument("seriesId") { type = NavType.StringType })) { entry ->
             val seriesId = entry.arguments?.getString("seriesId") ?: return@composable
