@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,7 +31,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import android.os.SystemClock
+import com.platinum.ott.core.platform.DpadKeyTracker
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -86,6 +96,20 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
     // "search" зарегистрирован как "search?q={q}" — сравниваем по базовому пути.
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route?.substringBefore('?')
     var expanded by remember { mutableStateOf(false) }
+    // ФИКС «панель сама открывается»: при входе на экран система ставит начальный
+    // фокус на первый фокусируемый элемент — это панель (она первая в Row). Раньше
+    // это раскрывало её на каждом экране и после каждого перехода из панели.
+    // Теперь: если фокус пришёл БЕЗ нажатия стрелки после появления экрана — панель
+    // остаётся свёрнутой и передаёт фокус контенту (moveFocus вправо).
+    val focusManager = LocalFocusManager.current
+    val composedAt = remember { SystemClock.uptimeMillis() }
+    var handoffToContent by remember { mutableStateOf(false) }
+    LaunchedEffect(handoffToContent) {
+        if (handoffToContent) {
+            handoffToContent = false
+            focusManager.moveFocus(FocusDirection.Right)
+        }
+    }
     val width by animateDpAsState(if (expanded) ExpandedWidth else CollapsedWidth, tween(180), label = "sidebarWidth")
     val colors = MaterialTheme.colorScheme
 
@@ -99,7 +123,17 @@ fun NavSidebar(navController: NavHostController, modifier: Modifier = Modifier) 
                 .then(if (expanded) Modifier.shadow(24.dp) else Modifier)
                 .background(colors.surface)
                 // hasFocus = фокус на любом из пунктов внутри панели.
-                .onFocusChanged { expanded = it.hasFocus }
+                .onFocusChanged {
+                    if (!it.hasFocus) expanded = false
+                    else if (DpadKeyTracker.lastDirectionalKeyMs >= composedAt) expanded = true
+                    else { expanded = false; handoffToContent = true }
+                }
+                // Стрелка, нажатая уже внутри (свёрнутой) панели, раскрывает её.
+                .onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown &&
+                        (it.key == Key.DirectionUp || it.key == Key.DirectionDown || it.key == Key.DirectionLeft)) expanded = true
+                    false
+                }
                 .padding(vertical = ZenithDimens.paddingL, horizontal = 10.dp),
             horizontalAlignment = Alignment.Start
         ) {

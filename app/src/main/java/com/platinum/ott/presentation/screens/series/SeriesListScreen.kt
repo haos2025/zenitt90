@@ -36,8 +36,6 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
     LaunchedEffect(Unit) { viewModel.load() }
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
-            Spacer(Modifier.width(ZenithDimens.paddingM))
             Text("Сериалы", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))

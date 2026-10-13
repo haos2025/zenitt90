@@ -19,9 +19,6 @@ data class LocalSyncSettingsDto(
     val maxQualityOnMobile: String = "720p",
     val networkTimeoutSeconds: Int = 15,
     val newEpisodesNotificationsEnabled: Boolean = true,
-    val quietHoursEnabled: Boolean = true,
-    val quietStartHour: Int = 23,
-    val quietEndHour: Int = 8,
     val subtitlesShowByDefault: Boolean = false
 )
 

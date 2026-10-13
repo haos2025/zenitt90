@@ -64,7 +64,6 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
             is PersonUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             is PersonUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) {
                 Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
-                Button(onClick = onBackPressed) { Text("Назад") }
             }
             is PersonUiState.Success -> {
                 val profile = state.profile

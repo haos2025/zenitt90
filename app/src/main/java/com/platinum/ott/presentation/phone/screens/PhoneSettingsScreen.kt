@@ -224,22 +224,6 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 Text("Новый контент", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
                 Text("Скоро", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            CardDivider()
-            var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
-            var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
-            var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Тихий режим", color = ZenithOnSurface, modifier = Modifier.weight(1f))
-                Switch(checked = quietEnabled, onCheckedChange = { quietEnabled = it; notifPrefs.setQuietHoursEnabled(it) })
-            }
-            if (quietEnabled) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$quietStart:00–$quietEnd:00", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
-                    Spacer(Modifier.width(ZenithDimens.paddingS))
-                    OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
-                }
-            }
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
 

@@ -15,6 +15,14 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import com.platinum.ott.core.platform.safeRequestFocus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.*
@@ -160,20 +168,9 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
         NavSidebar(navController)
         Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.tvOverscanPadding, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingL)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = onBackPressed) { Text("← Назад") }
-                Spacer(Modifier.width(ZenithDimens.paddingM))
-                BasicTextField(
-                    value = query,
-                    onValueChange = viewModel::onQueryChange,
-                    singleLine = true,
-                    textStyle = TextStyle(ZenithOnSurface, 20.sp),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).background(ZenithOnSurface.copy(0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
-                    decorationBox = { inner ->
-                        if (query.isEmpty()) Text("Название фильма или сериала…", style = TextStyle(ZenithOnSurface.copy(0.3f), 20.sp))
-                        inner()
-                    }
-                )
+                // Поле не принимает ввод само по себе: клавиатура открывается только
+                // по нажатию OK на поле (раньше всплывала сама при получении фокуса).
+                SearchField(query = query, onChange = viewModel::onQueryChange, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(ZenithDimens.paddingM))
                 OutlinedButton(onClick = { showCompanionQr = true }) { Text("По QR с телефона") }
                 // Кнопки нет вообще, если на устройстве нет голосового сервиса —
@@ -240,6 +237,61 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
             content = companionAddress,
             onDismiss = { showCompanionQr = false },
             modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+// Поле поиска: в покое — обычная кликабельная плашка (фокус на ней НЕ вызывает
+// клавиатуру), по OK переходит в режим ввода и только тогда открывает IME.
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    var isEditing by remember { mutableStateOf(false) }
+    var gotFocus by remember { mutableStateOf(false) }
+    var wasEditing by remember { mutableStateOf(false) }
+    val inputRequester = remember { FocusRequester() }
+    val idleRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // После выхода из ввода возвращаем фокус на плашку, чтобы он не «убегал».
+    LaunchedEffect(isEditing) { if (!isEditing && wasEditing) idleRequester.safeRequestFocus() }
+
+    if (!isEditing) {
+        Surface(
+            onClick = { gotFocus = false; wasEditing = true; isEditing = true },
+            shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = ZenithOnSurface.copy(0.08f),
+                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            ),
+            modifier = modifier.focusRequester(idleRequester)
+        ) {
+            Text(
+                if (query.isEmpty()) "Название фильма или сериала…" else query,
+                style = TextStyle(if (query.isEmpty()) ZenithOnSurface.copy(0.4f) else ZenithOnSurface, 20.sp),
+                maxLines = 1,
+                modifier = Modifier.padding(ZenithDimens.paddingM, ZenithDimens.paddingSM)
+            )
+        }
+    } else {
+        LaunchedEffect(Unit) { inputRequester.safeRequestFocus(); keyboard?.show() }
+        BasicTextField(
+            value = query,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = TextStyle(ZenithOnSurface, 20.sp),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { isEditing = false; keyboard?.hide() }, onDone = { isEditing = false; keyboard?.hide() }),
+            modifier = modifier
+                .focusRequester(inputRequester)
+                .background(ZenithOnSurface.copy(0.08f), ZenithShapeSmall)
+                .padding(ZenithDimens.paddingM, ZenithDimens.paddingSM)
+                .onFocusChanged {
+                    if (it.isFocused) gotFocus = true
+                    else if (gotFocus) { isEditing = false; keyboard?.hide() }
+                },
+            decorationBox = { inner -> inner() }
         )
     }
 }

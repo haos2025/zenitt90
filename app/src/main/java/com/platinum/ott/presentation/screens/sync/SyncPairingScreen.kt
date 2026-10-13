@@ -76,9 +76,7 @@ fun SyncPairingScreen(
     var enteredCode by remember { mutableStateOf("") }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Синхронизация устройств") }, navigationIcon = {
-            TextButton(onClick = onBackPressed) { Text("Назад") }
-        })
+        TopAppBar(title = { Text("Синхронизация устройств") })
     }) { padding ->
         Column(
             Modifier

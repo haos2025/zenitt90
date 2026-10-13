@@ -7,6 +7,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.focusGroup
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,7 +54,7 @@ import com.platinum.ott.presentation.components.RecommendationsRow
 import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
 import com.platinum.ott.ui.theme.*
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, onNavigateToPerson: (Int) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
     LaunchedEffect(movieId) { viewModel.load(movieId) }
@@ -72,7 +86,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
             // Эпизод сериала — сразу уводим на общий экран сериала, не
             // рисуя здесь вообще ничего (см. DetailViewModel.load()).
             is DetailUiState.RedirectToSeries -> LaunchedEffect(state.seriesId) { onNavigateToSeries(state.seriesId) }
-            is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error); Button(onClick = onBackPressed) { Text("Назад") } }
+            is DetailUiState.Error -> Column(Modifier.align(Alignment.Center).padding(ZenithDimens.paddingXL)) { Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error) }
             is DetailUiState.Success -> {
                 // Один раз на фильм (см. комментарий у объявления
                 // playButtonFocusRequester выше) — переводим фокус на
@@ -152,21 +166,36 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // которой раньше существовал отдельный TV-вариант. Обычный
                 // LazyColumn ниже — это и есть официально рекомендованная
                 // замена, не временный компромисс.
-                // Список прокручивается к началу, когда фокус возвращается в верхний блок
-                // (постер + кнопки): иначе после спуска к актёрам и обратного «вверх»
-                // Compose прокручивает минимально — ровно до кнопки «Смотреть», и постер
-                // с названием остаются наполовину за верхним краем экрана.
+                // ПЕРЕДЕЛАНО (репорт с ТВ: «постер наполовину», «залипает на Показать
+                // полностью», «кнопки прыгают при переходе на В избранное»). Причина — прокрутка
+                // списка конкурировала сама с собой: минимальная докрутка Compose к
+                // сфокусированной кнопке + моя animateScrollToItem(0) на каждое изменение
+                // фокуса. Теперь экран — две «страницы» по высоте экрана: 0 = верхний блок
+                // (постер, название, кнопки), 1 = актёры и «Смотрите также». Прокрутка
+                // пользователем выключена; страница переключается ровно одной анимацией по
+                // тому, в какой странице находится фокус. Вход в верхний блок всегда ставит
+                // фокус на «Смотреть» (а не на «Показать полностью»).
                 val listState = rememberLazyListState()
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                    item {
-                        // Герой-блок: слева портретный постер TMDB (если он есть;
-                        // сырой скриншот потока от провайдера как постер не
-                        // показываем — см. комментарий про hasRealBackdrop выше),
-                        // справа название, строка метаданных-«таблеток», жанры,
-                        // описание и кнопки. Фокус по-прежнему стартует на «Смотреть».
+                var page by remember(movieId) { mutableIntStateOf(0) }
+                LaunchedEffect(page) { listState.animateScrollToItem(page) }
+                var showOverviewDialog by remember(movieId) { mutableStateOf(false) }
+                val screenHeightDp = LocalConfiguration.current.screenHeightDp
+                val posterHeight = (screenHeightDp * 0.5f).coerceIn(200f, 330f).dp
+                val posterWidth = posterHeight * 2f / 3f
+                val hasCast = state.metadata?.cast?.isNotEmpty() == true
+                val hasMore = hasCast || state.recommendations.isNotEmpty()
+                LazyColumn(state = listState, userScrollEnabled = false, modifier = Modifier.fillMaxSize()) {
+                    item(key = "hero") {
+                        Column(
+                            modifier = Modifier.fillParentMaxHeight().fillMaxWidth().padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingL),
+                            verticalArrangement = Arrangement.Center
+                        ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL),
-                            modifier = Modifier.onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } }
+                            modifier = Modifier
+                                .onFocusChanged { if (it.hasFocus) page = 0 }
+                                .focusProperties { enter = { playButtonFocusRequester } }
+                                .focusGroup()
                         ) {
                             if (tmdbPosterUrl != null) {
                                 AsyncImage(
@@ -174,8 +203,8 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                     contentDescription = state.movie.title,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
-                                        .width(200.dp)
-                                        .height(300.dp)
+                                        .width(posterWidth)
+                                        .height(posterHeight)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(ZenithSurface)
                                 )
@@ -212,22 +241,20 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         }
                                     }
                                     meta.overview?.let { overview ->
-                                        // Клэмп в 4 строки + «Показать полностью»/«Свернуть» —
-                                        // тумблер виден только когда текст реально обрезан
-                                        // (onTextLayout.hasVisualOverflow).
-                                        var isOverviewExpanded by remember(movieId) { mutableStateOf(false) }
+                                        // 4 строки + «Показать полностью» — полный текст открывается в
+                                        // модальном окне (раскрытие прямо в экране сдвигало кнопки).
                                         var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
                                         Text(
                                             overview,
                                             color = ZenithOnSurface.copy(0.8f),
                                             style = MaterialTheme.typography.bodyLarge,
-                                            maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 4,
+                                            maxLines = 4,
                                             overflow = TextOverflow.Ellipsis,
-                                            onTextLayout = { if (!isOverviewExpanded) isOverviewExpandable = it.hasVisualOverflow }
+                                            onTextLayout = { isOverviewExpandable = it.hasVisualOverflow }
                                         )
                                         if (isOverviewExpandable) {
                                             Surface(
-                                                onClick = { isOverviewExpanded = !isOverviewExpanded },
+                                                onClick = { showOverviewDialog = true },
                                                 shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
                                                 colors = ClickableSurfaceDefaults.colors(
                                                     containerColor = Color.Transparent,
@@ -236,7 +263,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
                                             ) {
                                                 Text(
-                                                    if (isOverviewExpanded) "Свернуть" else "Показать полностью",
+                                                    "Показать полностью",
                                                     color = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.padding(horizontal = ZenithDimens.paddingS, vertical = ZenithDimens.paddingXS)
                                                 )
@@ -262,34 +289,45 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                 }
                             }
                         }
-                    }
-                    // Карусель актёров (п.4) — не рисуется вовсе, если TMDB
-                    // credits не вернул ничего (старая закэшированная запись
-                    // без castJson, ошибка сети, или у фильма правда нет cast).
-                    if (state.metadata?.cast?.isNotEmpty() == true) {
-                        item { CastRow(state.metadata.cast, onMemberClick = { member -> onNavigateToPerson(member.id) }) }
-                    }
-                    // "Смотрите также" (п.5) — только для контента, у которого
-                    // TMDB нашёл совпадение (см. DetailViewModel.load()); для
-                    // собственного M3U/Xtream-плейлиста список всегда пуст.
-                    if (state.recommendations.isNotEmpty()) {
-                        item {
-                            // Реальный репорт с TV: нажатие на карточку раньше
-                            // ничего не делало. Recommendation — запись TMDB, не
-                            // обязательно из собственного каталога — сначала
-                            // ищем совпадение (DetailViewModel.findInCatalog(),
-                            // тот же SearchMoviesUseCase, что и обычный поиск),
-                            // и либо переходим, либо явно говорим, что не нашли,
-                            // а не молчим как раньше.
-                            RecommendationsRow(state.recommendations, onItemClick = { rec ->
-                                scope.launch {
-                                    val foundId = viewModel.findInCatalog(rec)
-                                    if (foundId != null) onNavigateToMovie(foundId)
-                                    else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
-                                }
-                            })
+                        if (hasMore) {
+                            Spacer(Modifier.height(ZenithDimens.paddingM))
+                            Text("▼  Актёры и похожие фильмы", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                        }
                         }
                     }
+                    // Страница 1: актёры (если TMDB вернул credits) и «Смотрите также»
+                    // (только для контента, найденного в TMDB).
+                    if (hasMore) {
+                        item(key = "more") {
+                            Column(
+                                modifier = Modifier
+                                    .fillParentMaxHeight().fillMaxWidth()
+                                    .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingL)
+                                    .onFocusChanged { if (it.hasFocus) page = 1 },
+                                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)
+                            ) {
+                                if (hasCast) CastRow(state.metadata!!.cast, onMemberClick = { member -> onNavigateToPerson(member.id) })
+                                if (state.recommendations.isNotEmpty()) {
+                                    // Нажатие: ищем совпадение в каталоге (DetailViewModel.findInCatalog()),
+                                    // переходим либо явно сообщаем, что не нашли.
+                                    RecommendationsRow(state.recommendations, onItemClick = { rec ->
+                                        scope.launch {
+                                            val foundId = viewModel.findInCatalog(rec)
+                                            if (foundId != null) onNavigateToMovie(foundId)
+                                            else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                                        }
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+                if (showOverviewDialog) {
+                    OverviewDialog(
+                        title = state.movie.title,
+                        text = state.metadata?.overview.orEmpty(),
+                        onDismiss = { showOverviewDialog = false }
+                    )
                 }
                 if (showAddFavoriteDialog) {
                     MoveToFolderDialog(
@@ -319,4 +357,46 @@ private fun DetailPill(text: String, textColor: Color, background: Color) {
             .background(background)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     )
+}
+
+/** Модальное окно с полным описанием: Вверх/Вниз прокручивают текст, Назад или «Закрыть» — выход. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun OverviewDialog(title: String, text: String, onDismiss: () -> Unit) {
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val textFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { textFocus.safeRequestFocus() }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .heightIn(max = 520.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(ZenithSurface)
+                .padding(28.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            Box(
+                Modifier
+                    .weight(1f, fill = false)
+                    .focusRequester(textFocus)
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when {
+                            e.key == Key.DirectionDown && scroll.canScrollForward -> { scope.launch { scroll.animateScrollBy(220f) }; true }
+                            e.key == Key.DirectionUp && scroll.canScrollBackward -> { scope.launch { scroll.animateScrollBy(-220f) }; true }
+                            else -> false
+                        }
+                    }
+                    .focusable()
+                    .verticalScroll(scroll)
+            ) {
+                Text(text, color = ZenithOnSurface.copy(0.9f), style = MaterialTheme.typography.bodyLarge)
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            Button(onClick = onDismiss) { Text("Закрыть") }
+        }
+    }
 }

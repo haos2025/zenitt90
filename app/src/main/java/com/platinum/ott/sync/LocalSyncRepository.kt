@@ -203,9 +203,6 @@ class LocalSyncRepository(
             maxQualityOnMobile = qualityPreferences.getMaxQualityOnMobile(),
             networkTimeoutSeconds = networkPreferences.getTimeoutSeconds(),
             newEpisodesNotificationsEnabled = notificationPreferences.isNewEpisodesEnabled(),
-            quietHoursEnabled = notificationPreferences.isQuietHoursEnabled(),
-            quietStartHour = notificationPreferences.getQuietStartHour(),
-            quietEndHour = notificationPreferences.getQuietEndHour(),
             subtitlesShowByDefault = subtitlePreferences.getShowByDefault()
         )
         LocalSyncPayload(
@@ -313,8 +310,6 @@ class LocalSyncRepository(
             qualityPreferences.setMaxQualityOnMobile(settings.maxQualityOnMobile)
             networkPreferences.setTimeoutSeconds(settings.networkTimeoutSeconds)
             notificationPreferences.setNewEpisodesEnabled(settings.newEpisodesNotificationsEnabled)
-            notificationPreferences.setQuietHoursEnabled(settings.quietHoursEnabled)
-            notificationPreferences.setQuietHours(settings.quietStartHour, settings.quietEndHour)
             subtitlePreferences.setShowByDefault(settings.subtitlesShowByDefault)
         }
 

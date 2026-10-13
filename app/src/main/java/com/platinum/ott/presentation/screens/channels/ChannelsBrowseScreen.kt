@@ -100,8 +100,6 @@ fun ChannelsBrowseScreen(
             OutlinedButton(onClick = onOpenEpgGrid) { Text("Программа передач") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
             OutlinedButton(onClick = onManageClick) { Text("Управление") }
-            Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

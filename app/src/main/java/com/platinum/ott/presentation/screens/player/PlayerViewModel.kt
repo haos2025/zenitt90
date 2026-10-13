@@ -93,7 +93,11 @@ sealed interface PlayerUiState {
         // по центру экрана при DirectionLeft/DirectionRight на TV (см.
         // PlayerScreen.kt), сам переход по-прежнему работает по id.
         val nextEpisodeTitle: String? = null,
-        val previousEpisodeTitle: String? = null
+        val previousEpisodeTitle: String? = null,
+        // Для оверлея: id сериала (кнопка «Серии») и признак записи из архива
+        // (кнопка «В эфир» вместо живого эфира).
+        val seriesId: String? = null,
+        val isCatchup: Boolean = false
     ) : PlayerUiState
     data class Error(val message: String) : PlayerUiState
 }
@@ -232,6 +236,8 @@ class PlayerViewModel @Inject constructor(
     // не записывалась, экран "История" всегда был пуст не из-за бага чтения,
     // а потому что писать было некому.
     private var currentMovieId: String = ""
+    /** id того, что играет сейчас (серия/канал могут меняться без смены маршрута экрана). */
+    val currentId: String get() = currentMovieId
     private var currentTitle: String = ""
     // PROMPT_SUBTITLES.md, подзадача 1 — год нужен только для поиска по
     // OpenSubtitles (title+year, см. searchAndApplyOpenSubtitles()), больше
@@ -588,7 +594,9 @@ class PlayerViewModel @Inject constructor(
                 _uiState.value = PlayerUiState.Ready(
                     variants, initial, currentTitle,
                     nextEpisodeId = nextEpisodeId, previousEpisodeId = previousEpisodeId,
-                    nextEpisodeTitle = nextEpisodeTitle, previousEpisodeTitle = previousEpisodeTitle
+                    nextEpisodeTitle = nextEpisodeTitle, previousEpisodeTitle = previousEpisodeTitle,
+                    seriesId = movie?.seriesId,
+                    isCatchup = catchupStartMillis != null && catchupEndMillis != null
                 )
                 startHistoryAutosave()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
@@ -650,6 +658,46 @@ class PlayerViewModel @Inject constructor(
             showZapBanner(channel)
         }
     }
+
+    // ---- Модальные окна оверлея (серии / каналы / программа) ----
+    suspend fun getEpisodeList(seriesId: String): List<com.platinum.ott.domain.model.Movie> =
+        runCatching { playlistRepository.getEpisodesForSeries(seriesId) }.getOrDefault(emptyList())
+
+    fun playEpisode(id: String) { if (id != currentMovieId) loadMovie(id) }
+
+    suspend fun getSubscribedChannels(): List<com.platinum.ott.data.repository.ChannelUiItem> =
+        runCatching { channelRepository.getSubscribed() }.getOrDefault(emptyList())
+
+    fun switchToChannel(channel: com.platinum.ott.data.repository.ChannelUiItem) {
+        if (channel.id != currentMovieId) loadMovie(channel.id)
+        showZapBanner(channel)
+    }
+
+    suspend fun getCurrentChannel(): com.platinum.ott.data.repository.ChannelUiItem? =
+        if (currentMovieId.startsWith("ch_")) runCatching { channelRepository.getById(currentMovieId) }.getOrNull() else null
+
+    suspend fun getChannelProgram(channelId: String, fromMs: Long, toMs: Long): List<com.platinum.ott.data.local.entity.EpgProgramEntity> =
+        runCatching { epgProgramRepository.getForChannelInRange(channelId, fromMs, toMs) }.getOrDefault(emptyList())
+
+    /** Текущая и следующая передача для постоянной шапки оверлея на живом канале. */
+    suspend fun getNowNext(): ZapBannerInfo? {
+        val channel = getCurrentChannel() ?: return null
+        val current = epgProgramRepository.getCurrentForChannel(channel.id)
+        val next = current?.let {
+            epgProgramRepository.getForChannelInRange(channel.id, it.endTimeMillis, it.endTimeMillis + TimeUnit.HOURS.toMillis(6)).firstOrNull()
+        }
+        val progress = current?.let {
+            val total = (it.endTimeMillis - it.startTimeMillis).toFloat()
+            if (total <= 0f) null else ((System.currentTimeMillis() - it.startTimeMillis) / total).coerceIn(0f, 1f)
+        }
+        return ZapBannerInfo(channel.id, channel.canonicalName, channel.logo, channel.channelNumber, current?.title, progress, next?.title)
+    }
+
+    fun playCatchup(startMs: Long, endMs: Long) {
+        if (currentMovieId.startsWith("ch_")) loadMovie(currentMovieId, catchupStartMillis = startMs, catchupEndMillis = endMs)
+    }
+
+    fun playLive() { if (currentMovieId.startsWith("ch_")) loadMovie(currentMovieId) }
 
     private val _zapBanner = MutableStateFlow<ZapBannerInfo?>(null)
     val zapBanner: StateFlow<ZapBannerInfo?> = _zapBanner

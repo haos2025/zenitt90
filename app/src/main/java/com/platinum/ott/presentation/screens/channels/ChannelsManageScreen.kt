@@ -84,8 +84,6 @@ fun ChannelsManageScreen(
             OutlinedButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                 Text(if (isChecking) "Проверка..." else "Проверить сейчас")
             }
-            Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

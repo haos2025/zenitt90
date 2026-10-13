@@ -44,7 +44,6 @@ fun CacheManagementScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Управление кэшем", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

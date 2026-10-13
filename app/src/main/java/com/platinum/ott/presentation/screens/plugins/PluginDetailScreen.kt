@@ -36,7 +36,6 @@ fun PluginDetailScreen(
                 PluginIcon(current.iconUrl, current.name, 56.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingM))
                 Text(current.name, style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = onBackPressed) { Text("Назад") }
             }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             DetailRow("ID", current.id)

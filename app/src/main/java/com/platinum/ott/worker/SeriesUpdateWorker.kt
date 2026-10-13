@@ -65,7 +65,6 @@ class SeriesUpdateWorker @AssistedInject constructor(
     }
 
     private fun notifyNewEpisode(seriesTitle: String, season: Int, episode: Int, contentId: String) {
-        if (notificationPreferences.isQuietNow()) return
         if (ActivityCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         // Раньше диплинка на конкретный сериал не существовало — экрана
         // "по сериалам" не было вообще, открывать было физически некуда.

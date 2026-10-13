@@ -83,7 +83,6 @@ fun PluginCatalogScreen(
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingXL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Плагины", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingM))
         TabRow(selectedTabIndex = selectedTab) {

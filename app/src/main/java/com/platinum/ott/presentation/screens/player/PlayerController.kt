@@ -13,10 +13,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -29,6 +32,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
@@ -88,43 +94,51 @@ import com.platinum.ott.ui.theme.*
  * закономерно начинают перемещать фокус между кнопками ряда, а не
  * перематывать — это соответствует поведению конкурентов, не регрессия.
  */
+/**
+ * ПЕРЕДЕЛАНО (двухуровневая модель, выбрана Shadow): оверлей не «режим фокуса», а два уровня
+ * в одной вертикали, по которой ходят Вверх/Вниз:
+ *   level 1 — фокус на видео: полоса прогресса «активна», Влево/Вправо = перемотка;
+ *   level 2 — фокус в ряду кнопок: Влево/Вправо ходят по кнопкам.
+ * Вверх с уровня 2 → уровень 1, Вверх с уровня 1 → скрыть, Назад — на ряд выше, затем скрыть,
+ * затем выйти (всё это — в PlayerScreen.onKeyEvent). Содержимое зависит от kind:
+ *   MOVIE   — play/pause + настройки;
+ *   SERIES  — ⏮ ⏯ ⏭, «Серии» + настройки;
+ *   LIVE    — «в эфире сейчас/далее» вместо полосы, «Каналы», «Программа» + настройки (без скорости);
+ *   CATCHUP — полоса записи, «В эфир», «Каналы», «Программа» + настройки.
+ */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlayerController(
     isVisible: Boolean,
+    level: Int,
+    kind: PlayerKind,
     isPlaying: Boolean,
     currentPositionMs: Long,
     durationMs: Long,
     onTogglePlay: () -> Unit,
+    primaryFocusRequester: FocusRequester,
     title: String = "",
     hasNextEpisode: Boolean = false,
     hasPreviousEpisode: Boolean = false,
     onNextEpisode: () -> Unit = {},
     onPreviousEpisode: () -> Unit = {},
-    onConnectPhone: () -> Unit = {},
-    // Растёт ли сейчас прогресс-бар — управляется снаружи (PlayerScreen),
-    // это единственный источник правды о том, держит ли пользователь
-    // сейчас DirectionLeft/DirectionRight.
+    liveInfo: ZapBannerInfo? = null,
+    onOpenEpisodes: () -> Unit = {},
+    onOpenChannels: () -> Unit = {},
+    onOpenProgram: () -> Unit = {},
+    onWatchLive: () -> Unit = {},
+    // Растёт ли сейчас прогресс-бар — управляется снаружи (PlayerScreen).
     isSeekActive: Boolean = false,
     // Прогруженная вперёд позиция (0 — не показывать: выключено в настройках или live).
     bufferedPositionMs: Long = 0L,
-    // Состояние для подсветки активных иконок справа — то же самое, что
-    // уже частично было на телефоне (subtitlesEnabled), плюс скорость.
-    // Для аудио/качества устойчивого понятия "активно" нет (нет
-    // единого дефолта, с которым сравнивать), поэтому эти две иконки
-    // всегда нейтральные — кликабельны, просто без подсветки состояния.
     subtitlesEnabled: Boolean = false,
     playbackSpeed: Float = 1f,
     onOpenMenuTab: (PlaybackMenuTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isSeries = hasNextEpisode || hasPreviousEpisode
+    val isLive = kind == PlayerKind.LIVE
+    val isSeries = kind == PlayerKind.SERIES
 
-    // Motion.kt (PROMPT_DESIGN_SYSTEM.md, подзадача 2): длительность та
-    // же, что была неявным дефолтом Compose (300ms), но easing теперь
-    // явно ZenithEasingStandard, а не дефолтный FastOutSlowInEasing —
-    // сознательное решение свести все переходы проекта к одной кривой,
-    // а не оставить два разных типа easing на разные случаи.
     AnimatedVisibility(
         visible = isVisible,
         enter   = fadeIn(animationSpec = tween(ZenithDurationMedium, easing = ZenithEasingStandard)),
@@ -133,82 +147,77 @@ fun PlayerController(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
 
-            if (title.isNotBlank()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight(0.22f).align(Alignment.TopCenter)
-                        .background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                        .padding(horizontal = ZenithDimens.paddingXXL, vertical = ZenithDimens.paddingXL),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = title, style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface)
-                    MenuIconButton(icon = Icons.Default.PhoneAndroid, contentDescription = "Подключить телефон", isActive = false, iconSize = 28.dp, onClick = onConnectPhone)
+            // Шапка: название + метка типа.
+            Box(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.2f).align(Alignment.TopCenter)
+                    .background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
+                    .padding(horizontal = ZenithDimens.paddingXXL, vertical = ZenithDimens.paddingXL),
+                horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (kind) {
+                    PlayerKind.LIVE -> KindBadge("● ЭФИР", ZenithError)
+                    PlayerKind.CATCHUP -> KindBadge("ЗАПИСЬ", MaterialTheme.colorScheme.secondary)
+                    else -> {}
                 }
+                if (title.isNotBlank()) Text(text = title, style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
-            // Капсула — не на весь экран, у неё собственная плашка с рамкой
-            // и скруглением, а не растянутый на всю ширину градиент.
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = ZenithDimens.paddingXXL)
-                    .widthIn(max = 860.dp)
-                    .fillMaxWidth(0.8f)
+                    .padding(bottom = ZenithDimens.paddingXL)
+                    .widthIn(max = 900.dp)
+                    .fillMaxWidth(0.82f)
                     .clip(ZenithShapeLarge)
-                    .background(ZenithSurface.copy(alpha = 0.92f))
-                    .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
+                    .background(ZenithSurface.copy(alpha = 0.93f))
+                    .border(1.dp, if (level == 1) ZenithOnSurface.copy(alpha = 0.16f) else ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                     .padding(horizontal = ZenithDimens.paddingXL, vertical = ZenithDimens.paddingM),
-                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
+                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
             ) {
-                // Время слито в один ряд с баром (было: бар отдельной
-                // строкой, время под ним отдельной строкой) — экономит
-                // высоту капсулы на целую строку.
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.7f))
-                    Spacer(Modifier.width(ZenithDimens.paddingS))
-                    ProgressBar(currentMs = currentPositionMs, bufferedMs = bufferedPositionMs, durationMs = durationMs, isActive = isSeekActive, modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(ZenithDimens.paddingS))
-                    Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.4f))
+                // Ряд 1: полоса прогресса (VOD/запись) или «сейчас в эфире» (live).
+                if (isLive) {
+                    LiveNowNext(liveInfo)
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = formatTime(currentPositionMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.7f))
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
+                        ProgressBar(currentMs = currentPositionMs, bufferedMs = bufferedPositionMs, durationMs = durationMs, isActive = isSeekActive, emphasized = level == 1, modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(ZenithDimens.paddingS))
+                        Text(text = formatTime(durationMs), style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.4f))
+                    }
                 }
 
-                // Один ряд: слева — транспорт (play/pause, либо
-                // след./пред. эпизод по бокам для сериала), справа —
-                // четыре маленькие квадратные иконки настроек
-                // воспроизведения.
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                // Ряд 2: кнопки.
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                         if (isSeries) {
-                            IconGlyphButton(
-                                icon = Icons.Default.SkipPrevious,
-                                contentDescription = "Предыдущая серия",
-                                onClick = onPreviousEpisode,
-                                enabled = hasPreviousEpisode,
-                                size = 52.dp
-                            )
-                            Spacer(modifier = Modifier.width(ZenithDimens.paddingL))
+                            IconGlyphButton(Icons.Default.SkipPrevious, "Предыдущая серия", onPreviousEpisode, 48.dp, enabled = hasPreviousEpisode)
                         }
                         IconGlyphButton(
                             icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Пауза" else "Смотреть",
-                            onClick = onTogglePlay,
-                            isPrimary = true,
-                            size = 68.dp
+                            onClick = onTogglePlay, size = 60.dp, isPrimary = true,
+                            modifier = Modifier.focusRequester(primaryFocusRequester)
                         )
                         if (isSeries) {
-                            Spacer(modifier = Modifier.width(ZenithDimens.paddingL))
-                            IconGlyphButton(
-                                icon = Icons.Default.SkipNext,
-                                contentDescription = "Следующая серия",
-                                onClick = onNextEpisode,
-                                enabled = hasNextEpisode,
-                                size = 52.dp
-                            )
+                            IconGlyphButton(Icons.Default.SkipNext, "Следующая серия", onNextEpisode, 48.dp, enabled = hasNextEpisode)
+                        }
+                        when (kind) {
+                            PlayerKind.SERIES -> ActionPill(Icons.Default.VideoLibrary, "Серии", onOpenEpisodes)
+                            PlayerKind.LIVE -> {
+                                ActionPill(Icons.Default.Tv, "Каналы", onOpenChannels)
+                                ActionPill(Icons.Default.CalendarMonth, "Программа", onOpenProgram)
+                            }
+                            PlayerKind.CATCHUP -> {
+                                ActionPill(Icons.Default.FiberManualRecord, "В эфир", onWatchLive)
+                                ActionPill(Icons.Default.Tv, "Каналы", onOpenChannels)
+                                ActionPill(Icons.Default.CalendarMonth, "Программа", onOpenProgram)
+                            }
+                            PlayerKind.MOVIE -> {}
                         }
                     }
 
@@ -218,10 +227,81 @@ fun PlayerController(
                         MenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled) { onOpenMenuTab(PlaybackMenuTab.SUBTITLES) }
                         MenuIconButton(icon = Icons.Default.Audiotrack, contentDescription = "Аудиодорожка", isActive = false) { onOpenMenuTab(PlaybackMenuTab.AUDIO) }
                         MenuIconButton(icon = Icons.Default.HighQuality, contentDescription = "Качество", isActive = false) { onOpenMenuTab(PlaybackMenuTab.QUALITY) }
-                        MenuIconButton(icon = Icons.Default.Speed, contentDescription = "Скорость", isActive = playbackSpeed != 1f) { onOpenMenuTab(PlaybackMenuTab.SPEED) }
+                        if (!isLive) {
+                            MenuIconButton(icon = Icons.Default.Speed, contentDescription = "Скорость", isActive = playbackSpeed != 1f) { onOpenMenuTab(PlaybackMenuTab.SPEED) }
+                        }
                     }
                 }
+
+                // Подсказка по клавишам — показывает, что делает каждая стрелка на ТЕКУЩЕМ уровне.
+                Text(
+                    text = when {
+                        level == 2 -> "◄ ►  выбор кнопки     ▲  к полосе     Назад  к полосе"
+                        isLive -> "▲  каналы     ▼  кнопки     Назад  скрыть"
+                        else -> "◄ ►  перемотка     ▼  кнопки     ▲  скрыть"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ZenithOnSurface.copy(alpha = 0.38f),
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun KindBadge(text: String, color: Color) {
+    Text(
+        text, style = MaterialTheme.typography.labelLarge, color = Color.White,
+        modifier = Modifier.clip(ZenithShapePill).background(color).padding(horizontal = 12.dp, vertical = 4.dp)
+    )
+}
+
+/** Ряд 1 для живого канала: что идёт сейчас (с прогрессом передачи) и что следом. */
+@Composable
+private fun LiveNowNext(info: ZapBannerInfo?) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (info?.currentProgramTitle == null) {
+            Text("Прямой эфир", style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface.copy(alpha = 0.8f))
+            if (info != null) Text("Нет данных о программе передач", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.45f))
+        } else {
+            Text(
+                "${info.channelNumber}  ·  ${info.currentProgramTitle}",
+                style = MaterialTheme.typography.bodyLarge, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            if (info.currentProgramProgress != null) {
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.15f))) {
+                    Box(Modifier.fillMaxWidth(info.currentProgramProgress.coerceIn(0f, 1f)).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+                }
+            }
+            if (info.nextProgramTitle != null) {
+                Text("Далее: ${info.nextProgramTitle}", style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** Кнопка-«таблетка» с иконкой и подписью (Серии / Каналы / Программа / В эфир). */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ActionPill(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(ZenithShapePill),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = ZenithOnSurface.copy(alpha = 0.1f),
+            focusedContainerColor = ZenithFocusContainerActive
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, ZenithOnSurface), shape = ZenithShapePill)
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = ZenithOnSurface, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = ZenithOnSurface, maxLines = 1)
         }
     }
 }
@@ -234,7 +314,8 @@ private fun IconGlyphButton(
     onClick: () -> Unit,
     size: Dp,
     isPrimary: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
 ) {
     // Реальный репорт (сравнение с TiviMate/Netflix/YouTube TV): раньше
     // здесь стоял Box с .focusProperties { canFocus = false } — play/pause
@@ -259,7 +340,7 @@ private fun IconGlyphButton(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(size),
+        modifier = modifier.size(size),
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else ZenithOnSurface.copy(alpha = 0.1f),
@@ -327,14 +408,14 @@ private fun MenuIconButton(
 }
 
 @Composable
-private fun ProgressBar(currentMs: Long, bufferedMs: Long, durationMs: Long, isActive: Boolean, modifier: Modifier = Modifier) {
+private fun ProgressBar(currentMs: Long, bufferedMs: Long, durationMs: Long, isActive: Boolean, emphasized: Boolean = false, modifier: Modifier = Modifier) {
     val progress = if (durationMs > 0L) (currentMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // 4dp в покое → 10dp пока идёт перемотка (isActive выставляется
     // снаружи по частоте DirectionLeft/DirectionRight), 150ms ease-out —
     // тот же принцип, что предложен для телефона (PhonePlayerController),
     // только источник взаимодействия другой (D-pad, не касание/драг).
     val height by animateDpAsState(
-        targetValue = if (isActive) 10.dp else 4.dp,
+        targetValue = if (isActive) 10.dp else if (emphasized) 7.dp else 4.dp,
         animationSpec = tween(durationMillis = ZenithDurationShort, easing = ZenithEasingStandard),
         label = "tvProgressBarHeight"
     )

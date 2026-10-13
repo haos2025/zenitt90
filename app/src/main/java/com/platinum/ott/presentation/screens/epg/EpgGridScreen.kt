@@ -93,8 +93,6 @@ fun EpgGridScreen(
             OutlinedButton(onClick = { viewModel.jumpToNow() }) { Text("Сейчас") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
             OutlinedButton(onClick = { viewModel.shiftWindow(forward = true) }) { Text("30 мин ▶") }
-            Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = onBackPressed) { Text("Назад") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

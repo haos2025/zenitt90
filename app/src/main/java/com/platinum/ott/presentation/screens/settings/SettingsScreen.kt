@@ -139,7 +139,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             SettingsGroup("Уведомления", Icons.Outlined.Notifications) {
                 // Раньше все три строки ("Новые серии: Вкл", "Новый контент: Вкл",
                 // "Тихий режим: 23:00-08:00") были захардкожены и ни на что не
-                // влияли. Теперь "Новые серии"/"Тихий режим" реально управляют
+                // влияли. Теперь "Новые серии" реально управляют
                 // SeriesUpdateWorker (см. NotificationPreferences.kt) — сериал
                 // должен быть в Избранном, чтобы отслеживаться.
                 // "Новый контент" оставлен как "Скоро" — в бэкенде физически нет
@@ -153,22 +153,6 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 }
                 SettingsDivider()
                 SettingsItem("Новый контент", "Скоро")
-                SettingsDivider()
-                var quietEnabled by remember { mutableStateOf(notifPrefs.isQuietHoursEnabled()) }
-                var quietStart by remember { mutableStateOf(notifPrefs.getQuietStartHour()) }
-                var quietEnd by remember { mutableStateOf(notifPrefs.getQuietEndHour()) }
-                CycleSetting("Тихий режим", if (quietEnabled) "${quietStart}:00–${quietEnd}:00" else "Выкл") {
-                    quietEnabled = !quietEnabled
-                    notifPrefs.setQuietHoursEnabled(quietEnabled)
-                }
-                if (quietEnabled) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Диапазон", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
-                        OutlinedButton(onClick = { quietStart = (quietStart + 23) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("− начало") }
-                        Spacer(Modifier.width(ZenithDimens.paddingS))
-                        OutlinedButton(onClick = { quietEnd = (quietEnd + 1) % 24; notifPrefs.setQuietHours(quietStart, quietEnd) }) { Text("+ конец") }
-                    }
-                }
             }
             Spacer(Modifier.height(ZenithDimens.paddingL))
             SettingsGroup("Сеть", Icons.Outlined.Wifi) {
