@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.focus.focusGroup
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
