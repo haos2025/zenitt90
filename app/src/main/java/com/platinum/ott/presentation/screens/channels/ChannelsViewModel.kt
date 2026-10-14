@@ -56,6 +56,40 @@ class ChannelsViewModel @Inject constructor(
         }
     }
 
+    /** «Сейчас в эфире» для строки списка (телефон): название передачи и доля прошедшего (0..1). */
+    suspend fun nowPlaying(channelId: String): Pair<String, Float>? = try {
+        val now = System.currentTimeMillis()
+        sessionGraph.epgProgramRepository.getCurrentForChannel(channelId, now)?.let { p ->
+            val total = (p.endTimeMillis - p.startTimeMillis).coerceAtLeast(1L)
+            p.title to ((now - p.startTimeMillis).toFloat() / total).coerceIn(0f, 1f)
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Сейчас/далее для панели выбранного канала (ТВ). */
+    data class NowNext(
+        val title: String, val progress: Float, val startMs: Long, val endMs: Long,
+        val description: String?, val nextTitle: String?
+    )
+
+    suspend fun nowNext(channelId: String): NowNext? = try {
+        val now = System.currentTimeMillis()
+        val repo = sessionGraph.epgProgramRepository
+        repo.getCurrentForChannel(channelId, now)?.let { p ->
+            val total = (p.endTimeMillis - p.startTimeMillis).coerceAtLeast(1L)
+            val next = repo.getForChannelInRange(channelId, p.endTimeMillis, p.endTimeMillis + 6 * 3_600_000L)
+                .filter { it.startTimeMillis >= p.endTimeMillis }.minByOrNull { it.startTimeMillis }
+            NowNext(p.title, ((now - p.startTimeMillis).toFloat() / total).coerceIn(0f, 1f), p.startTimeMillis, p.endTimeMillis, p.description, next?.title)
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
     fun setSubscribed(channelId: String, isSubscribed: Boolean) {
         viewModelScope.launch { repository.setSubscribed(channelId, isSubscribed); load() }
     }
