@@ -61,7 +61,13 @@ class ChannelRepository(
     private suspend fun toUiItems(channels: List<com.platinum.ott.data.local.entity.ChannelEntity>): List<ChannelUiItem> {
         // ФИКС (аудит): один батч-запрос вместо N — см. комментарий у
         // ChannelStreamDao.getByChannelIds().
-        val streamsByChannel = channelStreamDao.getByChannelIds(channels.map { it.id }).groupBy { it.channelId }
+        // ФИКС (вылет «Каналы» после добавления плейлиста): SQLite ограничивает число
+        // параметров одного запроса (999 на Android ≤ 10 — это и ТВ-приставки). Список
+        // из тысячи+ каналов давал `too many SQL variables` и падение приложения,
+        // поэтому идентификаторы отправляем пачками по 500.
+        val streamsByChannel = channels.map { it.id }.chunked(500)
+            .flatMap { channelStreamDao.getByChannelIds(it) }
+            .groupBy { it.channelId }
         return channels.map { channel ->
             val streams = streamsByChannel[channel.id].orEmpty()
             ChannelUiItem(
@@ -157,6 +163,6 @@ class ChannelRepository(
             .values
             .filter { it.size > 1 }
             .flatMap { group -> group.sortedBy { it.priority }.drop(1).map { it.id } }
-        if (duplicateIds.isNotEmpty()) channelStreamDao.deleteByIds(duplicateIds)
+        duplicateIds.chunked(500).forEach { channelStreamDao.deleteByIds(it) }
     }
 }

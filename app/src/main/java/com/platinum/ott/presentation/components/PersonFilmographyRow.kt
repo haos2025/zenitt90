@@ -7,7 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,7 +57,7 @@ fun PersonFilmographyRow(title: String, items: List<PersonCreditItem>, onItemCli
         Text(title, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            items(items, key = { it.tmdbId.toString() + it.mediaType }) { credit ->
+            itemsIndexed(items, key = { i, c -> "${i}_${c.tmdbId}${c.mediaType}" }) { _, credit ->
                 val request = remember(credit.posterPath, widthPx, heightPx) {
                     TmdbImage.posterUrl(credit.posterPath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()

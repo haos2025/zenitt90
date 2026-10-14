@@ -6,7 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,7 +62,7 @@ fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation
         Text("Смотрите также", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            items(items, key = { it.tmdbId }) { rec ->
+            itemsIndexed(items, key = { i, r -> "${i}_${r.tmdbId}" }) { _, rec ->
                 val request = remember(rec.posterPath, widthPx, heightPx) {
                     TmdbImage.posterUrl(rec.posterPath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()

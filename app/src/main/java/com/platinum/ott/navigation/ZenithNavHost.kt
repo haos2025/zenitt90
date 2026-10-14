@@ -84,7 +84,6 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 ChannelsBrowseScreen(
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
-                    onOpenEpgGrid = { navController.navigate("epg_grid") },
                     onManageClick = { navController.navigate("channels_manage") }
                 )
             }

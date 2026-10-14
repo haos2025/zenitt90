@@ -180,7 +180,10 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 LaunchedEffect(page) { listState.animateScrollToItem(page) }
                 var showOverviewDialog by remember(movieId) { mutableStateOf(false) }
                 val screenHeightDp = LocalConfiguration.current.screenHeightDp
-                val posterHeight = (screenHeightDp * 0.5f).coerceIn(200f, 330f).dp
+                // Низкие экраны (ТВ-приставки в 540dp и ниже): компактный режим — меньше
+                // текста, чтобы ВЕСЬ верхний блок и кнопки помещались без обрезки.
+                val compact = screenHeightDp < 500
+                val posterHeight = (screenHeightDp * if (compact) 0.52f else 0.5f).coerceIn(170f, 330f).dp
                 val posterWidth = posterHeight * 2f / 3f
                 val hasCast = state.metadata?.cast?.isNotEmpty() == true
                 val hasMore = hasCast || state.recommendations.isNotEmpty()
@@ -215,12 +218,28 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                             ) {
                                 Text(
                                     state.movie.title,
-                                    style = MaterialTheme.typography.displaySmall,
+                                    style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = ZenithOnSurface,
-                                    maxLines = 2,
+                                    maxLines = if (compact) 1 else 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                // Добавление показывает выбор папки только если папки уже
+                                // есть; снятие — сразу (см. DetailViewModel.addFavorite/
+                                // removeFavorite). Системный Back закрывает экран, отдельной
+                                // кнопки «Назад» нет.
+                                Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
+                                    Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
+                                    OutlinedButton(onClick = {
+                                        when {
+                                            state.isFavorite -> viewModel.removeFavorite(movieId)
+                                            folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
+                                            else -> showAddFavoriteDialog = true
+                                        }
+                                    }) {
+                                        Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
+                                    }
+                                }
                                 state.metadata?.let { meta ->
                                     // Год / длительность — серые таблетки, рейтинг — жёлтая.
                                     // Пустые части пропускаем, чтобы не рисовать пустых таблеток.
@@ -235,20 +254,20 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         }
                                     }
                                     val genres = meta.genres.orEmpty().split(',', '/').map { it.trim() }.filter { it.isNotEmpty() }.take(4)
-                                    if (genres.isNotEmpty()) {
+                                    if (genres.isNotEmpty() && !compact) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                                             genres.forEach { DetailPill(it, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) }
                                         }
                                     }
                                     meta.overview?.let { overview ->
-                                        // 4 строки + «Показать полностью» — полный текст открывается в
+                                        // 3 строки + «Показать полностью» — полный текст открывается в
                                         // модальном окне (раскрытие прямо в экране сдвигало кнопки).
                                         var isOverviewExpandable by remember(movieId) { mutableStateOf(false) }
                                         Text(
                                             overview,
                                             color = ZenithOnSurface.copy(0.8f),
                                             style = MaterialTheme.typography.bodyLarge,
-                                            maxLines = 4,
+                                            maxLines = if (compact) 2 else 3,
                                             overflow = TextOverflow.Ellipsis,
                                             onTextLayout = { isOverviewExpandable = it.hasVisualOverflow }
                                         )
@@ -271,27 +290,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         }
                                     }
                                 }
-                                // Добавление показывает выбор папки только если папки уже
-                                // есть; снятие — сразу (см. DetailViewModel.addFavorite/
-                                // removeFavorite). Системный Back закрывает экран, отдельной
-                                // кнопки «Назад» нет.
-                                Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                                    Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
-                                    OutlinedButton(onClick = {
-                                        when {
-                                            state.isFavorite -> viewModel.removeFavorite(movieId)
-                                            folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
-                                            else -> showAddFavoriteDialog = true
-                                        }
-                                    }) {
-                                        Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
-                                    }
-                                }
                             }
-                        }
-                        if (hasMore) {
-                            Spacer(Modifier.height(ZenithDimens.paddingM))
-                            Text("▼  Актёры и похожие фильмы", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                         }
                         }
                     }
@@ -306,7 +305,7 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                     .onFocusChanged { if (it.hasFocus) page = 1 },
                                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)
                             ) {
-                                if (hasCast) CastRow(state.metadata!!.cast, onMemberClick = { member -> onNavigateToPerson(member.id) })
+                                if (hasCast) CastRow(state.metadata!!.cast, showRoles = false, onMemberClick = { member -> onNavigateToPerson(member.id) })
                                 if (state.recommendations.isNotEmpty()) {
                                     // Нажатие: ищем совпадение в каталоге (DetailViewModel.findInCatalog()),
                                     // переходим либо явно сообщаем, что не нашли.

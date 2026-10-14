@@ -41,9 +41,17 @@ class ChannelsViewModel @Inject constructor(
             // Подписанные — сначала, внутри группы — по алфавиту; так
             // пользователь сразу видит свой рабочий список каналов, а
             // разбор кандидатов на подписку/слияние — ниже него.
-            val channels = repository.getAll().sortedWith(
-                compareByDescending<ChannelUiItem> { it.isSubscribed }.thenBy { it.canonicalName.lowercase() }
-            )
+            // Ошибка чтения БД не должна ронять приложение — показываем пустой список.
+            val channels = try {
+                repository.getAll().sortedWith(
+                    compareByDescending<ChannelUiItem> { it.isSubscribed }.thenBy { it.canonicalName.lowercase() }
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("ChannelsViewModel", "load failed", e)
+                emptyList()
+            }
             _uiState.value = ChannelsUiState.Success(channels)
         }
     }

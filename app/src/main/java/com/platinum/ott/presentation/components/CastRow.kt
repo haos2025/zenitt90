@@ -7,7 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -65,7 +65,7 @@ private val photoHeight = 110.dp
  * не обновится сам (TTL 24ч).
  */
 @Composable
-fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {}, modifier: Modifier = Modifier) {
+fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {}, modifier: Modifier = Modifier, showRoles: Boolean = true) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { photoWidth.roundToPx() }
@@ -75,7 +75,7 @@ fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {},
         Text("Актёры", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
         Spacer(Modifier.height(ZenithDimens.paddingS))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            items(members, key = { it.name + it.character.orEmpty() }) { member ->
+            itemsIndexed(members, key = { index, m -> "${index}_${m.name}" }) { _, member ->
                 val request = remember(member.profilePath, widthPx, heightPx) {
                     TmdbImage.profileUrl(member.profilePath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
@@ -106,7 +106,7 @@ fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {},
                     }
                     Spacer(Modifier.height(ZenithDimens.paddingXS))
                     Text(member.name, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    member.character?.let {
+                    if (showRoles) member.character?.let {
                         Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }

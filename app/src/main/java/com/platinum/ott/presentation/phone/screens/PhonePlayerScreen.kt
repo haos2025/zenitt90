@@ -113,6 +113,19 @@ fun PhonePlayerScreen(
     // Баннер переключения канала (как на TV): номер, имя, программа сейчас.
     val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
     val isLive = movieId.startsWith("ch_")
+    // Списки поверх плеера: каналы (эфир) / серии (сериал).
+    var showList by remember { mutableStateOf(false) }
+    var channelsList by remember { mutableStateOf<List<com.platinum.ott.data.repository.ChannelUiItem>?>(null) }
+    var episodesList by remember { mutableStateOf<List<com.platinum.ott.domain.model.Movie>?>(null) }
+    LaunchedEffect(showList) {
+        if (!showList) return@LaunchedEffect
+        if (isLive) { channelsList = null; channelsList = viewModel.getSubscribedChannels() }
+        else {
+            episodesList = null
+            val sid = (uiState as? PlayerUiState.Ready)?.seriesId
+            episodesList = if (sid != null) viewModel.getEpisodeList(sid) else emptyList()
+        }
+    }
     val shownBufferedMs = if (overlaySettings.showBuffered && !isLive) bufferedPositionMs else 0L
     LaunchedEffect(lastInteraction, showControls, hideDelayMs, holdForPause) {
         if (showControls && hideDelayMs > 0 && !holdForPause) { delay(hideDelayMs.toLong()); showControls = false }
@@ -143,7 +156,20 @@ fun PhonePlayerScreen(
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
 
             kotlinx.coroutines.coroutineScope {
-                launch { detectTapGestures(onTap = { showControls = !showControls; lastInteraction = System.currentTimeMillis() }) }
+                launch {
+                    detectTapGestures(
+                        onTap = { showControls = !showControls; lastInteraction = System.currentTimeMillis() },
+                        // Двойной тап слева/справа — перемотка ±10 с (как в YouTube/MX Player).
+                        onDoubleTap = { offset ->
+                            if (!isLive) {
+                                val back = offset.x < size.width / 2f
+                                if (back) viewModel.seekBackward() else viewModel.seekForward()
+                                gestureIndicator = GestureIndicator.Skip(if (back) -10 else 10)
+                                gestureScope.launch { delay(600); gestureIndicator = null }
+                            }
+                        }
+                    )
+                }
                 launch {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -236,7 +262,19 @@ fun PhonePlayerScreen(
             update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true },
             modifier = Modifier.fillMaxSize()
         )
-        gestureIndicator?.let { GestureIndicatorOverlay(it, Modifier.align(Alignment.Center)) }
+        gestureIndicator?.let { ind ->
+            val skip = ind as? GestureIndicator.Skip
+            GestureIndicatorOverlay(
+                ind,
+                Modifier.align(
+                    when {
+                        skip == null -> Alignment.Center
+                        skip.seconds < 0 -> Alignment.CenterStart
+                        else -> Alignment.CenterEnd
+                    }
+                ).then(if (skip != null) Modifier.padding(horizontal = 48.dp) else Modifier)
+            )
+        }
 
         // PROMPT_SUBTITLES.md, подзадача 8 — см. развёрнутый комментарий в
         // PlayerScreen.kt (TV-версия): AI-сгенерированные реплики не через
@@ -343,8 +381,25 @@ fun PhonePlayerScreen(
                     onPreviousEpisode = { if (isLive) viewModel.zapToPreviousChannel() else viewModel.playPreviousEpisode(); lastInteraction = System.currentTimeMillis() },
                     isFullscreen = isFullscreen,
                     onToggleFullscreen = { isFullscreen = !isFullscreen; lastInteraction = System.currentTimeMillis() },
+                    listLabel = when {
+                        isLive -> "Каналы"
+                        state.seriesId != null -> "Серии"
+                        else -> null
+                    },
+                    onOpenList = { showList = true; lastInteraction = System.currentTimeMillis() },
                     modifier = Modifier.fillMaxSize()
                 )
+                if (showList) {
+                    if (isLive) PhoneChannelsSheet(
+                        channels = channelsList, currentId = viewModel.currentId,
+                        onPick = { c -> showList = false; viewModel.switchToChannel(c) },
+                        onDismiss = { showList = false }
+                    ) else PhoneEpisodesSheet(
+                        seriesTitle = state.title, episodes = episodesList, currentId = viewModel.currentId,
+                        onPick = { m -> showList = false; viewModel.playEpisode(m.id) },
+                        onDismiss = { showList = false }
+                    )
+                }
                 zapBannerInfo?.let { info ->
                     Column(
                         modifier = Modifier
@@ -382,6 +437,7 @@ private sealed interface GestureIndicator {
     data class Brightness(val value: Float) : GestureIndicator
     data class Volume(val value: Float) : GestureIndicator
     data class Seek(val deltaMs: Long, val targetMs: Long) : GestureIndicator
+    data class Skip(val seconds: Int) : GestureIndicator
 }
 
 @Composable
@@ -400,6 +456,9 @@ private fun GestureIndicatorOverlay(indicator: GestureIndicator, modifier: Modif
                 Icon(Icons.Default.VolumeUp, null, tint = ZenithOnSurface)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
                 Text("${(indicator.value * 100).roundToInt()}%", color = ZenithOnSurface)
+            }
+            is GestureIndicator.Skip -> {
+                Text(if (indicator.seconds < 0) "◄◄  ${-indicator.seconds} с" else "${indicator.seconds} с  ►►", color = ZenithOnSurface)
             }
             is GestureIndicator.Seek -> {
                 val sign = if (indicator.deltaMs >= 0) "+" else "-"

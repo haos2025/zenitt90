@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,13 +47,14 @@ import kotlinx.coroutines.delay
  * Плеер ТВ. Оверлей управления — двухуровневый (модель Б), содержимое зависит от
  * типа воспроизведения (PlayerKind: фильм / сериал / эфир / запись):
  *
- *  Уровень 1 — фокус на видео (rootHasFocus): Влево/Вправо — перемотка ±10 с (для эфира
- *    не заняты), OK — пауза, Вниз — на ряд кнопок (уровень 2), Вверх — скрыть оверлей
- *    (в эфире Вверх открывает список каналов).
- *  Уровень 2 — фокус на кнопке ряда: Влево/Вправо ходят по кнопкам (штатная навигация
- *    Compose), Вверх — назад на видео (уровень 1).
- *  Назад — на ступень выше: закрыть модальное окно → с кнопок на видео → скрыть оверлей →
- *    выйти из плеера. Скрытый оверлей показывается любой стрелкой/OK.
+ *  Фокус Compose всегда на корне экрана; подсвеченная кнопка оверлея — selectedAction
+ *  («виртуальный фокус», см. PlayerController.kt).
+ *  Управление на видео (selectedAction == null): Влево/Вправо — перемотка ±10 с (в эфире
+ *    не заняты), OK — пауза, Вниз — на ряд кнопок, Вверх — скрыть оверлей (в эфире Вверх
+ *    открывает список каналов).
+ *  Ряд кнопок: Влево/Вправо — выбор кнопки, OK — нажать, Вверх — назад на видео.
+ *  Назад (BackHandler) — на ступень выше: закрыть модальное окно/меню → с кнопок на видео →
+ *    скрыть оверлей → выйти из плеера. Скрытый оверлей показывается любой стрелкой/OK.
  *  Модальные окна (PlayerModals.kt): серии, каналы, программа канала; закрываются Назад.
  *  Menu — меню качества/звука/субтитров/скорости. CH+/CH− и цифры — каналы (эфир),
  *  медиа-клавиши работают всегда. Кнопки «Назад» на экране нет — только системная клавиша.
@@ -77,8 +79,9 @@ fun PlayerScreen(
     var currentPositionMs by remember { mutableStateOf(0L) }
     var bufferedPositionMs by remember { mutableStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
-    // Кнопка play/pause в ряду оверлея — сюда уходит фокус при нажатии «Вниз» (уровень 2).
-    val primaryFocusRequester = remember { FocusRequester() }
+    // «Виртуальный фокус» оверлея: null — управление на видео (Влево/Вправо = перемотка),
+    // иначе — подсвеченная кнопка ряда. Настоящий фокус Compose всегда остаётся на корне.
+    var selectedAction by remember { mutableStateOf<OverlayAction?>(null) }
     val retryFocusRequester = remember { FocusRequester() }
 
     // Модальные окна оверлея и их данные (null — ещё грузится).
@@ -211,7 +214,7 @@ fun PlayerScreen(
         if (isDpadSeekActive || menuOpen || showCompanionQr || holdForPause || modalOpen) return@LaunchedEffect
         delay(hideDelayMs.toLong())
         controlsVisible = false
-        // Кнопка, на которой стоял фокус, исчезает вместе с оверлеем — возвращаем фокус на видео.
+        selectedAction = null
         focusRequester.safeRequestFocus()
     }
 
@@ -247,35 +250,39 @@ fun PlayerScreen(
             PlayerModal.NONE -> {}
         }
     }
-    // После закрытия модального окна фокус возвращается на видео (уровень 1).
-    var modalWasOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(modalOpen) {
-        if (modalOpen) modalWasOpen = true
-        else if (modalWasOpen) { modalWasOpen = false; focusRequester.safeRequestFocus() }
+    // Корень экрана должен держать фокус всегда, когда нет модального окна/меню/QR —
+    // иначе клавиши пульта не дойдут до обработчика ниже.
+    val isReady = uiState is PlayerUiState.Ready
+    LaunchedEffect(modalOpen, menuOpen, showCompanionQr, isReady) {
+        if (isReady && !modalOpen && !menuOpen && !showCompanionQr) {
+            delay(30)
+            focusRequester.safeRequestFocus()
+        }
     }
     // В экране ошибки фокус на «Повторить», чтобы OK сразу работал.
     LaunchedEffect(uiState is PlayerUiState.Error) {
         if (uiState is PlayerUiState.Error) { delay(50); retryFocusRequester.safeRequestFocus() }
     }
 
-    // Раньше Center/Left/Right обрабатывались здесь безусловно — даже когда
-    // (после четвёртого раунда) фокус реально стоял на настоящей
-    // фокусируемой иконке капсулы (MenuIconButton), нажатие стрелки туда
-    // не долетало: сначала выяснилось, что декоративные кнопки
-    // (IconGlyphButton — play/pause и т.д.) на самом деле ловили фокус на
-    // себя раньше настоящих иконок (см. фикс в PlayerController.kt), а
-    // даже после того, как это исправлено, Left/Right, не поглощённые
-    // сфокусированной иконкой (у неё нет обработки стрелок, только OK),
-    // всё равно поднимались по дереву сюда и безусловно перематывали —
-    // реальный репорт с пульта: "стрелки всегда только перематывают, до
-    // других кнопок не добраться". rootHasFocus ниже — фокус именно на
-    // этом Box (не на потомке): пока он true, стрелки/OK работают как
-    // глобальные хоткеи перемотки/паузы; как только фокус ушёл на
-    // конкретную кнопку капсулы, эти клавиши здесь больше не
-    // перехватываются — событие просто не доходит досюда (сфокусированный
-    // элемент либо сам его обработал, либо это стрелка для обычной
-    // фокус-навигации Compose между иконками).
-    var rootHasFocus by remember { mutableStateOf(true) }
+    // ВИРТУАЛЬНЫЙ ФОКУС: кнопки оверлея не фокусируемые, настоящий фокус всегда на этом корне,
+    // а какая кнопка подсвечена — хранит selectedAction. Так фокус нельзя «потерять» при
+    // скрытии оверлея/закрытии модалки (из-за этого раньше переставали работать Вниз и Назад).
+    fun touchControls() { controlsVisible = true; interactionNonce++ }
+    fun hideControls() { controlsVisible = false; selectedAction = null }
+
+    // Назад — ступенями: QR/модалка/меню → кнопки → видео → скрыть оверлей → выйти.
+    // BackHandler надёжнее, чем перехват Key.Back: работает и с жестом/системной кнопкой.
+    BackHandler(enabled = true) {
+        when {
+            uiState !is PlayerUiState.Ready -> onBackPressed()
+            showCompanionQr -> showCompanionQr = false
+            modal != PlayerModal.NONE -> modal = PlayerModal.NONE
+            menuOpen -> viewModel.dismissPlaybackMenu()
+            selectedAction != null -> { selectedAction = null; touchControls() }
+            controlsVisible -> hideControls()
+            else -> onBackPressed()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -283,7 +290,6 @@ fun PlayerScreen(
             .background(Color.Black)
             .focusRequester(focusRequester)
             .focusable()
-            .onFocusChanged { rootHasFocus = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) interactionNonce++
                 false
@@ -292,45 +298,19 @@ fun PlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val ready = uiState as? PlayerUiState.Ready ?: return@onKeyEvent false
                 val isChannel = movieId.startsWith("ch_")
-                // Показать оверлей и перезапустить таймер автоскрытия.
-                fun touchControls() { controlsVisible = true; interactionNonce++ }
 
-                if (showCompanionQr) {
-                    return@onKeyEvent when (event.key) {
-                        Key.Back -> { showCompanionQr = false; true }
-                        else -> false
-                    }
-                }
-
-                // Модальное окно (серии/каналы/программа): Назад закрывает, остальное — самому окну.
-                if (modal != PlayerModal.NONE) {
-                    return@onKeyEvent when (event.key) {
-                        Key.Back -> { modal = PlayerModal.NONE; true }
-                        else -> false
-                    }
-                }
-
+                // Поверх экрана модальное окно / QR / меню — клавиши отдаём им (Назад — в BackHandler).
+                if (showCompanionQr || modal != PlayerModal.NONE) return@onKeyEvent false
                 if (ready.showPlaybackMenu) {
-                    return@onKeyEvent when (event.key) {
-                        Key.Back, Key.Menu -> { viewModel.dismissPlaybackMenu(); true }
-                        else -> false // Up/Down/Center — отдаём PlaybackMenuOverlay
-                    }
-                }
-
-                // Back — ступень за ступенью: с кнопок на видео → скрыть оверлей → выйти.
-                if (event.key == Key.Back) {
-                    when {
-                        !rootHasFocus -> { focusRequester.requestFocus(); touchControls() }
-                        controlsVisible -> controlsVisible = false
-                        else -> onBackPressed()
-                    }
-                    return@onKeyEvent true
+                    return@onKeyEvent if (event.key == Key.Menu) { viewModel.dismissPlaybackMenu(); true } else false
                 }
                 if (event.key == Key.Menu) { viewModel.togglePlaybackMenu(); return@onKeyEvent true }
-                // Медиа-клавиши и CH+/CH− — независимо от того, где фокус.
+
+                // Медиа-клавиши и CH+/CH− — всегда.
                 when (event.key) {
                     Key.MediaPlay -> { viewModel.exoPlayer.play(); return@onKeyEvent true }
                     Key.MediaPause -> { viewModel.exoPlayer.pause(); return@onKeyEvent true }
+                    Key.MediaPlayPause -> { touchControls(); viewModel.togglePlayPause(); return@onKeyEvent true }
                     Key.MediaFastForward -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekForward(); seekToast = "+10 сек"; return@onKeyEvent true }
                     Key.MediaRewind -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekBackward(); seekToast = "-10 сек"; return@onKeyEvent true }
                     Key.ChannelUp -> { if (isChannel) { viewModel.zapToNextChannel(); touchControls(); return@onKeyEvent true } else return@onKeyEvent false }
@@ -338,40 +318,66 @@ fun PlayerScreen(
                     else -> {}
                 }
 
-                // Уровень 2 (фокус на кнопке ряда): «Вверх» — назад на видео; остальное
-                // (Влево/Вправо/OK) — штатная навигация и нажатие кнопки.
-                if (!rootHasFocus) {
-                    return@onKeyEvent if (event.key == Key.DirectionUp) {
-                        focusRequester.requestFocus(); touchControls(); true
-                    } else false
+                val kind = playerKindOf(movieId, ready)
+                val actions = overlayActions(kind, ready.previousEpisodeId != null, ready.nextEpisodeId != null)
+                val canSeek = !isChannel || ready.isCatchup
+                val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+
+                // Оверлей скрыт: любая стрелка/OK сначала его показывает (OK ещё и ставит паузу/play,
+                // Влево/Вправо — перематывают, в эфире Вверх сразу открывает «Каналы»).
+                val sel = selectedAction
+                if (sel != null && controlsVisible) {
+                    // Кнопки ряда.
+                    val idx = actions.indexOf(sel).let { if (it < 0) actions.indexOf(OverlayAction.PLAY).coerceAtLeast(0) else it }
+                    return@onKeyEvent when {
+                        event.key == Key.DirectionRight -> { selectedAction = actions[(idx + 1).coerceAtMost(actions.lastIndex)]; touchControls(); true }
+                        event.key == Key.DirectionLeft -> { selectedAction = actions[(idx - 1).coerceAtLeast(0)]; touchControls(); true }
+                        event.key == Key.DirectionUp -> { selectedAction = null; touchControls(); true }
+                        event.key == Key.DirectionDown -> { touchControls(); true }
+                        isCenter -> {
+                            touchControls()
+                            when (actions[idx]) {
+                                OverlayAction.PLAY -> viewModel.togglePlayPause()
+                                OverlayAction.PREV -> viewModel.playPreviousEpisode()
+                                OverlayAction.NEXT -> viewModel.playNextEpisode()
+                                OverlayAction.EPISODES -> modal = PlayerModal.EPISODES
+                                OverlayAction.CHANNELS -> modal = PlayerModal.CHANNELS
+                                OverlayAction.PROGRAM -> modal = PlayerModal.PROGRAM
+                                OverlayAction.LIVE -> viewModel.playLive()
+                                OverlayAction.SUBTITLES -> viewModel.openPlaybackMenu(PlaybackMenuTab.SUBTITLES)
+                                OverlayAction.AUDIO -> viewModel.openPlaybackMenu(PlaybackMenuTab.AUDIO)
+                                OverlayAction.QUALITY -> viewModel.openPlaybackMenu(PlaybackMenuTab.QUALITY)
+                                OverlayAction.SPEED -> viewModel.openPlaybackMenu(PlaybackMenuTab.SPEED)
+                            }
+                            true
+                        }
+                        else -> false
+                    }
                 }
 
-                // Уровень 1 (фокус на видео).
-                val canSeek = !isChannel || ready.isCatchup
-                when (event.key) {
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                        touchControls(); viewModel.togglePlayPause(); true
-                    }
-                    Key.DirectionRight -> {
+                // Управление «на видео».
+                when {
+                    isCenter -> { touchControls(); viewModel.togglePlayPause(); true }
+                    event.key == Key.DirectionRight -> {
                         touchControls()
                         if (canSeek) { seekToast = "+10 сек"; seekPulseNonce++; viewModel.seekForward() }
-                        true // в эфире Влево/Вправо не заняты, но фокус на кнопки не уводим
+                        true
                     }
-                    Key.DirectionLeft -> {
+                    event.key == Key.DirectionLeft -> {
                         touchControls()
                         if (canSeek) { seekToast = "-10 сек"; seekPulseNonce++; viewModel.seekBackward() }
                         true
                     }
-                    Key.DirectionDown -> {
-                        if (!controlsVisible) { touchControls() }
-                        else { touchControls(); primaryFocusRequester.safeRequestFocus() }
+                    event.key == Key.DirectionDown -> {
+                        if (!controlsVisible) touchControls()
+                        else { selectedAction = OverlayAction.PLAY; touchControls() }
                         true
                     }
-                    Key.DirectionUp -> {
+                    event.key == Key.DirectionUp -> {
                         when {
-                            !controlsVisible -> touchControls()
                             isChannel && !ready.isCatchup -> modal = PlayerModal.CHANNELS
-                            else -> controlsVisible = false
+                            !controlsVisible -> touchControls()
+                            else -> hideControls()
                         }
                         true
                     }
@@ -393,7 +399,14 @@ fun PlayerScreen(
                 android.view.LayoutInflater.from(ctx)
                     .inflate(com.platinum.ott.R.layout.player_view_texture, null) as PlayerView
             },
-            update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true },
+            update = {
+                it.player = viewModel.exoPlayer
+                it.keepScreenOn = true
+                // Системный View не должен забирать фокус пульта у корня Compose.
+                it.isFocusable = false
+                it.isFocusableInTouchMode = false
+                it.descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            },
             modifier = Modifier.fillMaxSize()
         )
         when (val state = uiState) {
@@ -408,35 +421,21 @@ fun PlayerScreen(
                 }
             }
             is PlayerUiState.Ready -> {
-                val kind = when {
-                    movieId.startsWith("ch_") -> if (state.isCatchup) PlayerKind.CATCHUP else PlayerKind.LIVE
-                    state.seriesId != null -> PlayerKind.SERIES
-                    else -> PlayerKind.MOVIE
-                }
                 PlayerController(
                     isVisible = controlsVisible,
-                    level = if (rootHasFocus) 1 else 2,
-                    kind = kind,
+                    selected = selectedAction,
+                    kind = playerKindOf(movieId, state),
                     isPlaying = isPlaying,
                     currentPositionMs = currentPositionMs,
                     durationMs = viewModel.exoPlayer.duration.coerceAtLeast(0L),
-                    onTogglePlay = { viewModel.togglePlayPause() },
-                    primaryFocusRequester = primaryFocusRequester,
                     title = state.title,
                     hasNextEpisode = state.nextEpisodeId != null,
                     hasPreviousEpisode = state.previousEpisodeId != null,
-                    onNextEpisode = { viewModel.playNextEpisode() },
-                    onPreviousEpisode = { viewModel.playPreviousEpisode() },
                     liveInfo = liveInfo,
-                    onOpenEpisodes = { modal = PlayerModal.EPISODES },
-                    onOpenChannels = { modal = PlayerModal.CHANNELS },
-                    onOpenProgram = { modal = PlayerModal.PROGRAM },
-                    onWatchLive = { viewModel.playLive() },
                     isSeekActive = isDpadSeekActive,
                     bufferedPositionMs = if (showBuffered) bufferedPositionMs else 0L,
                     subtitlesEnabled = state.subtitlesEnabled,
                     playbackSpeed = state.playbackSpeed,
-                    onOpenMenuTab = { viewModel.openPlaybackMenu(it) },
                     modifier = Modifier.fillMaxSize()
                 )
                 // Тонкая полоска прогресса — видна только пока капсула спрятана
@@ -652,4 +651,11 @@ private fun digitFromKey(key: Key): Int? = when (key) {
     Key.Eight, Key.NumPad8 -> 8
     Key.Nine, Key.NumPad9 -> 9
     else -> null
+}
+
+/** Тип воспроизводимого — по маршруту (ch_…) и состоянию плеера. */
+private fun playerKindOf(movieId: String, state: PlayerUiState.Ready): PlayerKind = when {
+    movieId.startsWith("ch_") -> if (state.isCatchup) PlayerKind.CATCHUP else PlayerKind.LIVE
+    state.seriesId != null -> PlayerKind.SERIES
+    else -> PlayerKind.MOVIE
 }

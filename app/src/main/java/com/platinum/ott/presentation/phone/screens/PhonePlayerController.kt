@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -144,6 +147,9 @@ fun PhonePlayerController(
     onPreviousEpisode: () -> Unit = {},
     isFullscreen: Boolean = true,
     onToggleFullscreen: () -> Unit = {},
+    // Кнопка-чип «Каналы» (эфир) / «Серии» (сериал) — открывает список (null — кнопки нет).
+    listLabel: String? = null,
+    onOpenList: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var menuTab by remember { mutableStateOf<PlaybackMenuTab?>(null) }
@@ -166,32 +172,58 @@ fun PhonePlayerController(
         modifier = modifier
     ) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.18f).align(Alignment.TopCenter)
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(0.65f), Color.Transparent))))
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.3f).align(Alignment.BottomCenter)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.7f)))))
+            // Затемнение сверху и снизу — вместо рамки-капсулы: видео остаётся видно.
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.22f).align(Alignment.TopCenter)
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(0.7f), Color.Transparent))))
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.38f).align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.82f)))))
 
-            // Верхняя строка — только "Назад + Название", fullscreen
-            // отсюда убран (переехал в капсулу).
+            // Верх: назад, метка «ЭФИР», название.
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBackPressed) { Icon(Icons.Default.ArrowBack, "Назад", tint = ZenithOnSurface) }
-                Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (isLive) {
+                    Text(
+                        "● ЭФИР", color = Color.White, style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.clip(ZenithShapePill).background(com.platinum.ott.ui.theme.ZenithError).padding(horizontal = 10.dp, vertical = 3.dp)
+                    )
+                    Spacer(Modifier.width(ZenithDimens.paddingS))
+                }
+                Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
 
-            Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Центр: крупный play/pause, по бокам — предыдущая/следующая серия или канал.
+            Row(
+                Modifier.align(Alignment.Center),
+                horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXL),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    Modifier.fillMaxWidth()
-                        .clip(ZenithShapeLarge)
-                        .background(ZenithSurface.copy(alpha = 0.9f))
-                        .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
-                        .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
-                ) {
-                    // Время слито в один ряд со скраббером (было: слайдер
-                    // отдельной строкой, время отдельной строкой под ним).
-                    var previewPositionMs by remember { mutableStateOf<Long?>(null) }
+                if (isSeries) {
+                    TransportButton(
+                        icon = Icons.Default.SkipPrevious,
+                        contentDescription = if (isLive) "Предыдущий канал" else "Предыдущая серия",
+                        enabled = hasPreviousEpisode, onClick = onPreviousEpisode, size = 52.dp
+                    )
+                }
+                TransportButton(
+                    icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Пауза" else "Play",
+                    isPrimary = true, onClick = onTogglePlay, size = 72.dp
+                )
+                if (isSeries) {
+                    TransportButton(
+                        icon = Icons.Default.SkipNext,
+                        contentDescription = if (isLive) "Следующий канал" else "Следующая серия",
+                        enabled = hasNextEpisode, onClick = onNextEpisode, size = 52.dp
+                    )
+                }
+            }
+
+            // Низ: полоса прогресса (не для эфира) и ряд чипов.
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
+            ) {
+                var previewPositionMs by remember { mutableStateOf<Long?>(null) }
+                if (!isLive) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(formatMs(previewPositionMs ?: currentPositionMs), color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.width(ZenithDimens.paddingS))
@@ -204,50 +236,26 @@ fun PhonePlayerController(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(ZenithDimens.paddingS))
-                        Text(formatMs(durationMs), color = ZenithOnSurface.copy(0.5f), style = MaterialTheme.typography.bodySmall)
+                        Text(formatMs(durationMs), color = ZenithOnSurface.copy(0.6f), style = MaterialTheme.typography.bodySmall)
                     }
-
-                    // Один ряд: слева — транспортный кластер (play/pause,
-                    // либо + след./пред. эпизод по бокам для сериала),
-                    // справа — субтитры / "⋮" / fullscreen.
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (isSeries) {
-                                TransportButton(
-                                    icon = Icons.Default.SkipPrevious,
-                                    contentDescription = if (isLive) "Предыдущий канал" else "Предыдущая серия",
-                                    enabled = hasPreviousEpisode,
-                                    onClick = onPreviousEpisode
-                                )
-                                Spacer(Modifier.width(ZenithDimens.paddingM))
-                            }
-                            TransportButton(
-                                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Пауза" else "Play",
-                                isPrimary = true,
-                                onClick = onTogglePlay
-                            )
-                            if (isSeries) {
-                                Spacer(Modifier.width(ZenithDimens.paddingM))
-                                TransportButton(
-                                    icon = Icons.Default.SkipNext,
-                                    contentDescription = if (isLive) "Следующий канал" else "Следующая серия",
-                                    enabled = hasNextEpisode,
-                                    onClick = onNextEpisode
-                                )
-                            }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (listLabel != null) {
+                        Row(
+                            Modifier.clip(ZenithShapePill).background(ZenithOnSurface.copy(alpha = 0.16f)).clickable(onClick = onOpenList)
+                                .padding(horizontal = 16.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(if (isLive) Icons.Default.Tv else Icons.Default.VideoLibrary, null, tint = ZenithOnSurface, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(listLabel, color = ZenithOnSurface, style = MaterialTheme.typography.labelLarge)
                         }
-
-                        Spacer(Modifier.weight(1f))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                            SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled || autoSubtitleState != AutoSubtitleState.Off) { menuTab = PlaybackMenuTab.SUBTITLES }
-                            SmallMenuIconButton(icon = Icons.Default.MoreVert, contentDescription = "Ещё настройки", isActive = false) { moreSheetOpen = true; moreSheetCategory = null }
-                            SmallMenuIconButton(icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "На весь экран", isActive = isFullscreen) { onToggleFullscreen() }
-                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
+                        SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled || autoSubtitleState != AutoSubtitleState.Off) { menuTab = PlaybackMenuTab.SUBTITLES }
+                        SmallMenuIconButton(icon = Icons.Default.MoreVert, contentDescription = "Ещё настройки", isActive = false) { moreSheetOpen = true; moreSheetCategory = null }
+                        SmallMenuIconButton(icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "На весь экран", isActive = isFullscreen) { onToggleFullscreen() }
                     }
                 }
             }
@@ -363,19 +371,17 @@ private fun TransportButton(
     contentDescription: String,
     onClick: () -> Unit,
     isPrimary: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    size: Dp = if (isPrimary) 48.dp else 40.dp
 ) {
-    // Крупная кнопка play/pause уменьшена с 56dp до 48dp — это ровно
-    // минимальный тач-таргет по рекомендациям Android, дальше сжимать
-    // уже в ущерб точности попадания пальцем.
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(if (isPrimary) 48.dp else 40.dp)
+        modifier = Modifier.size(size)
             .clip(CircleShape)
-            .background(if (isPrimary) MaterialTheme.colorScheme.primary else ZenithOnSurface.copy(alpha = 0.1f))
+            .background(if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else Color.Black.copy(alpha = 0.45f))
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription, tint = ZenithOnSurface.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(if (isPrimary) 26.dp else 20.dp))
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(size)) {
+            Icon(icon, contentDescription, tint = if (isPrimary) Color(0xFF06222B) else ZenithOnSurface.copy(alpha = if (enabled) 1f else 0.3f), modifier = Modifier.size(size * 0.5f))
         }
     }
 }
