@@ -256,7 +256,7 @@ class PlaylistSourceRepository(
                     // с url-tvg в шапке технически тоже может встретиться,
                     // хоть и нетипично (см. допущение у sourceDao.updateEpgUrl
                     // выше в предыдущей подзадаче).
-                    if (epgUrl != null) refreshEpgFromXmltv(epgUrl)
+                    M3uPlaylistParser.parseEpgUrls(epgUrl).forEach { refreshEpgFromXmltv(it) }
                     if (source.contentKind == "live") {
                         // Живой эфир целиком уходит в Channel/ChannelStream —
                         // не пишется в playlist_movies вообще (см.
@@ -362,7 +362,17 @@ class PlaylistSourceRepository(
             val req = Request.Builder().url(url).build()
             val programs = client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use emptyList()
-                resp.body?.byteStream()?.use { stream -> XmltvSaxParser.parse(stream, windowStart, windowEnd) } ?: emptyList()
+                resp.body?.byteStream()?.use { raw ->
+                    // XMLTV часто отдают как .xml.gz БЕЗ заголовка Content-Encoding — OkHttp
+                    // такой файл сам не распакует, поэтому смотрим на магические байты gzip.
+                    val buffered = java.io.BufferedInputStream(raw, 8192)
+                    buffered.mark(2)
+                    val b0 = buffered.read(); val b1 = buffered.read()
+                    buffered.reset()
+                    val stream: java.io.InputStream =
+                        if (b0 == 0x1f && b1 == 0x8b) java.util.zip.GZIPInputStream(buffered, 8192) else buffered
+                    XmltvSaxParser.parse(stream, windowStart, windowEnd)
+                } ?: emptyList()
             }
             if (programs.isEmpty()) return false
             programs.groupBy { "ch_tvg_${it.channelId}" }.forEach { (channelId, channelPrograms) ->

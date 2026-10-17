@@ -39,7 +39,8 @@ object M3uPlaylistParser {
     // PROMPT_EPG.md, подзадача 2 — стандартный атрибут шапки плейлиста
     // (строка "#EXTM3U url-tvg="http://...""), не строки #EXTINF, поэтому
     // отдельный regex и отдельная функция ниже, а не добавление в ATTR_REGEX.
-    private val URL_TVG_REGEX = Regex("url-tvg=\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+    // url-tvg / x-tvg-url, кавычки двойные или одинарные, значение может быть списком через запятую.
+    private val URL_TVG_REGEX = Regex("(?:url-tvg|x-tvg-url)\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE)
     // У M3U, в отличие от Xtream, нет структурированного API сериалов —
     // единственный источник "это серия N сезона M" — сам текст названия.
     // Это ЭВРИСТИКА, не гарантия: сработает на "Шоу S01E02", не сработает
@@ -157,6 +158,13 @@ object M3uPlaylistParser {
      */
     fun parseEpgUrl(raw: String): String? {
         val headerLine = raw.lineSequence().firstOrNull { it.trim().startsWith("#EXTM3U") } ?: return null
-        return URL_TVG_REGEX.find(headerLine)?.groupValues?.get(1)?.ifBlank { null }
+        // Несколько адресов через запятую — храним строкой как есть (в т.ч. из нескольких
+        // атрибутов), разбирает на отдельные адреса parseEpgUrls().
+        val all = URL_TVG_REGEX.findAll(headerLine).map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
+        return all.joinToString(",").ifBlank { null }
     }
+
+    /** Разбивает значение epgUrl (возможно список через запятую/пробел) на отдельные http(s)-адреса. */
+    fun parseEpgUrls(value: String?): List<String> =
+        value.orEmpty().split(',', ' ', ';').map { it.trim() }.filter { it.startsWith("http", ignoreCase = true) }.distinct()
 }

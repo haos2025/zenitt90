@@ -207,6 +207,9 @@ class PlayerViewModel @Inject constructor(
         // шагом сборки, которого в проекте пока нет.
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(application)
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            // Если основной аппаратный декодер не создался/упал — пробуем следующий
+            // из списка (в т.ч. программный) вместо молчаливого отсутствия звука/видео.
+            .setEnableDecoderFallback(true)
         // Больше не .setMediaSourceFactory(...) на Builder — playVariant()
         // теперь всегда собирает MediaSource сам, свежей фабрикой (см. выше),
         // и отдаёт его через setMediaSource(), а не setMediaItem()/prepare()
@@ -217,6 +220,12 @@ class PlayerViewModel @Inject constructor(
     }
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
+
+    // Звук есть в потоке, но ни одна аудиодорожка не поддерживается устройством
+    // (AC-3/E-AC-3/DTS и т.п. без декодера) — раньше канал просто молчал без
+    // объяснений. Текст показывает PlayerScreen; null — проблем нет.
+    private val _audioIssue = MutableStateFlow<String?>(null)
+    val audioIssue: StateFlow<String?> = _audioIssue
 
     // Раньше PlayerScreen передавал useController=false и не выводил вообще
     // никакого UI управления — PlayerController.kt/PlaybackMenuOverlay.kt
@@ -363,6 +372,19 @@ class PlayerViewModel @Inject constructor(
             // MediaItem, ответ HLS-манифеста и т.п.) — пересобираем список
             // опций из АКТУАЛЬНОГО снимка, не храним ничего между вызовами.
             override fun onTracksChanged(tracks: Tracks) {
+                var audioGroups = 0
+                var audioSupported = 0
+                val unsupportedMimes = linkedSetOf<String>()
+                for (g in tracks.groups) if (g.type == C.TRACK_TYPE_AUDIO) {
+                    for (i in 0 until g.length) {
+                        audioGroups++
+                        if (g.isTrackSupported(i)) audioSupported++
+                        else g.getTrackFormat(i).sampleMimeType?.let { unsupportedMimes += it.substringAfter('/').uppercase() }
+                    }
+                }
+                _audioIssue.value = if (audioGroups > 0 && audioSupported == 0)
+                    "Звук не воспроизводится: кодек ${unsupportedMimes.joinToString().ifEmpty { "неизвестен" }} не поддерживается устройством"
+                else null
                 val current = _uiState.value as? PlayerUiState.Ready ?: return
                 val audio = mutableListOf<TrackOption>()
                 val subtitles = mutableListOf<TrackOption>()

@@ -162,7 +162,7 @@ fun ChannelsBrowseScreen(
                 }
                 // 3. Панель выделенного канала.
                 val panelChannel = visibleChannels.firstOrNull { it.id == focusedId } ?: visibleChannels.firstOrNull()
-                ChannelPanel(panelChannel, viewModel, Modifier.width(300.dp).fillMaxHeight())
+                ChannelPanel(panelChannel, viewModel, Modifier.width(220.dp).fillMaxHeight())
             }
         }
     }
@@ -220,7 +220,7 @@ private fun ChannelRowTv(
 @Composable
 private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, modifier: Modifier = Modifier) {
     Column(
-        modifier.clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.05f)).padding(ZenithDimens.paddingM),
+        modifier.clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.05f)).padding(ZenithDimens.paddingSM),
         verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
     ) {
         if (channel == null) return@Column
@@ -228,7 +228,7 @@ private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, 
         LaunchedEffect(channel.id) { info = null; info = viewModel.nowNext(channel.id) }
         val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-        ChannelLogo(channel, 96.dp)
+        ChannelLogo(channel, 72.dp)
         Text("${channel.channelNumber}  ·  ${channel.canonicalName}", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
         val i = info
         if (i == null) {
@@ -238,7 +238,7 @@ private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, 
             Text(i.title, style = MaterialTheme.typography.bodyLarge, color = ZenithOnSurface, maxLines = 3, overflow = TextOverflow.Ellipsis)
             ProgressLine(i.progress)
             if (!i.description.isNullOrBlank()) {
-                Text(i.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.65f), maxLines = 5, overflow = TextOverflow.Ellipsis)
+                Text(i.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.65f), maxLines = 4, overflow = TextOverflow.Ellipsis)
             }
             if (i.nextTitle != null) {
                 Spacer(Modifier.height(ZenithDimens.paddingXS))

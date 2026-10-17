@@ -127,6 +127,7 @@ fun PlayerScreen(
     // этот — результат уже СОСТОЯВШЕГОСЯ переключения (стрелками или по
     // номеру), с названием канала и текущей программой из EPG.
     val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
+    val audioIssue by viewModel.audioIssue.collectAsStateWithLifecycle()
 
     // Растущий прогресс-бар (PlayerController.ProgressBar, isSeekActive) —
     // seekPulseNonce увеличивается на каждое реальное нажатие
@@ -275,9 +276,11 @@ fun PlayerScreen(
     BackHandler(enabled = true) {
         when {
             uiState !is PlayerUiState.Ready -> onBackPressed()
-            showCompanionQr -> showCompanionQr = false
-            modal != PlayerModal.NONE -> modal = PlayerModal.NONE
-            menuOpen -> viewModel.dismissPlaybackMenu()
+            // Закрытие окна/меню/QR одним нажатием: выделение кнопки оверлея
+            // (через которую окно открывали) снимаем сразу, иначе нужен второй «Назад».
+            showCompanionQr -> { showCompanionQr = false; selectedAction = null }
+            modal != PlayerModal.NONE -> { modal = PlayerModal.NONE; selectedAction = null }
+            menuOpen -> { viewModel.dismissPlaybackMenu(); selectedAction = null }
             selectedAction != null -> { selectedAction = null; touchControls() }
             controlsVisible -> hideControls()
             else -> onBackPressed()
@@ -358,6 +361,14 @@ fun PlayerScreen(
                 // Управление «на видео».
                 when {
                     isCenter -> { touchControls(); viewModel.togglePlayPause(); true }
+                    // Эфир: Вправо/Влево — следующий/предыдущий канал. Повторы зажатой
+                    // клавиши гасим (иначе список пролетает за секунду).
+                    isChannel && !ready.isCatchup && (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) -> {
+                        if (event.nativeKeyEvent.repeatCount == 0) {
+                            if (event.key == Key.DirectionRight) viewModel.zapToNextChannel() else viewModel.zapToPreviousChannel()
+                        }
+                        true
+                    }
                     event.key == Key.DirectionRight -> {
                         touchControls()
                         if (canSeek) { seekToast = "+10 сек"; seekPulseNonce++; viewModel.seekForward() }
@@ -375,7 +386,6 @@ fun PlayerScreen(
                     }
                     event.key == Key.DirectionUp -> {
                         when {
-                            isChannel && !ready.isCatchup -> modal = PlayerModal.CHANNELS
                             !controlsVisible -> touchControls()
                             else -> hideControls()
                         }
@@ -453,11 +463,11 @@ fun PlayerScreen(
                 when (modal) {
                     PlayerModal.EPISODES -> EpisodesModal(
                         seriesTitle = state.title, episodes = episodes, currentId = viewModel.currentId,
-                        onPick = { m -> modal = PlayerModal.NONE; viewModel.playEpisode(m.id) }
+                        onPick = { m -> modal = PlayerModal.NONE; selectedAction = null; viewModel.playEpisode(m.id) }
                     )
                     PlayerModal.CHANNELS -> ChannelsModal(
                         channels = channelsList, currentId = viewModel.currentId,
-                        onPick = { c -> modal = PlayerModal.NONE; viewModel.switchToChannel(c) }
+                        onPick = { c -> modal = PlayerModal.NONE; selectedAction = null; viewModel.switchToChannel(c) }
                     )
                     PlayerModal.PROGRAM -> ProgramModal(
                         channel = programChannel, programs = programs, nowMs = System.currentTimeMillis(),
@@ -533,6 +543,19 @@ fun PlayerScreen(
             }
         }
 
+        // Нет поддерживаемой аудиодорожки — объясняем, почему тишина.
+        if (audioIssue != null && uiState is PlayerUiState.Ready) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = ZenithDimens.paddingL)
+                    .clip(ZenithShapeMedium)
+                    .background(ZenithSurface.copy(alpha = 0.9f))
+                    .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
+            ) {
+                Text(text = audioIssue ?: "", style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface)
+            }
+        }
         // Короткая надпись по центру экрана на DirectionLeft/DirectionRight
         // Motion.kt (PROMPT_DESIGN_SYSTEM.md, подзадача 2) — та же
         // осознанная замена дефолтного FastOutSlowInEasing на единую
