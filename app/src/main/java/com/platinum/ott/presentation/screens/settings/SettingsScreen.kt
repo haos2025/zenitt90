@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -220,6 +221,18 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 }
                 SettingsDivider()
                 SettingsItem("Язык", "Скоро")
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingL))
+            SettingsGroup("Управление пультом", Icons.Outlined.Gamepad) {
+                val overlay by viewModel.playerOverlay.collectAsState()
+                val modes = com.platinum.ott.core.LiveArrowMode.values().toList()
+                CycleSetting("Стрелки в эфире", overlay.liveArrowMode.title) {
+                    viewModel.setLiveArrowMode(modes.nextAfter(overlay.liveArrowMode))
+                }
+                SettingsDivider()
+                CycleSetting("«Назад» в окнах плеера", if (overlay.backClosesAll) "Закрывает всё сразу" else "По шагам") {
+                    viewModel.setBackClosesAll(!overlay.backClosesAll)
+                }
             }
             Spacer(Modifier.height(ZenithDimens.paddingL))
             SettingsGroup("Плагины", Icons.Outlined.Extension) {

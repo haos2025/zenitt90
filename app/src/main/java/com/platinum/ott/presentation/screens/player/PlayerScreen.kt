@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.platinum.ott.core.LiveArrowMode
 import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
@@ -274,13 +275,18 @@ fun PlayerScreen(
     // Назад — ступенями: QR/модалка/меню → кнопки → видео → скрыть оверлей → выйти.
     // BackHandler надёжнее, чем перехват Key.Back: работает и с жестом/системной кнопкой.
     BackHandler(enabled = true) {
+        // «Назад» в окне оверлея (каналы/серии/программа/меню настроек/QR): по умолчанию закрывает окно И
+        // оверлей одним нажатием (возврат к видео). Режим «По шагам» (Настройки → Управление пультом) —
+        // как раньше: окно → выделение кнопки → оверлей → выход.
+        val closeAll = overlaySettings.backClosesAll
+        // Диагностика двойного «Назад»: в logcat фильтр ZenithBack покажет, что именно было открыто в момент нажатия.
+        android.util.Log.d("ZenithBack", "back: modal=$modal menu=$menuOpen qr=$showCompanionQr sel=$selectedAction controls=$controlsVisible closeAll=$closeAll")
+        fun afterWindowClosed() { selectedAction = null; if (closeAll) controlsVisible = false else touchControls() }
         when {
             uiState !is PlayerUiState.Ready -> onBackPressed()
-            // Закрытие окна/меню/QR одним нажатием: выделение кнопки оверлея
-            // (через которую окно открывали) снимаем сразу, иначе нужен второй «Назад».
-            showCompanionQr -> { showCompanionQr = false; selectedAction = null }
-            modal != PlayerModal.NONE -> { modal = PlayerModal.NONE; selectedAction = null }
-            menuOpen -> { viewModel.dismissPlaybackMenu(); selectedAction = null }
+            showCompanionQr -> { showCompanionQr = false; afterWindowClosed() }
+            modal != PlayerModal.NONE -> { modal = PlayerModal.NONE; afterWindowClosed() }
+            menuOpen -> { viewModel.dismissPlaybackMenu(); afterWindowClosed() }
             selectedAction != null -> { selectedAction = null; touchControls() }
             controlsVisible -> hideControls()
             else -> onBackPressed()
@@ -359,16 +365,40 @@ fun PlayerScreen(
                 }
 
                 // Управление «на видео».
+                // В ПРЯМОМ эфире поведение стрелок задаёт настройка «Стрелки в эфире»
+                // (LiveArrowMode, Настройки → Управление пультом); в фильмах, сериалах
+                // и архиве стрелки всегда перематывают (см. ниже).
+                val liveNow = isChannel && !ready.isCatchup
+                val arrowMode = overlaySettings.liveArrowMode
+                val firstRepeat = event.nativeKeyEvent.repeatCount == 0 // повторы зажатой клавиши не переключают каналы
                 when {
+                    // UP_DOWN_ZAP: Вверх/Вниз заняты каналами, поэтому OK показывает оверлей и входит в его кнопки.
+                    liveNow && arrowMode == LiveArrowMode.UP_DOWN_ZAP && isCenter -> {
+                        if (!controlsVisible) touchControls()
+                        else { selectedAction = actions.firstOrNull { it == OverlayAction.CHANNELS } ?: actions.first(); touchControls() }
+                        true
+                    }
                     isCenter -> { touchControls(); viewModel.togglePlayPause(); true }
-                    // Эфир: Вправо/Влево — следующий/предыдущий канал. Повторы зажатой
-                    // клавиши гасим (иначе список пролетает за секунду).
-                    isChannel && !ready.isCatchup && (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) -> {
-                        if (event.nativeKeyEvent.repeatCount == 0) {
+                    // LEFT_RIGHT_ZAP: Вправо/Влево — следующий/предыдущий канал.
+                    liveNow && arrowMode == LiveArrowMode.LEFT_RIGHT_ZAP && (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) -> {
+                        if (firstRepeat) {
                             if (event.key == Key.DirectionRight) viewModel.zapToNextChannel() else viewModel.zapToPreviousChannel()
                         }
                         true
                     }
+                    // UP_DOWN_ZAP: Вверх/Вниз — каналы, Влево — список каналов, Вправо — программа.
+                    liveNow && arrowMode == LiveArrowMode.UP_DOWN_ZAP && (event.key == Key.DirectionUp || event.key == Key.DirectionDown) -> {
+                        if (firstRepeat) {
+                            if (event.key == Key.DirectionUp) viewModel.zapToNextChannel() else viewModel.zapToPreviousChannel()
+                        }
+                        true
+                    }
+                    liveNow && arrowMode == LiveArrowMode.UP_DOWN_ZAP && event.key == Key.DirectionLeft -> { modal = PlayerModal.CHANNELS; true }
+                    liveNow && arrowMode == LiveArrowMode.UP_DOWN_ZAP && event.key == Key.DirectionRight -> { modal = PlayerModal.PROGRAM; true }
+                    // CLASSIC: Влево/Вправо в эфире ничего не делают (только показывают оверлей).
+                    liveNow && arrowMode == LiveArrowMode.CLASSIC && (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) -> { touchControls(); true }
+                    // CLASSIC: Вверх в эфире — список каналов (как раньше).
+                    liveNow && arrowMode == LiveArrowMode.CLASSIC && event.key == Key.DirectionUp -> { modal = PlayerModal.CHANNELS; true }
                     event.key == Key.DirectionRight -> {
                         touchControls()
                         if (canSeek) { seekToast = "+10 сек"; seekPulseNonce++; viewModel.seekForward() }

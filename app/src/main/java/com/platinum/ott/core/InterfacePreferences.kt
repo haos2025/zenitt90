@@ -44,5 +44,17 @@ class InterfacePreferences(context: Context) {
         get() = prefs.getBoolean("player_show_buffered", true)
         set(value) = prefs.edit().putBoolean("player_show_buffered", value).apply()
 
-    fun playerOverlaySettings() = PlayerOverlaySettings(controlsHideDelayMs, showProgressStrip, progressStripDp, keepControlsWhenPaused, showBuffered)
+    var liveArrowMode: LiveArrowMode
+        get() = runCatching { LiveArrowMode.valueOf(prefs.getString("player_live_arrow_mode", null) ?: "") }
+            .getOrDefault(LiveArrowMode.LEFT_RIGHT_ZAP)
+        set(value) = prefs.edit().putString("player_live_arrow_mode", value.name).apply()
+
+    var backClosesAll: Boolean
+        get() = prefs.getBoolean("player_back_closes_all", true)
+        set(value) = prefs.edit().putBoolean("player_back_closes_all", value).apply()
+
+    fun playerOverlaySettings() = PlayerOverlaySettings(
+        controlsHideDelayMs, showProgressStrip, progressStripDp, keepControlsWhenPaused, showBuffered,
+        liveArrowMode, backClosesAll
+    )
 }

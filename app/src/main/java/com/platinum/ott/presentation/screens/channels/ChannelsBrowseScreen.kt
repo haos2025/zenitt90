@@ -162,7 +162,7 @@ fun ChannelsBrowseScreen(
                 }
                 // 3. Панель выделенного канала.
                 val panelChannel = visibleChannels.firstOrNull { it.id == focusedId } ?: visibleChannels.firstOrNull()
-                ChannelPanel(panelChannel, viewModel, Modifier.width(220.dp).fillMaxHeight())
+                ChannelPanel(panelChannel, viewModel, Modifier.width(180.dp).fillMaxHeight())
             }
         }
     }
@@ -228,7 +228,7 @@ private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, 
         LaunchedEffect(channel.id) { info = null; info = viewModel.nowNext(channel.id) }
         val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-        ChannelLogo(channel, 72.dp)
+        ChannelLogo(channel, 96.dp)
         Text("${channel.channelNumber}  ·  ${channel.canonicalName}", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
         val i = info
         if (i == null) {

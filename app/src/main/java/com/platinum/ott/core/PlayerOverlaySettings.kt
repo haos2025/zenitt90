@@ -12,8 +12,25 @@ data class PlayerOverlaySettings(
     val showProgressStrip: Boolean = true,
     val progressStripDp: Int = DEFAULT_PROGRESS_STRIP_DP,
     val keepControlsWhenPaused: Boolean = true,
-    val showBuffered: Boolean = true
+    val showBuffered: Boolean = true,
+    /** Как стрелки пульта ведут себя в прямом эфире (только ТВ). */
+    val liveArrowMode: LiveArrowMode = LiveArrowMode.LEFT_RIGHT_ZAP,
+    /** true — «Назад» в окне оверлея закрывает окно И оверлей одним нажатием; false — по шагам. */
+    val backClosesAll: Boolean = true
 )
+
+/**
+ * Режимы стрелок пульта в ПРЯМОМ эфире (в фильмах/архиве стрелки всегда перематывают).
+ * Реализация — PlayerScreen.kt (onKeyEvent), выбор — Настройки → «Управление пультом».
+ */
+enum class LiveArrowMode(val title: String) {
+    /** Вправо/Влево — следующий/предыдущий канал; Вверх — показать/скрыть оверлей; Вниз — кнопки оверлея. */
+    LEFT_RIGHT_ZAP("Влево/Вправо — каналы"),
+    /** Вверх/Вниз — следующий/предыдущий канал; Влево — список каналов; Вправо — программа; OK — оверлей. */
+    UP_DOWN_ZAP("Вверх/Вниз — каналы"),
+    /** Как было раньше: Вверх — список каналов, Вниз — оверлей, Влево/Вправо ничего не делают. */
+    CLASSIC("Классика (Вверх — список)")
+}
 
 const val DEFAULT_PROGRESS_STRIP_DP = 3
 
