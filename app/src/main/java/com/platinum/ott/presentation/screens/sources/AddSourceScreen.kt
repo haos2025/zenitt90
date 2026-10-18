@@ -143,7 +143,7 @@ fun AddSourceScreen(
                         horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
                         modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS)
                     ) {
-                        Switch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
+                        com.platinum.ott.presentation.components.FocusSwitch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
                         Column {
                             Text("Это плейлист живых каналов", color = ZenithOnSurface)
                             Text(

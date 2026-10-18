@@ -100,11 +100,18 @@ class HomeViewModel @Inject constructor(
     // эту часть списка повторно на каждый вызов.
     private var cachedPlaylistMovies: List<Movie> = emptyList()
 
+    companion object {
+        @Volatile private var lastSuccess: HomeUiState.Success? = null
+    }
+
     init { loadCatalog() }
 
     fun loadCatalog(page: Int = 1) {
         viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
+            // Повторный заход на главную: сразу показываем последний удачный каталог (в памяти процесса),
+            // а обновление идёт в фоне — без вечной «загрузки», если backend спит или отвечает медленно.
+            val previous = lastSuccess
+            _uiState.value = if (page == 1 && previous != null) previous else HomeUiState.Loading
 
             // Раньше M3U/Xtream-логин был "калиткой" без последствий — сохранял
             // учётные данные, но ни один экран не превращал их в контент.
@@ -127,7 +134,10 @@ class HomeViewModel @Inject constructor(
             // одной карточкой, не N плоскими эпизодами (см.
             // PlaylistRepository.getCatalogGroupedBySeries()).
             val playlistDeferred = async { try { getPlaylistCatalog.executeGroupedBySeries() } catch (_: Exception) { emptyList() } }
-            val catalogDeferred = async { getCatalog.execute(page) }
+            val catalogDeferred = async {
+                kotlinx.coroutines.withTimeoutOrNull(45_000L) { getCatalog.execute(page) }
+                    ?: Result.failure(Exception("Сервер долго не отвечает"))
+            }
 
             cachedPlaylistMovies = playlistDeferred.await()
 
@@ -139,7 +149,7 @@ class HomeViewModel @Inject constructor(
             // отдельным промежуточным состоянием (isBackendLoading=true, не
             // полноценный Success без оговорок), backend-ряды домешиваются
             // ниже вторым обновлением _uiState, когда действительно ответят.
-            if (cachedPlaylistMovies.isNotEmpty()) {
+            if (cachedPlaylistMovies.isNotEmpty() && !(page == 1 && previous != null)) {
                 _uiState.value = HomeUiState.Success(
                     movies = cachedPlaylistMovies,
                     page = 1,
@@ -151,16 +161,21 @@ class HomeViewModel @Inject constructor(
 
             catalogDeferred.await().onSuccess {
                 val allMovies = cachedPlaylistMovies + it.movies
-                _uiState.value = HomeUiState.Success(
+                val ok = HomeUiState.Success(
                     movies = allMovies,
                     page = it.currentPage,
                     totalPages = it.totalPages
                 )
+                if (page == 1) lastSuccess = ok
+                _uiState.value = ok
                 computeGenrePriority(allMovies)
             }.onFailure { error ->
                 // Backend недоступен, но свой плейлист может быть жив —
                 // не превращать это в полный отказ экрана, если есть хоть что-то
-                if (cachedPlaylistMovies.isNotEmpty()) {
+                val keep = lastSuccess
+                if (page == 1 && keep != null && cachedPlaylistMovies.isEmpty()) {
+                    _uiState.value = keep
+                } else if (cachedPlaylistMovies.isNotEmpty()) {
                     // Уже показан выше (промежуточное состояние) — просто
                     // снимаем isBackendLoading, не превращаем в общий Error.
                     _uiState.value = HomeUiState.Success(cachedPlaylistMovies, 1, 1)

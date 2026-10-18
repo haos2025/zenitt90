@@ -34,7 +34,35 @@ class ChannelsViewModel @Inject constructor(
     private val _isChecking = MutableStateFlow(false)
     val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
 
-    init { load() }
+    private val _epgBusy = MutableStateFlow(false)
+    val epgBusy: kotlinx.coroutines.flow.StateFlow<Boolean> = _epgBusy
+    // Увеличивается после обновления программы — экраны перечитывают «сейчас в эфире».
+    private val _epgVersion = MutableStateFlow(0)
+    val epgVersion: kotlinx.coroutines.flow.StateFlow<Int> = _epgVersion
+
+    init {
+        load()
+        // Программа не обновлялась больше 6 часов (или никогда) — тихо обновляем в фоне.
+        viewModelScope.launch {
+            try {
+                sessionGraph.playlistSourceRepository.refreshEpgIfStale(6 * 3_600_000L)
+                _epgVersion.value++
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+        }
+    }
+
+    /** Ручное обновление программы: onResult получает человекочитаемый отчёт (что скачано, сколько сопоставлено). */
+    fun refreshEpg(onResult: (String) -> Unit) {
+        if (_epgBusy.value) return
+        viewModelScope.launch {
+            _epgBusy.value = true
+            val report = mutableListOf<String>()
+            val ok = try { sessionGraph.playlistSourceRepository.refreshEpgOnly(report) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { report.add("Ошибка: ${e.message}"); false }
+            _epgBusy.value = false
+            _epgVersion.value++
+            onResult((if (ok) "Программа обновлена" else "Программу получить не удалось") + "\n" + report.joinToString("\n"))
+        }
+    }
 
     fun load() {
         viewModelScope.launch {

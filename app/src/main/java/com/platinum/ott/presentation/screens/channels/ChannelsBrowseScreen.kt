@@ -67,6 +67,8 @@ fun ChannelsBrowseScreen(
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val epgBusy by viewModel.epgBusy.collectAsStateWithLifecycle()
+    val epgVersion by viewModel.epgVersion.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
@@ -120,7 +122,13 @@ fun ChannelsBrowseScreen(
             Text("Каналы", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             ChannelSearchField(query = searchQuery, onChange = { searchQuery = it }, modifier = Modifier.width(240.dp))
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = onManageClick) { Text("Управление") }
+            OutlinedButton(
+                scale = OutlinedButtonDefaults.scale(focusedScale = 1f),
+                enabled = !epgBusy,
+                onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
+            ) { Text(if (epgBusy) "Загрузка программы…" else "Обновить программу") }
+            Spacer(Modifier.width(ZenithDimens.paddingS))
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onManageClick) { Text("Управление") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
 
@@ -162,6 +170,7 @@ fun ChannelsBrowseScreen(
                             ChannelTileTv(
                                 item = ch,
                                 isFavorite = ch.id in favorites,
+                                epgVersion = epgVersion,
                                 viewModel = viewModel,
                                 onClick = { onPlayChannel(ch.id) },
                                 onLongClick = { toggleFavorite(ch.id) },
@@ -173,7 +182,7 @@ fun ChannelsBrowseScreen(
                 }
                 // 3. Панель выделенного канала.
                 val panelChannel = visibleChannels.firstOrNull { it.id == focusedId } ?: visibleChannels.firstOrNull()
-                ChannelPanel(panelChannel, viewModel, Modifier.width(180.dp).fillMaxHeight())
+                ChannelPanel(panelChannel, viewModel, epgVersion, Modifier.width(180.dp).fillMaxHeight())
             }
         }
     }
@@ -184,6 +193,7 @@ fun ChannelsBrowseScreen(
 private fun ChannelTileTv(
     item: ChannelUiItem,
     isFavorite: Boolean,
+    epgVersion: Int,
     viewModel: ChannelsViewModel,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -192,7 +202,7 @@ private fun ChannelTileTv(
 ) {
     // Программа грузится только для реально скомпонованных (видимых) плиток, обновление раз в минуту.
     var now by remember(item.id) { mutableStateOf<Pair<String, Float>?>(null) }
-    LaunchedEffect(item.id) {
+    LaunchedEffect(item.id, epgVersion) {
         while (true) {
             now = viewModel.nowPlaying(item.id)
             kotlinx.coroutines.delay(60_000)
@@ -237,14 +247,14 @@ private fun ChannelTileTv(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, modifier: Modifier = Modifier) {
+private fun ChannelPanel(channel: ChannelUiItem?, viewModel: ChannelsViewModel, epgVersion: Int, modifier: Modifier = Modifier) {
     Column(
         modifier.clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.05f)).padding(ZenithDimens.paddingSM),
         verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
     ) {
         if (channel == null) return@Column
         var info by remember(channel.id) { mutableStateOf<ChannelsViewModel.NowNext?>(null) }
-        LaunchedEffect(channel.id) { info = null; info = viewModel.nowNext(channel.id) }
+        LaunchedEffect(channel.id, epgVersion) { info = null; info = viewModel.nowNext(channel.id) }
         val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
         ChannelLogo(channel, 96.dp)
@@ -315,7 +325,7 @@ private fun CategoryRow(title: String, count: Int, selected: Boolean, onSelect: 
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ChannelSearchField(query: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun ChannelSearchField(query: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, hint: String = "Поиск") {
     var isEditing by remember { mutableStateOf(false) }
     var gotFocus by remember { mutableStateOf(false) }
     var wasEditing by remember { mutableStateOf(false) }
@@ -333,10 +343,11 @@ private fun ChannelSearchField(query: String, onChange: (String) -> Unit, modifi
                 containerColor = ZenithOnSurface.copy(alpha = 0.08f),
                 focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
             ),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
             modifier = modifier.focusRequester(idleRequester)
         ) {
             Text(
-                if (query.isEmpty()) "Поиск" else query,
+                if (query.isEmpty()) hint else query,
                 style = TextStyle(if (query.isEmpty()) ZenithOnSurface.copy(alpha = 0.4f) else ZenithOnSurface, 16.sp),
                 maxLines = 1,
                 modifier = Modifier.padding(ZenithDimens.paddingM, ZenithDimens.paddingSM)

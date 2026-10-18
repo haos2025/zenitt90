@@ -75,17 +75,12 @@ fun EpgGridScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Программа передач", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            BasicTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it; viewModel.search(it) },
-                singleLine = true,
-                textStyle = TextStyle(ZenithOnSurface, 16.sp),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.width(200.dp).background(ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeSmall).padding(ZenithDimens.paddingM, ZenithDimens.paddingSM),
-                decorationBox = { inner ->
-                    if (searchQuery.isEmpty()) Text("Поиск передачи", color = ZenithOnSurface.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
-                    inner()
-                }
+            // Не открывает клавиатуру сам: сначала кнопка, по OK — ввод.
+            com.platinum.ott.presentation.screens.channels.ChannelSearchField(
+                query = searchQuery,
+                onChange = { searchQuery = it; viewModel.search(it) },
+                modifier = Modifier.width(200.dp),
+                hint = "Поиск передачи"
             )
             Spacer(Modifier.width(ZenithDimens.paddingS))
             OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.shiftWindow(forward = false) }) { Text("◀ 30 мин") }

@@ -350,7 +350,7 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
                 }
             }
         }
-        Switch(
+        com.platinum.ott.presentation.components.FocusSwitch(
             checked = plugin.isEnabled,
             onCheckedChange = onToggle,
             modifier = Modifier.align(Alignment.BottomStart).padding(ZenithDimens.paddingSM)

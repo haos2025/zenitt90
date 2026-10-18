@@ -46,7 +46,7 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
  * из плейлистов) вписываем целиком, иначе логотип растягивается на всю карточку.
  */
 fun contentScaleForId(contentId: String): ContentScale =
-    if (com.platinum.ott.domain.ContentIdKind.isZenithBackendContent(contentId)) ContentScale.Crop else ContentScale.Fit
+    if (contentId.startsWith("ch_")) ContentScale.Fit else ContentScale.Crop
 
 @Composable
 fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -117,7 +117,8 @@ fun MovieCard(
                 model = request,
                 contentDescription = title,
                 contentScale = contentScale,
-                modifier = Modifier.fillMaxSize(),
+                // Логотипы (Fit) — с полями, чтобы не упирались в края и не были огромными.
+                modifier = if (contentScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 28.dp, vertical = 44.dp) else Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                 onError = { posterFailed = true },

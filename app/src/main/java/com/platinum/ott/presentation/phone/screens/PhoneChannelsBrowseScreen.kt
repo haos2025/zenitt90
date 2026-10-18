@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -56,6 +57,8 @@ fun PhoneChannelsBrowseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
+    val epgBusy by viewModel.epgBusy.collectAsStateWithLifecycle()
+    val epgVersion by viewModel.epgVersion.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     var favorites by remember { mutableStateOf(prefs.getStringSet(KEY_FAVS, emptySet()).orEmpty().toSet()) }
@@ -95,6 +98,10 @@ fun PhoneChannelsBrowseScreen(
                     navigationIcon = { IconButton(onClick = onBackPressed) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") } },
                     actions = {
                         IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) { Icon(Icons.Filled.Search, contentDescription = "Поиск") }
+                        IconButton(
+                            enabled = !epgBusy,
+                            onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
+                        ) { Icon(Icons.Filled.Refresh, contentDescription = "Обновить программу") }
                         IconButton(onClick = onManageClick) { Icon(Icons.Filled.Settings, contentDescription = "Управление каналами") }
                     }
                 )
@@ -144,6 +151,7 @@ fun PhoneChannelsBrowseScreen(
                     ChannelRow(
                         item = ch,
                         isFavorite = ch.id in favorites,
+                        epgVersion = epgVersion,
                         viewModel = viewModel,
                         onClick = { onPlayChannel(ch.id) },
                         onToggleFavorite = { toggleFavorite(ch.id) },
@@ -160,6 +168,7 @@ fun PhoneChannelsBrowseScreen(
 private fun ChannelRow(
     item: ChannelUiItem,
     isFavorite: Boolean,
+    epgVersion: Int,
     viewModel: ChannelsViewModel,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -168,7 +177,7 @@ private fun ChannelRow(
     // Программа грузится только для реально показанных строк (LazyColumn компонует лишь видимые)
     // и обновляется раз в минуту.
     var now by remember(item.id) { mutableStateOf<Pair<String, Float>?>(null) }
-    LaunchedEffect(item.id) {
+    LaunchedEffect(item.id, epgVersion) {
         while (true) {
             now = viewModel.nowPlaying(item.id)
             kotlinx.coroutines.delay(60_000)

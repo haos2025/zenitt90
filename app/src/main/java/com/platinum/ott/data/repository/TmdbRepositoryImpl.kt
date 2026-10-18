@@ -36,10 +36,17 @@ private val gson = Gson()
 private val castListType = object : TypeToken<List<CastMember>>() {}.type
 
 class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDao: MetadataDao) : TmdbRepository {
+    // Негативный кэш: что не нашлось или упало — не долбим TMDB повторно 30 минут.
+    private val missCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     override suspend fun getMetadata(contentId: String, title: String, year: Int?): Result<TmdbMetadata> = withContext(Dispatchers.IO) {
         val cached = metadataDao.getByContentId(contentId)
         if (cached != null && System.currentTimeMillis() - cached.cachedAt < 24 * 3600 * 1000L) {
             return@withContext Result.success(cached.toDomain())
+        }
+        val missAt = missCache[contentId]
+        if (missAt != null && System.currentTimeMillis() - missAt < 30 * 60 * 1000L) {
+            return@withContext Result.failure(Exception("TMDB: недавно не найдено"))
         }
         try {
             // withPermit — не более 4 одновременных запросов к TMDB на всё
@@ -50,7 +57,7 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             val entity = tmdbConcurrencyLimiter.withPermit { fetchWithRetry(contentId, title, year) }
             metadataDao.upsert(entity)
             Result.success(entity.toDomain())
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: Exception) { missCache[contentId] = System.currentTimeMillis(); Result.failure(e) }
     }
 
     // До 2 повторных попыток именно на 429 (Too Many Requests) с паузой —
@@ -66,10 +73,11 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             // Названия из каталога часто «грязные»: «Niti (Нити)», «Фильм (2008)», «Title / Название».
             // Пробуем по очереди: как есть → без скобок → текст из скобок → части через « / »;
             // для каждого сначала с годом, потом без (год в каталоге бывает неточным).
-            val result = titleVariants(title).firstNotNullOfOrNull { v ->
-                (api.searchMovie(v, year).results.firstOrNull()
-                    ?: if (year != null && year > 0) api.searchMovie(v, null).results.firstOrNull() else null)
-            } ?: throw Exception("TMDB: не найдено")
+            // Не больше ~4 запросов на промах: иначе каталог на главной упирается в лимиты TMDB (429).
+            val variants = titleVariants(title)
+            val result = variants.firstNotNullOfOrNull { v -> api.searchMovie(v, year).results.firstOrNull() }
+                ?: (if (year != null && year > 0) variants.firstOrNull()?.let { api.searchMovie(it, null).results.firstOrNull() } else null)
+                ?: throw Exception("TMDB: не найдено")
             val details = api.getMovieDetails(result.id)
             val trailer = details.videos?.results?.firstOrNull { it.site == "YouTube" && it.type == "Trailer" }
             val genres = details.genres.joinToString(", ") { it.name }
@@ -100,7 +108,7 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             if (inner.length >= 2 && !inner.matches(Regex("\\d{4}"))) out += inner
         }
         title.split(" / ", " | ").map { it.trim() }.filter { it.isNotBlank() }.forEach { out += it }
-        return out.filter { it.isNotBlank() }.take(5)
+        return out.filter { it.isNotBlank() }.take(3)
     }
 
     private fun MetadataEntity.toDomain(): TmdbMetadata {

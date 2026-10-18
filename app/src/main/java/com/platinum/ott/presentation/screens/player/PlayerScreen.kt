@@ -282,13 +282,8 @@ fun PlayerScreen(
 
     // Назад — ступенями: QR/модалка/меню → кнопки → видео → скрыть оверлей → выйти.
     // BackHandler надёжнее, чем перехват Key.Back: работает и с жестом/системной кнопкой.
-    BackHandler(enabled = true) {
-        // «Назад» в окне оверлея (каналы/серии/программа/меню настроек/QR): по умолчанию закрывает окно И
-        // оверлей одним нажатием (возврат к видео). Режим «По шагам» (Настройки → Управление пультом) —
-        // как раньше: окно → выделение кнопки → оверлей → выход.
+    fun handleBack() {
         val closeAll = overlaySettings.backClosesAll
-        // Диагностика двойного «Назад»: в logcat фильтр ZenithBack покажет, что именно было открыто в момент нажатия.
-        android.util.Log.d("ZenithBack", "back: modal=$modal menu=$menuOpen qr=$showCompanionQr sel=$selectedAction controls=$controlsVisible closeAll=$closeAll")
         fun afterWindowClosed() { selectedAction = null; if (closeAll) controlsVisible = false else touchControls() }
         when {
             uiState !is PlayerUiState.Ready -> onBackPressed()
@@ -300,6 +295,7 @@ fun PlayerScreen(
             else -> onBackPressed()
         }
     }
+    BackHandler(enabled = true) { handleBack() }
 
     Box(
         modifier = Modifier
@@ -308,6 +304,12 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // «Назад» в окне (меню/каналы/серии/программа/QR) закрывает его сразу, до того как
+                // Compose успеет сначала снять фокус с элемента (из-за этого было два нажатия).
+                if (event.key == Key.Back && (showCompanionQr || modal != PlayerModal.NONE || menuOpen)) {
+                    if (event.type == KeyEventType.KeyDown) handleBack()
+                    return@onPreviewKeyEvent true
+                }
                 if (event.type == KeyEventType.KeyDown) interactionNonce++
                 false
             }

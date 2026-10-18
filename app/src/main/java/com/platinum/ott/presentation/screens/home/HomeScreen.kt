@@ -10,6 +10,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -37,6 +41,8 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
     val recentlyAiredEpisode by viewModel.recentlyAiredEpisode.collectAsStateWithLifecycle()
     var selectedFilter by remember { mutableStateOf(HomeContentFilter.ALL) }
 
+    val chipRequester = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    val homeFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Row(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavSidebar(navController)
         Column(Modifier.weight(1f).fillMaxHeight().padding(top = ZenithDimens.paddingL, bottom = ZenithDimens.paddingL)) {
@@ -60,7 +66,10 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                         if (filter == HomeContentFilter.CHANNELS) navController.navigate("channels")
                         else selectedFilter = filter
                     }
-                    FilterChip(selectedFilter == filter, onClick = onFilterClick) { Text(filter.label) }
+                    FilterChip(
+                        selectedFilter == filter, onClick = onFilterClick,
+                        modifier = if (selectedFilter == filter) Modifier.focusRequester(chipRequester) else Modifier
+                    ) { Text(filter.label) }
                 }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
@@ -115,7 +124,19 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                             }
                     }
 
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL),
+                        // Вверх из любого ряда: если штатный поиск фокуса не нашёл элемент выше — уходим на чипсы.
+                        modifier = Modifier.onPreviewKeyEvent { e ->
+                            if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionUp) {
+                                if (!homeFocusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)) {
+                                    try { chipRequester.requestFocus() } catch (_: Exception) {}
+                                }
+                                true
+                            } else false
+                        }
+                    ) {
                         if (continueWatching.isNotEmpty() || recentlyAiredEpisode != null) {
                             item(key = "info_strip") {
                                 HomeInfoStrip(

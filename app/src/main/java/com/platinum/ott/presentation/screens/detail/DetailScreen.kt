@@ -177,7 +177,17 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // фокус на «Смотреть» (а не на «Показать полностью»).
                 val listState = rememberLazyListState()
                 var page by remember(movieId) { mutableIntStateOf(0) }
-                LaunchedEffect(page) { listState.animateScrollToItem(page) }
+                val detailFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                var pendingDown by remember(movieId) { mutableStateOf(false) }
+                var pendingUp by remember(movieId) { mutableStateOf(false) }
+                // Второй экран («актёры/смотрите также») в ленивом списке не скомпонован, пока мы на первом,
+                // поэтому штатный поиск фокуса вниз/вверх его не находит. Сами переключаем страницу и
+                // затем двигаем фокус.
+                LaunchedEffect(page) {
+                    listState.animateScrollToItem(page)
+                    if (page == 1 && pendingDown) { pendingDown = false; detailFocusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }
+                    if (page == 0 && pendingUp) { pendingUp = false; try { playButtonFocusRequester.requestFocus() } catch (_: Exception) {} }
+                }
                 var showOverviewDialog by remember(movieId) { mutableStateOf(false) }
                 val screenHeightDp = LocalConfiguration.current.screenHeightDp
                 // Низкие экраны (ТВ-приставки в 540dp и ниже): компактный режим — меньше
@@ -197,6 +207,16 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                             horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL),
                             modifier = Modifier
                                 .onFocusChanged { if (it.hasFocus) page = 0 }
+                                .onPreviewKeyEvent { e ->
+                                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown && hasMore) {
+                                        if (!detailFocusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) {
+                                            pendingDown = true
+                                            if (page == 1) page = 0
+                                            page = 1
+                                        }
+                                        true
+                                    } else false
+                                }
                                 .focusProperties { enter = { playButtonFocusRequester } }
                                 .focusGroup()
                         ) {
@@ -302,7 +322,16 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                 modifier = Modifier
                                     .fillParentMaxHeight().fillMaxWidth()
                                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingL)
-                                    .onFocusChanged { if (it.hasFocus) page = 1 },
+                                    .onFocusChanged { if (it.hasFocus) page = 1 }
+                                    .onPreviewKeyEvent { e ->
+                                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) {
+                                            if (!detailFocusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)) {
+                                                pendingUp = true
+                                                page = 0
+                                            }
+                                            true
+                                        } else false
+                                    },
                                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)
                             ) {
                                 if (hasCast) CastRow(state.metadata!!.cast, showRoles = false, onMemberClick = { member -> onNavigateToPerson(member.id) })

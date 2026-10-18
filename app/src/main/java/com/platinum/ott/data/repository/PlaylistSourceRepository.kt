@@ -259,16 +259,20 @@ class PlaylistSourceRepository(
                     // хоть и нетипично (см. допущение у sourceDao.updateEpgUrl
                     // выше в предыдущей подзадаче).
                     val ownEpgUrls = M3uPlaylistParser.parseEpgUrls(epgUrl)
-                    ownEpgUrls.forEach { refreshEpgFromXmltv(it) }
                     if (source.contentKind == "live") {
                         // Живой эфир целиком уходит в Channel/ChannelStream —
                         // не пишется в playlist_movies вообще (см.
                         // PROMPT_IPTV_FOUNDATION.md, ChannelMatchingRepository).
                         channelMatchingRepository.matchAndStore(sourceId, rawEntries.map { it.toRawChannelCandidate() })
-                        // Свой адрес программы в плейлисте не указан — пробуем запасные источники.
-                        if (ownEpgUrls.isEmpty()) refreshEpgFromFallbackSources()
+                        // EPG — ПОСЛЕ сохранения каналов: сопоставление по названию работает по уже
+                        // существующим каналам (раньше шло до — при первом обновлении каналов ещё не было).
+                        val handled = mutableSetOf<String>()
+                        var epgOk = false
+                        ownEpgUrls.forEach { if (refreshEpgFromXmltv(it, null, handled)) epgOk = true }
+                        if (!epgOk) refreshEpgFromFallbackSources(null, handled)
                     } else {
                         storeVodEntries(source, sourceId, rawEntries)
+                        ownEpgUrls.forEach { refreshEpgFromXmltv(it) }
                     }
                 }
                 "xtream" -> {
@@ -362,14 +366,25 @@ class PlaylistSourceRepository(
      * окажется на порядок больше "десятков МБ" из PROMPT_EPG.md, стоит
      * перепроверить отдельно, здесь это не тестировалось.
      */
-    private suspend fun refreshEpgFromXmltv(url: String): Boolean {
+    private suspend fun refreshEpgFromXmltv(
+        url: String,
+        report: MutableList<String>? = null,
+        handled: MutableSet<String> = mutableSetOf()
+    ): Boolean {
+        val shortUrl = url.substringAfter("://").substringBefore('?').take(60)
         return try {
             val now = System.currentTimeMillis()
             val windowStart = now - TimeUnit.HOURS.toMillis(2)
             val windowEnd = now + TimeUnit.HOURS.toMillis(48)
-            val req = Request.Builder().url(url).build()
+            // Отдельный клиент: XMLTV — файл на десятки МБ, общий API-таймаут (15/30 с) его обрывал.
+            // User-Agent «как у браузера» — часть серверов EPG отдаёт 403 библиотечным клиентам.
+            val req = Request.Builder().url(url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+                .build()
             val xmltvNames = mutableMapOf<String, MutableList<String>>()
-            val programs = client.newCall(req).execute().use { resp ->
+            var httpCode = 0
+            val programs = epgClient.newCall(req).execute().use { resp ->
+                httpCode = resp.code
                 if (!resp.isSuccessful) return@use emptyList()
                 resp.body?.byteStream()?.use { raw ->
                     // XMLTV часто отдают как .xml.gz БЕЗ заголовка Content-Encoding — OkHttp
@@ -385,92 +400,106 @@ class PlaylistSourceRepository(
                     }
                 } ?: emptyList()
             }
-            if (programs.isEmpty()) return false
-            programs.groupBy { "ch_tvg_${it.channelId}" }.forEach { (channelId, channelPrograms) ->
-                val entities = channelPrograms.map { p ->
-                    EpgProgramEntity(
-                        id = "$channelId:${p.startTimeMillis}",
-                        channelId = channelId,
-                        title = p.title,
-                        description = p.description,
-                        category = p.category,
-                        startTimeMillis = p.startTimeMillis,
-                        endTimeMillis = p.endTimeMillis
-                    )
-                }
-                epgProgramRepository.replaceProgramsForChannel(channelId, entities)
+            if (programs.isEmpty()) {
+                report?.add("$shortUrl: " + if (httpCode in 200..299) "файл получен, программ в окне −2ч…+48ч нет" else "HTTP $httpCode")
+                return false
             }
-            matchEpgByName(programs.groupBy { it.channelId }, xmltvNames)
+            val byXmltv = programs.groupBy { it.channelId }
+            val byLower = HashMap<String, String>()
+            for (xid in byXmltv.keys) byLower.putIfAbsent(xid.lowercase().trim(), xid)
+            val nameIndex = HashMap<String, String>()
+            for (xid in byXmltv.keys) {
+                for (n in (xmltvNames[xid].orEmpty() + xid.substringBeforeLast('.'))) {
+                    for (k in EpgNameMatcher.keys(n)) nameIndex.putIfAbsent(k, xid)
+                }
+            }
+            var byId = 0; var byName = 0
+            for (ch in channelMatchingRepository.allChannels()) {
+                // 1) по tvg-id без учёта регистра; 2) по названию (только если по id не нашлось).
+                var xid = ch.tvgId?.let { byLower[it.lowercase().trim()] }
+                var viaName = false
+                if (xid == null) {
+                    if (ch.id in handled) continue
+                    xid = EpgNameMatcher.keys(ch.canonicalName).firstNotNullOfOrNull { nameIndex[it] }
+                    viaName = xid != null
+                }
+                val list = byXmltv[xid ?: continue] ?: continue
+                epgProgramRepository.replaceProgramsForChannel(
+                    ch.id,
+                    list.map { p ->
+                        EpgProgramEntity(
+                            id = "${ch.id}:${p.startTimeMillis}", channelId = ch.id, title = p.title,
+                            description = p.description, category = p.category,
+                            startTimeMillis = p.startTimeMillis, endTimeMillis = p.endTimeMillis
+                        )
+                    }
+                )
+                handled += ch.id
+                if (viaName) byName++ else byId++
+            }
+            report?.add("$shortUrl: программ ${programs.size}, каналов в файле ${byXmltv.size}; сопоставлено по id $byId, по названию $byName")
             true
-        } catch (_: Exception) {
-            // См. комментарий в KDoc функции — источник без EPG/с битым
-            // XMLTV не должен мешать основному контенту обновиться.
+        } catch (e: Exception) {
+            // Источник без EPG/с битым XMLTV не должен мешать основному контенту обновиться.
+            report?.add("$shortUrl: ошибка ${e.javaClass.simpleName}: ${e.message?.take(80)}")
             false
         }
     }
 
-    /**
-     * Автосопоставление по названию: каналам без tvg-id (или с tvg-id, которого нет в этом
-     * XMLTV и у которых пока нет программы) подставляется расписание XMLTV-канала с тем же
-     * нормализованным названием (EpgNameMatcher — только точное совпадение).
-     */
-    private suspend fun matchEpgByName(
-        byXmltvId: Map<String, List<com.platinum.ott.data.playlist.XmltvProgram>>,
-        names: Map<String, List<String>>
-    ) {
-        if (byXmltvId.isEmpty()) return
-        val index = HashMap<String, String>()
-        for (xid in byXmltvId.keys) {
-            val candidates = (names[xid].orEmpty() + xid.substringBeforeLast('.'))
-            for (n in candidates) for (k in EpgNameMatcher.keys(n)) index.putIfAbsent(k, xid)
-        }
-        if (index.isEmpty()) return
-        for (ch in channelMatchingRepository.allChannels()) {
-            val tvg = ch.tvgId
-            if (tvg != null) {
-                if (byXmltvId.containsKey(tvg)) continue
-                if (epgProgramRepository.getCurrentForChannel(ch.id) != null) continue
-            }
-            val xid = EpgNameMatcher.keys(ch.canonicalName).firstNotNullOfOrNull { index[it] } ?: continue
-            val list = byXmltvId[xid] ?: continue
-            epgProgramRepository.replaceProgramsForChannel(
-                ch.id,
-                list.map { p ->
-                    EpgProgramEntity(
-                        id = "${ch.id}:${p.startTimeMillis}", channelId = ch.id, title = p.title,
-                        description = p.description, category = p.category,
-                        startTimeMillis = p.startTimeMillis, endTimeMillis = p.endTimeMillis
-                    )
-                }
-            )
-        }
-    }
-
     /** Запасные источники: по очереди, пока один из них не даст программу. */
-    private suspend fun refreshEpgFromFallbackSources() {
+    private suspend fun refreshEpgFromFallbackSources(report: MutableList<String>? = null, handled: MutableSet<String> = mutableSetOf()) {
         for (url in EpgFallbackSources.URLS) {
-            if (refreshEpgFromXmltv(url)) return
+            if (refreshEpgFromXmltv(url, report, handled)) return
         }
     }
 
+    private val epgPrefs by lazy { appContext.getSharedPreferences("epg_state", Context.MODE_PRIVATE) }
+    private val epgClient by lazy {
+        client.newBuilder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(5, TimeUnit.MINUTES)
+            .build()
+    }
+
     /**
-     * Для фонового воркера: обновляет ТОЛЬКО программу передач (без перезагрузки каталогов).
-     * Адреса: url-tvg плейлистов, xmltv.php Xtream-панелей; если ни у одного источника нет
-     * своего адреса или они ничего не дали — запасные источники.
+     * Обновляет ТОЛЬКО программу передач (без перезагрузки каталогов): url-tvg плейлистов,
+     * xmltv.php Xtream; если ни один источник не дал программу — запасные (EpgFallbackSources).
+     * report — построчный отчёт для показа пользователю (что скачано и сколько каналов сопоставлено).
      */
-    suspend fun refreshEpgOnly() = withContext(Dispatchers.IO) {
+    suspend fun refreshEpgOnly(report: MutableList<String>? = null) = withContext(Dispatchers.IO) {
         var anyOk = false
-        for (source in sourceDao.getEnabled()) {
+        val handled = mutableSetOf<String>()
+        val sources = sourceDao.getEnabled()
+        if (sources.isEmpty()) report?.add("Нет включённых источников")
+        for (source in sources) {
             when (source.type) {
-                "m3u" -> M3uPlaylistParser.parseEpgUrls(source.epgUrl).forEach { if (refreshEpgFromXmltv(it)) anyOk = true }
+                "m3u" -> {
+                    val urls = M3uPlaylistParser.parseEpgUrls(source.epgUrl)
+                    if (urls.isEmpty()) report?.add("«${source.label}»: в плейлисте нет адреса программы (url-tvg)")
+                    urls.forEach { if (refreshEpgFromXmltv(it, report, handled)) anyOk = true }
+                }
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
                     if (host != null && user != null && pass != null &&
-                        refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))) anyOk = true
+                        refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass), report, handled)) anyOk = true
                 }
             }
         }
-        if (!anyOk) refreshEpgFromFallbackSources()
+        if (!anyOk) {
+            report?.add("Свои источники программы не дали — пробую запасные")
+            val before = handled.size
+            refreshEpgFromFallbackSources(report, handled)
+            if (handled.size > before) anyOk = true
+        }
+        if (anyOk) epgPrefs.edit().putLong("last_ok", System.currentTimeMillis()).apply()
+        anyOk
+    }
+
+    /** Фоновый запуск при открытии каналов: не чаще раза в maxAgeMs. */
+    suspend fun refreshEpgIfStale(maxAgeMs: Long) {
+        if (System.currentTimeMillis() - epgPrefs.getLong("last_ok", 0L) < maxAgeMs) return
+        refreshEpgOnly()
     }
 
     /**

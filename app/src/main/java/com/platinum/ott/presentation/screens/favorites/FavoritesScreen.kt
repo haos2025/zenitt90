@@ -11,7 +11,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,17 +100,31 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
                             MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
-                            // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
-                            // п.3) заменяет собой прежнюю отдельную кнопку "📁 В
-                            // папку" — три действия в одном месте: переместить в
-                            // папку, переключить аниме, убрать из избранного.
-                            // Отдельный фокусируемый элемент, не долгое нажатие —
-                            // на TV-пульте "press and hold" не универсальный жест.
+                        }
+                        // Действия — отдельная кнопка ПОД постером (раньше «⋮» лежала на углу карточки,
+                        // и пультом на неё нельзя было навести фокус).
+                        Box {
                             var showMenu by remember(fav.contentId) { mutableStateOf(false) }
-                            IconButton(
+                            var actionFocused by remember { mutableStateOf(false) }
+                            Surface(
                                 onClick = { showMenu = true },
-                                modifier = Modifier.align(Alignment.TopEnd)
-                            ) { Icon(Icons.Default.MoreVert, "Действия", tint = ZenithOnSurface) }
+                                modifier = Modifier.padding(top = ZenithDimens.paddingXS).onFocusChanged { actionFocused = it.isFocused },
+                                shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(50)),
+                                colors = ClickableSurfaceDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.08f),
+                                    focusedContainerColor = com.platinum.ott.ui.theme.ZenithFocusContainerActive
+                                ),
+                                border = ClickableSurfaceDefaults.border(
+                                    focusedBorder = Border(androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary))
+                                ),
+                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+                            ) {
+                                Row(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.MoreVert, null, tint = ZenithOnSurface, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Действия", style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface)
+                                }
+                            }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                                 if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
                                 if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })

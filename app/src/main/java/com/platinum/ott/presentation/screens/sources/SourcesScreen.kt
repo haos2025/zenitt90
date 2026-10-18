@@ -206,7 +206,7 @@ private fun SourceCard(
                 }
             }
 
-            Switch(checked = item.enabled, onCheckedChange = onToggleEnabled)
+            com.platinum.ott.presentation.components.FocusSwitch(checked = item.enabled, onCheckedChange = onToggleEnabled)
             Spacer(Modifier.width(ZenithDimens.paddingS))
 
             if (isRefreshing) {

@@ -81,7 +81,7 @@ fun ChannelsManageScreen(
             // это не "перепроверить всё немедленно", а "не ждать до
             // ближайшего запуска ChannelHealthCheckWorker", см. комментарий
             // у ChannelsViewModel.checkAll().
-            OutlinedButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                 Text(if (isChecking) "Проверка..." else "Проверить сейчас")
             }
         }
@@ -208,7 +208,7 @@ private fun ChannelCard(
             // же причина, что и у декоративного Box выше: клик на весь ряд
             // сделал бы Switch/меню недостижимыми пультом (D-pad идёт по
             // фокусируемым элементам последовательно, а не "тап в область").
-            Switch(checked = item.isSubscribed, onCheckedChange = onToggleSubscribed)
+            com.platinum.ott.presentation.components.FocusSwitch(checked = item.isSubscribed, onCheckedChange = onToggleSubscribed)
             Spacer(Modifier.width(ZenithDimens.paddingS))
 
             Box {
