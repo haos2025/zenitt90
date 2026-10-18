@@ -88,11 +88,11 @@ fun EpgGridScreen(
                 }
             )
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = { viewModel.shiftWindow(forward = false) }) { Text("◀ 30 мин") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.shiftWindow(forward = false) }) { Text("◀ 30 мин") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = { viewModel.jumpToNow() }) { Text("Сейчас") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.jumpToNow() }) { Text("Сейчас") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(onClick = { viewModel.shiftWindow(forward = true) }) { Text("30 мин ▶") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.shiftWindow(forward = true) }) { Text("30 мин ▶") }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

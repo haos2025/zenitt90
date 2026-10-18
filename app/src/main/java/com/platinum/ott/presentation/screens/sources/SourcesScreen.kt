@@ -117,7 +117,7 @@ fun SourcesScreen(
         }
 
         Spacer(Modifier.height(ZenithDimens.paddingL))
-        Button(onClick = onAddSourceClick, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+        Button(scale = ButtonDefaults.scale(focusedScale = 1f), onClick = onAddSourceClick, modifier = Modifier.align(Alignment.CenterHorizontally)) {
             Text("+ Добавить источник")
         }
     }

@@ -183,7 +183,7 @@ private fun ChannelRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("${item.channelNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.width(34.dp))
-            Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)), Alignment.Center) {
+            Box(Modifier.size(46.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f)), Alignment.Center) {
                 if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }

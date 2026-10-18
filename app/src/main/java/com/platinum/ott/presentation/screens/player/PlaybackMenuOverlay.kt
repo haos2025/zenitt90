@@ -6,6 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -86,11 +90,24 @@ fun PlaybackMenuOverlay(
     modifier: Modifier = Modifier
 ) {
     val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
-    // Переносится на MenuTabButton текущей активной вкладки — см. Row с
-    // четырьмя MenuTabButton ниже и комментарий в шапке файла.
-    val activeTabFocusRequester = remember { FocusRequester() }
-    // ФИКС (аудит): safeRequestFocus() — см. FocusUtils.kt.
-    LaunchedEffect(Unit) { activeTabFocusRequester.safeRequestFocus() }
+    // Вариант 2 (решение владельца): фокус сразу на списке (на выбранной
+    // строке), вкладки НЕ фокусируются — Влево/Вправо переключают вкладки,
+    // Вверх/Вниз ходят по строкам, OK выбирает и закрывает меню.
+    val tabs = PlaybackMenuTab.values().toList()
+    val listFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    // Индекс строки, на которую ставим фокус при открытии вкладки.
+    val focusIdx = when (tab) {
+        PlaybackMenuTab.QUALITY -> variants.indexOfFirst { it.url == currentVariant.url }
+        PlaybackMenuTab.AUDIO -> audioTracks.indexOfFirst { it.isSelected }
+        PlaybackMenuTab.SPEED -> speedOptions.indexOf(playbackSpeed)
+        PlaybackMenuTab.SUBTITLES -> 0
+    }.coerceAtLeast(0)
+    LaunchedEffect(tab) {
+        try { listState.scrollToItem(focusIdx) } catch (_: Exception) {}
+        kotlinx.coroutines.yield()
+        listFocus.safeRequestFocus()
+    }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
 
@@ -103,6 +120,15 @@ fun PlaybackMenuOverlay(
                 .background(ZenithSurface.copy(alpha = 0.96f))
                 .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                 .padding(vertical = ZenithDimens.paddingL)
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val i = tabs.indexOf(tab)
+                    when (e.key) {
+                        Key.DirectionLeft -> { onTabChange(tabs[(i - 1 + tabs.size) % tabs.size]); true }
+                        Key.DirectionRight -> { onTabChange(tabs[(i + 1) % tabs.size]); true }
+                        else -> false
+                    }
+                }
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM),
@@ -125,26 +151,27 @@ fun PlaybackMenuOverlay(
             // группа переключателей, а не четыре разные кнопки.
             Row(
                 Modifier.padding(horizontal = ZenithDimens.paddingM)
+                    .focusProperties { canFocus = false }
                     .clip(ZenithShapeMedium)
                     .background(ZenithOnSurface.copy(alpha = 0.05f))
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.QUALITY) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.QUALITY) }
-                MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.AUDIO) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.AUDIO) }
-                MenuTabButton("Субт.", tab == PlaybackMenuTab.SUBTITLES, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.SUBTITLES) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.SUBTITLES) }
-                MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f).let { if (tab == PlaybackMenuTab.SPEED) it.focusRequester(activeTabFocusRequester) else it }) { onTabChange(PlaybackMenuTab.SPEED) }
+                MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.QUALITY) }
+                MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.AUDIO) }
+                MenuTabButton("Субт.", tab == PlaybackMenuTab.SUBTITLES, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SUBTITLES) }
+                MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SPEED) }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(horizontal = ZenithDimens.paddingSM)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(horizontal = ZenithDimens.paddingSM)) {
                 when (tab) {
-                    PlaybackMenuTab.QUALITY -> items(variants, key = { it.url }) { v ->
-                        MenuRow(v.quality, v.source, v.url == currentVariant.url) { onSelectVariant(v) }
+                    PlaybackMenuTab.QUALITY -> itemsIndexed(variants, key = { _, v -> v.url }) { i, v ->
+                        MenuRow(v.quality, v.source, v.url == currentVariant.url, focus = if (i == focusIdx) listFocus else null) { onSelectVariant(v) }
                     }
                     PlaybackMenuTab.AUDIO -> {
                         if (audioTracks.isEmpty()) item { EmptyHint("Только одна дорожка") }
-                        items(audioTracks) { t -> MenuRow(t.label, null, t.isSelected) { onSelectAudio(t) } }
+                        itemsIndexed(audioTracks) { i, t -> MenuRow(t.label, null, t.isSelected, focus = if (i == focusIdx) listFocus else null) { onSelectAudio(t) } }
                     }
                     PlaybackMenuTab.SUBTITLES -> {
                         // PROMPT_SUBTITLES.md, подзадача 8 — первая строка,
@@ -158,7 +185,8 @@ fun PlaybackMenuOverlay(
                             MenuRow(
                                 label = "Автосубтитры",
                                 subLabel = autoSubtitleStatusLabel(autoSubtitleState),
-                                isSelected = autoSubtitleState != AutoSubtitleState.Off
+                                isSelected = autoSubtitleState != AutoSubtitleState.Off,
+                                focus = listFocus
                             ) { onToggleAutoSubtitles() }
                         }
                         item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
@@ -179,8 +207,8 @@ fun PlaybackMenuOverlay(
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
                         if (subtitleTracks.isEmpty()) item { EmptyHint("В потоке нет встроенных субтитров") }
                     }
-                    PlaybackMenuTab.SPEED -> items(speedOptions) { s ->
-                        MenuRow((if (s == 1f) "Обычная" else "${s}x"), null, s == playbackSpeed) { onSelectSpeed(s) }
+                    PlaybackMenuTab.SPEED -> itemsIndexed(speedOptions) { i, s ->
+                        MenuRow((if (s == 1f) "Обычная" else "${s}x"), null, s == playbackSpeed, focus = if (i == focusIdx) listFocus else null) { onSelectSpeed(s) }
                     }
                 }
             }
@@ -236,11 +264,12 @@ private fun MenuRow(
     subLabel: String?,
     isSelected: Boolean,
     trailingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    focus: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().let { if (focus != null) it.focusRequester(focus) else it },
         shape = ClickableSurfaceDefaults.shape(ZenithShapeMedium),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent,

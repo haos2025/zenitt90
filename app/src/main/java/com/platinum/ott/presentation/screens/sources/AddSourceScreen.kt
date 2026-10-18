@@ -129,12 +129,12 @@ fun AddSourceScreen(
                     when (m3uMethod) {
                         M3uMethod.URL -> SourceTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
                         M3uMethod.FILE -> {
-                            OutlinedButton(onClick = { filePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { filePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
                                 Text(fileName ?: "Выбрать файл .m3u")
                             }
                         }
                         M3uMethod.QR -> {
-                            OutlinedButton(onClick = { showCompanionQr = true }, modifier = Modifier.fillMaxWidth()) { Text("Показать QR для телефона") }
+                            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showCompanionQr = true }, modifier = Modifier.fillMaxWidth()) { Text("Показать QR для телефона") }
                             if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = ZenithOnSurface.copy(alpha = 0.5f))
                         }
                     }
@@ -166,8 +166,9 @@ fun AddSourceScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                OutlinedButton(onClick = onDone) { Text("Отмена") }
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onDone) { Text("Отмена") }
                 Button(
+ scale = ButtonDefaults.scale(focusedScale = 1f),
                     onClick = {
                         when (sourceType) {
                             SourceType.M3U -> when (m3uMethod) {
@@ -195,6 +196,7 @@ fun AddSourceScreen(
 @Composable
 private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
@@ -233,6 +235,7 @@ private fun SourceTextField(value: String, onChange: (String) -> Unit, placehold
 
     if (!isEditing) {
         Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
             onClick = { isEditing = true },
             shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(

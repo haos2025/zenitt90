@@ -63,12 +63,17 @@ private fun parseXmltvTimestamp(raw: String): Long? {
  * нужно, разбор этих блоков был бы чистой тратой времени/памяти.
  */
 object XmltvSaxParser {
-    fun parse(input: InputStream, windowStartMillis: Long, windowEndMillis: Long): List<XmltvProgram> {
+    fun parse(
+        input: InputStream,
+        windowStartMillis: Long,
+        windowEndMillis: Long,
+        onChannelName: ((channelId: String, displayName: String) -> Unit)? = null
+    ): List<XmltvProgram> {
         val result = mutableListOf<XmltvProgram>()
         val factory = SAXParserFactory.newInstance()
         disableExternalEntitiesQuietly(factory)
         val parser = factory.newSAXParser()
-        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis) { result.add(it) })
+        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis, onChannelName) { result.add(it) })
         return result
     }
 
@@ -99,9 +104,11 @@ object XmltvSaxParser {
 private class XmltvHandler(
     private val windowStartMillis: Long,
     private val windowEndMillis: Long,
+    private val onChannelName: ((String, String) -> Unit)?,
     private val onProgramme: (XmltvProgram) -> Unit
 ) : DefaultHandler() {
     private var inProgramme = false
+    private var currentChannelDef: String? = null
     private var channel: String? = null
     private var startMillis: Long? = null
     private var endMillis: Long? = null
@@ -118,6 +125,8 @@ private class XmltvHandler(
 
     override fun startElement(uri: String?, localName: String?, qName: String, attributes: Attributes) {
         when (qName) {
+            "channel" -> currentChannelDef = attributes.getValue("id")
+            "display-name" -> if (currentChannelDef != null && onChannelName != null) startCapturing()
             "programme" -> {
                 inProgramme = true
                 channel = attributes.getValue("channel")
@@ -146,6 +155,11 @@ private class XmltvHandler(
 
     override fun endElement(uri: String?, localName: String?, qName: String) {
         when (qName) {
+            "channel" -> currentChannelDef = null
+            "display-name" -> {
+                val id = currentChannelDef
+                if (id != null && onChannelName != null) { capturedTextOrNull()?.let { onChannelName.invoke(id, it) }; currentTextTarget = null }
+            }
             "title" -> if (inProgramme && title == null) { title = capturedTextOrNull(); currentTextTarget = null }
             "desc" -> if (inProgramme && description == null) { description = capturedTextOrNull(); currentTextTarget = null }
             "category" -> if (inProgramme && category == null) { category = capturedTextOrNull(); currentTextTarget = null }

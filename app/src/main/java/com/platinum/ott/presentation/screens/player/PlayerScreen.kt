@@ -272,6 +272,14 @@ fun PlayerScreen(
     fun touchControls() { controlsVisible = true; interactionNonce++ }
     fun hideControls() { controlsVisible = false; selectedAction = null }
 
+    // Закрытие меню настроек после выбора пункта / по крестику: то же
+    // поведение, что у «Назад» (см. BackHandler ниже, настройка backClosesAll).
+    fun closeMenuAfterPick() {
+        viewModel.dismissPlaybackMenu()
+        selectedAction = null
+        if (overlaySettings.backClosesAll) controlsVisible = false else touchControls()
+    }
+
     // Назад — ступенями: QR/модалка/меню → кнопки → видео → скрыть оверлей → выйти.
     // BackHandler надёжнее, чем перехват Key.Back: работает и с жестом/системной кнопкой.
     BackHandler(enabled = true) {
@@ -513,13 +521,13 @@ fun PlayerScreen(
                         onTabChange = { viewModel.setMenuTab(it) },
                         variants = state.variants,
                         currentVariant = state.currentVariant,
-                        onSelectVariant = { viewModel.selectQuality(it) },
+                        onSelectVariant = { viewModel.selectQuality(it); closeMenuAfterPick() },
                         audioTracks = state.audioTracks,
-                        onSelectAudio = { viewModel.selectAudioTrack(it) },
+                        onSelectAudio = { viewModel.selectAudioTrack(it); closeMenuAfterPick() },
                         subtitleTracks = state.subtitleTracks,
                         subtitlesEnabled = state.subtitlesEnabled,
-                        onSelectSubtitle = { viewModel.selectSubtitleTrack(it) },
-                        onDisableSubtitles = { viewModel.disableSubtitles() },
+                        onSelectSubtitle = { viewModel.selectSubtitleTrack(it); closeMenuAfterPick() },
+                        onDisableSubtitles = { viewModel.disableSubtitles(); closeMenuAfterPick() },
                         onRequestExternalSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
                         autoSubtitleState = autoSubtitleState,
                         onToggleAutoSubtitles = {
@@ -527,8 +535,8 @@ fun PlayerScreen(
                             else viewModel.disableAutoSubtitles()
                         },
                         playbackSpeed = state.playbackSpeed,
-                        onSelectSpeed = { viewModel.setPlaybackSpeed(it) },
-                        onDismiss = { viewModel.dismissPlaybackMenu() },
+                        onSelectSpeed = { viewModel.setPlaybackSpeed(it); closeMenuAfterPick() },
+                        onDismiss = { closeMenuAfterPick() },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

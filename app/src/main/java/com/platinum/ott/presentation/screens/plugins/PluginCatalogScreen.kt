@@ -162,9 +162,9 @@ private fun InstallFromUrlRow(
                 }
             )
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(enabled = !installing, onClick = onQrClick) { Text("По QR с телефона") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), enabled = !installing, onClick = onQrClick) { Text("По QR с телефона") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            Button(enabled = url.isNotBlank() && !installing, onClick = { onInstall(url.trim()) }) {
+            Button(scale = ButtonDefaults.scale(focusedScale = 1f), enabled = url.isNotBlank() && !installing, onClick = { onInstall(url.trim()) }) {
                 Text(if (installing) "Установка…" else "Установить по URL")
             }
         }
@@ -198,7 +198,7 @@ private fun InstallFromScriptRow(
     var expanded by remember { mutableStateOf(false) }
     val installing = installState is PluginViewModel.InstallState.Installing
     Column {
-        OutlinedButton(onClick = { expanded = !expanded }) {
+        OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { expanded = !expanded }) {
             Text(if (expanded) "Скрыть вставку скрипта" else "…или вставить скрипт плагина целиком")
         }
         if (expanded) {
@@ -218,7 +218,7 @@ private fun InstallFromScriptRow(
                 }
             )
             Spacer(Modifier.height(ZenithDimens.paddingS))
-            Button(enabled = script.isNotBlank() && !installing, onClick = { onInstall(script) }) {
+            Button(scale = ButtonDefaults.scale(focusedScale = 1f), enabled = script.isNotBlank() && !installing, onClick = { onInstall(script) }) {
                 Text(if (installing) "Установка…" else "Установить")
             }
             when (val state = installState) {
@@ -315,7 +315,7 @@ private fun UpdatesTab(uiState: PluginViewModel.UiState, viewModel: PluginViewMo
                                 Text(installed.name, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
                                 Text("${installed.installedVersion} → ${catalog.version}", color = ZenithOnSurfaceVariant)
                             }
-                            Button(onClick = { viewModel.updatePlugin(installed.id, catalog) }) { Text("Обновить") }
+                            Button(scale = ButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.updatePlugin(installed.id, catalog) }) { Text("Обновить") }
                         }
                     }
                 }
@@ -339,7 +339,7 @@ private fun PluginCard(plugin: PluginEntity, onClick: () -> Unit, onToggle: (Boo
     // потомка Surface в соседа по Box — Switch теперь самостоятельная
     // фокусируемая цель рядом с карточкой, а не внутри неё.
     Box(Modifier.fillMaxWidth().height(120.dp)) {
-        Surface(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+        Surface(scale = ClickableSurfaceDefaults.scale(focusedScale = 1f), onClick = onClick, modifier = Modifier.fillMaxSize()) {
             Row(Modifier.padding(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
                 PluginIcon(plugin.iconUrl, plugin.name, 40.dp)
                 Spacer(Modifier.width(ZenithDimens.paddingS))
@@ -372,7 +372,7 @@ private fun CatalogPluginCard(entry: PluginRepository.CatalogEntry, onInstall: (
                     Text(entry.description, color = ZenithOnSurface.copy(0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 }
             }
-            Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text("Установить") }
+            Button(scale = ButtonDefaults.scale(focusedScale = 1f), onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text("Установить") }
         }
     }
 }

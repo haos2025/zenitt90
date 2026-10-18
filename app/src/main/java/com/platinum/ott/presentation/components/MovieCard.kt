@@ -40,6 +40,14 @@ import com.platinum.ott.ui.theme.ZenithEasingStandard
 import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.ui.theme.ZenithShapeSmall
 
+/**
+ * Для записей истории/избранного есть только contentId (Movie нет): настоящий постер бывает лишь
+ * у контента с бэкенда (yt_/ia_) — его кадрируем; всё остальное (логотипы каналов, картинки
+ * из плейлистов) вписываем целиком, иначе логотип растягивается на всю карточку.
+ */
+fun contentScaleForId(contentId: String): ContentScale =
+    if (com.platinum.ott.domain.ContentIdKind.isZenithBackendContent(contentId)) ContentScale.Crop else ContentScale.Fit
+
 @Composable
 fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
     MovieCard(

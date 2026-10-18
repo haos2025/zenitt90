@@ -52,7 +52,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                 // раскладка фокуса — на пустом списке она просто не нужна,
                 // прячем только в этом случае).
                 if (history.isNotEmpty()) {
-                    OutlinedButton(onClick = { showClearAllConfirm = true }) {
+                    OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showClearAllConfirm = true }) {
                         Icon(Icons.Default.DeleteSweep, contentDescription = null)
                         Spacer(Modifier.width(ZenithDimens.paddingXS))
                         Text("Очистить всю историю")
@@ -78,7 +78,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                         // источник как раз того рода ненадёжности, из-за которой в
                         // истории вообще не годится долгое нажатие).
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(onClick = { onMovieClick(entry.contentId) }, modifier = Modifier.weight(1f)) {
+                        Surface(scale = ClickableSurfaceDefaults.scale(focusedScale = 1f), onClick = { onMovieClick(entry.contentId) }, modifier = Modifier.weight(1f)) {
                             Row(Modifier.padding(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
                                 // Раньше здесь стоял MovieCard — тот же полноразмерный
                                 // компонент, что и в сетке каталога (180×270dp по

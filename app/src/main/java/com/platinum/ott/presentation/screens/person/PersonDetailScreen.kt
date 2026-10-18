@@ -32,8 +32,8 @@ import com.platinum.ott.presentation.components.PersonFilmographyRow
 import com.platinum.ott.ui.theme.*
 import kotlinx.coroutines.launch
 
-private val photoWidth = 220.dp
-private val photoHeight = 330.dp
+private val photoWidth = 150.dp
+private val photoHeight = 225.dp
 
 /**
  * Экран актёра (подзадача 4 прогона про фокус/оверлей/актёров) — открывается
@@ -87,8 +87,11 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                     }
                 }
 
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
-                    item {
+                // Шапка (фото + данные) НЕПОДВИЖНА, прокручивается только фильмография под ней.
+                // Раньше всё было одним LazyColumn: при фокусе на ряд «Фильмы» шапка уезжала
+                // за край, а во время прокрутки тексты двоились (виден на скриншоте с ТВ).
+                Column(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                    run {
                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
                             Box(
                                 modifier = Modifier.width(photoWidth).height(photoHeight)
@@ -107,7 +110,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                 }
                             }
                             Column(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), modifier = Modifier.weight(1f)) {
-                                Text(profile.name, style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
+                                Text(profile.name, style = MaterialTheme.typography.headlineMedium, color = ZenithOnSurface)
                                 // Категоризированная инфа — каждое поле своей
                                 // строкой, а не одной "простынёй" через " · ",
                                 // как metaLine у фильма: у актёра это разнородные
@@ -129,7 +132,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                     var isBioExpandable by remember(personId) { mutableStateOf(false) }
                                     Text(
                                         bio, color = ZenithOnSurface.copy(0.8f), style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = if (isBioExpanded) Int.MAX_VALUE else 6,
+                                        maxLines = if (isBioExpanded) 10 else 3,
                                         overflow = TextOverflow.Ellipsis,
                                         onTextLayout = { if (!isBioExpanded) isBioExpandable = it.hasVisualOverflow }
                                     )
@@ -154,11 +157,13 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                             }
                         }
                     }
-                    if (movies.isNotEmpty()) {
-                        item { PersonFilmographyRow("Фильмы", movies, onItemClick = onCreditClick) }
-                    }
-                    if (series.isNotEmpty()) {
-                        item { PersonFilmographyRow("Сериалы", series, onItemClick = onCreditClick) }
+                    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
+                        if (movies.isNotEmpty()) {
+                            item { PersonFilmographyRow("Фильмы", movies, onItemClick = onCreditClick) }
+                        }
+                        if (series.isNotEmpty()) {
+                            item { PersonFilmographyRow("Сериалы", series, onItemClick = onCreditClick) }
+                        }
                     }
                 }
             }

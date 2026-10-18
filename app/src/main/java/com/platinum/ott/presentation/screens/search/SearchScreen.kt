@@ -172,13 +172,13 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                 // по нажатию OK на поле (раньше всплывала сама при получении фокуса).
                 SearchField(query = query, onChange = viewModel::onQueryChange, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(ZenithDimens.paddingM))
-                OutlinedButton(onClick = { showCompanionQr = true }) { Text("По QR с телефона") }
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showCompanionQr = true }) { Text("По QR с телефона") }
                 // Кнопки нет вообще, если на устройстве нет голосового сервиса —
                 // не показываем нерабочий элемент (см. комментарий у
                 // voiceRecognitionAvailable выше).
                 if (voiceRecognitionAvailable) {
                     Spacer(Modifier.width(ZenithDimens.paddingM))
-                    OutlinedButton(onClick = {
+                    OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = {
                         voiceError = null
                         recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                     }) {
@@ -258,6 +258,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Mod
 
     if (!isEditing) {
         Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
             onClick = { gotFocus = false; wasEditing = true; isEditing = true },
             shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
@@ -305,6 +306,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Mod
 private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
             onClick = onClick,
             shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
@@ -317,6 +319,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
         }
         Spacer(Modifier.width(ZenithDimens.paddingSM))
         Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
             onClick = onRemove,
             shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
             colors = ClickableSurfaceDefaults.colors(
@@ -333,6 +336,7 @@ private fun RecentSearchRow(text: String, onClick: () -> Unit, onRemove: () -> U
 @Composable
 private fun RecentSearchClearRow(onClick: () -> Unit) {
     Surface(
+ scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(

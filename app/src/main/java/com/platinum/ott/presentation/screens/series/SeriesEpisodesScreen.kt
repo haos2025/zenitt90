@@ -58,7 +58,7 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                     // диалога. Отметка "аниме" убрана с этого экрана — теперь
                     // только в едином меню на карточке в FavoritesScreen
                     // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                    OutlinedButton(onClick = {
+                    OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = {
                         if (isFavorite) viewModel.removeFavorite() else showAddFavoriteDialog = true
                     }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
                 }
@@ -126,14 +126,14 @@ private fun VariantChoiceDialog(variants: List<StreamVariant>, onSelect: (Stream
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun SeasonTab(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+    Surface(scale = ClickableSurfaceDefaults.scale(focusedScale = 1f), onClick = onClick, shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainer, focusedContainerColor = if (selected) MaterialTheme.colorScheme.primary else ZenithFocusContainerActive)
     ) { Text(label, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), color = ZenithOnSurface) }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable
 private fun EpisodeRow(episodeNumber: Int?, title: String, poster: String, description: String, progress: Float?, completed: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+    Surface(scale = ClickableSurfaceDefaults.scale(focusedScale = 1f), onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(containerColor = ZenithFocusContainer, focusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.5f))
     ) {
         Row(Modifier.fillMaxWidth().padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {

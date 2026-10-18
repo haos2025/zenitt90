@@ -63,8 +63,13 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
     // в 4 параллельных запроса).
     private suspend fun fetchWithRetry(contentId: String, title: String, year: Int?, attempt: Int = 0): MetadataEntity {
         try {
-            val search = api.searchMovie(title, year)
-            val result = search.results.firstOrNull() ?: throw Exception("TMDB: не найдено")
+            // Названия из каталога часто «грязные»: «Niti (Нити)», «Фильм (2008)», «Title / Название».
+            // Пробуем по очереди: как есть → без скобок → текст из скобок → части через « / »;
+            // для каждого сначала с годом, потом без (год в каталоге бывает неточным).
+            val result = titleVariants(title).firstNotNullOfOrNull { v ->
+                (api.searchMovie(v, year).results.firstOrNull()
+                    ?: if (year != null && year > 0) api.searchMovie(v, null).results.firstOrNull() else null)
+            } ?: throw Exception("TMDB: не найдено")
             val details = api.getMovieDetails(result.id)
             val trailer = details.videos?.results?.firstOrNull { it.site == "YouTube" && it.type == "Trailer" }
             val genres = details.genres.joinToString(", ") { it.name }
@@ -83,6 +88,19 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
             }
             throw e
         }
+    }
+
+    private fun titleVariants(title: String): List<String> {
+        val out = LinkedHashSet<String>()
+        out += title.trim()
+        val noBrackets = title.replace(Regex("[\\(\\[][^\\)\\]]*[\\)\\]]"), " ").replace(Regex("\\s+"), " ").trim()
+        if (noBrackets.isNotBlank()) out += noBrackets
+        Regex("[\\(\\[]([^\\)\\]]+)[\\)\\]]").findAll(title).forEach { m ->
+            val inner = m.groupValues[1].trim()
+            if (inner.length >= 2 && !inner.matches(Regex("\\d{4}"))) out += inner
+        }
+        title.split(" / ", " | ").map { it.trim() }.filter { it.isNotBlank() }.forEach { out += it }
+        return out.filter { it.isNotBlank() }.take(5)
     }
 
     private fun MetadataEntity.toDomain(): TmdbMetadata {

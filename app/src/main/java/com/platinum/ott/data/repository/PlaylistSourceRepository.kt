@@ -7,6 +7,8 @@ import com.platinum.ott.data.local.dao.PlaylistSourceDao
 import com.platinum.ott.data.local.entity.EpgProgramEntity
 import com.platinum.ott.data.local.entity.PlaylistMovieEntity
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
+import com.platinum.ott.data.playlist.EpgFallbackSources
+import com.platinum.ott.data.playlist.EpgNameMatcher
 import com.platinum.ott.data.playlist.M3uPlaylistParser
 import com.platinum.ott.data.playlist.XmltvSaxParser
 import com.platinum.ott.data.playlist.XtreamEpgClient
@@ -256,12 +258,15 @@ class PlaylistSourceRepository(
                     // с url-tvg в шапке технически тоже может встретиться,
                     // хоть и нетипично (см. допущение у sourceDao.updateEpgUrl
                     // выше в предыдущей подзадаче).
-                    M3uPlaylistParser.parseEpgUrls(epgUrl).forEach { refreshEpgFromXmltv(it) }
+                    val ownEpgUrls = M3uPlaylistParser.parseEpgUrls(epgUrl)
+                    ownEpgUrls.forEach { refreshEpgFromXmltv(it) }
                     if (source.contentKind == "live") {
                         // Живой эфир целиком уходит в Channel/ChannelStream —
                         // не пишется в playlist_movies вообще (см.
                         // PROMPT_IPTV_FOUNDATION.md, ChannelMatchingRepository).
                         channelMatchingRepository.matchAndStore(sourceId, rawEntries.map { it.toRawChannelCandidate() })
+                        // Свой адрес программы в плейлисте не указан — пробуем запасные источники.
+                        if (ownEpgUrls.isEmpty()) refreshEpgFromFallbackSources()
                     } else {
                         storeVodEntries(source, sourceId, rawEntries)
                     }
@@ -285,7 +290,10 @@ class PlaylistSourceRepository(
                     // fallback (get_short_epg), который раньше был реализован,
                     // но никогда не вызывался.
                     val xmltvOk = refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
-                    if (!xmltvOk) refreshEpgFromShortEpgFallback(host, user, pass, storedStreams)
+                    if (!xmltvOk) {
+                        refreshEpgFromShortEpgFallback(host, user, pass, storedStreams)
+                        refreshEpgFromFallbackSources()
+                    }
                 }
                 else -> {}
             }
@@ -360,6 +368,7 @@ class PlaylistSourceRepository(
             val windowStart = now - TimeUnit.HOURS.toMillis(2)
             val windowEnd = now + TimeUnit.HOURS.toMillis(48)
             val req = Request.Builder().url(url).build()
+            val xmltvNames = mutableMapOf<String, MutableList<String>>()
             val programs = client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use emptyList()
                 resp.body?.byteStream()?.use { raw ->
@@ -371,7 +380,9 @@ class PlaylistSourceRepository(
                     buffered.reset()
                     val stream: java.io.InputStream =
                         if (b0 == 0x1f && b1 == 0x8b) java.util.zip.GZIPInputStream(buffered, 8192) else buffered
-                    XmltvSaxParser.parse(stream, windowStart, windowEnd)
+                    XmltvSaxParser.parse(stream, windowStart, windowEnd) { id, name ->
+                        xmltvNames.getOrPut(id) { mutableListOf() }.add(name)
+                    }
                 } ?: emptyList()
             }
             if (programs.isEmpty()) return false
@@ -389,12 +400,77 @@ class PlaylistSourceRepository(
                 }
                 epgProgramRepository.replaceProgramsForChannel(channelId, entities)
             }
+            matchEpgByName(programs.groupBy { it.channelId }, xmltvNames)
             true
         } catch (_: Exception) {
             // См. комментарий в KDoc функции — источник без EPG/с битым
             // XMLTV не должен мешать основному контенту обновиться.
             false
         }
+    }
+
+    /**
+     * Автосопоставление по названию: каналам без tvg-id (или с tvg-id, которого нет в этом
+     * XMLTV и у которых пока нет программы) подставляется расписание XMLTV-канала с тем же
+     * нормализованным названием (EpgNameMatcher — только точное совпадение).
+     */
+    private suspend fun matchEpgByName(
+        byXmltvId: Map<String, List<com.platinum.ott.data.playlist.XmltvProgram>>,
+        names: Map<String, List<String>>
+    ) {
+        if (byXmltvId.isEmpty()) return
+        val index = HashMap<String, String>()
+        for (xid in byXmltvId.keys) {
+            val candidates = (names[xid].orEmpty() + xid.substringBeforeLast('.'))
+            for (n in candidates) for (k in EpgNameMatcher.keys(n)) index.putIfAbsent(k, xid)
+        }
+        if (index.isEmpty()) return
+        for (ch in channelMatchingRepository.allChannels()) {
+            val tvg = ch.tvgId
+            if (tvg != null) {
+                if (byXmltvId.containsKey(tvg)) continue
+                if (epgProgramRepository.getCurrentForChannel(ch.id) != null) continue
+            }
+            val xid = EpgNameMatcher.keys(ch.canonicalName).firstNotNullOfOrNull { index[it] } ?: continue
+            val list = byXmltvId[xid] ?: continue
+            epgProgramRepository.replaceProgramsForChannel(
+                ch.id,
+                list.map { p ->
+                    EpgProgramEntity(
+                        id = "${ch.id}:${p.startTimeMillis}", channelId = ch.id, title = p.title,
+                        description = p.description, category = p.category,
+                        startTimeMillis = p.startTimeMillis, endTimeMillis = p.endTimeMillis
+                    )
+                }
+            )
+        }
+    }
+
+    /** Запасные источники: по очереди, пока один из них не даст программу. */
+    private suspend fun refreshEpgFromFallbackSources() {
+        for (url in EpgFallbackSources.URLS) {
+            if (refreshEpgFromXmltv(url)) return
+        }
+    }
+
+    /**
+     * Для фонового воркера: обновляет ТОЛЬКО программу передач (без перезагрузки каталогов).
+     * Адреса: url-tvg плейлистов, xmltv.php Xtream-панелей; если ни у одного источника нет
+     * своего адреса или они ничего не дали — запасные источники.
+     */
+    suspend fun refreshEpgOnly() = withContext(Dispatchers.IO) {
+        var anyOk = false
+        for (source in sourceDao.getEnabled()) {
+            when (source.type) {
+                "m3u" -> M3uPlaylistParser.parseEpgUrls(source.epgUrl).forEach { if (refreshEpgFromXmltv(it)) anyOk = true }
+                "xtream" -> {
+                    val host = source.host; val user = source.username; val pass = source.password
+                    if (host != null && user != null && pass != null &&
+                        refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))) anyOk = true
+                }
+            }
+        }
+        if (!anyOk) refreshEpgFromFallbackSources()
     }
 
     /**

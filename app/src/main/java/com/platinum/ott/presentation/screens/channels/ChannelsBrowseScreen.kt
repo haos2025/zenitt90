@@ -7,6 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -146,9 +150,16 @@ fun ChannelsBrowseScreen(
                         )
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)) {
-                        itemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { index, ch ->
-                            ChannelRowTv(
+                    // Плитки (решение владельца для ТВ): сетка вместо списка.
+                    // Ширина плитки — минимум 150 dp, число колонок считается само.
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(150.dp),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
+                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+                    ) {
+                        gridItemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { index, ch ->
+                            ChannelTileTv(
                                 item = ch,
                                 isFavorite = ch.id in favorites,
                                 viewModel = viewModel,
@@ -170,7 +181,7 @@ fun ChannelsBrowseScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ChannelRowTv(
+private fun ChannelTileTv(
     item: ChannelUiItem,
     isFavorite: Boolean,
     viewModel: ChannelsViewModel,
@@ -179,7 +190,7 @@ private fun ChannelRowTv(
     onFocused: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Программа грузится только для реально скомпонованных (видимых) строк, обновление раз в минуту.
+    // Программа грузится только для реально скомпонованных (видимых) плиток, обновление раз в минуту.
     var now by remember(item.id) { mutableStateOf<Pair<String, Float>?>(null) }
     LaunchedEffect(item.id) {
         while (true) {
@@ -187,10 +198,11 @@ private fun ChannelRowTv(
             kotlinx.coroutines.delay(60_000)
         }
     }
+    val tileShape = RoundedCornerShape(14.dp)
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+        shape = ClickableSurfaceDefaults.shape(tileShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = ZenithOnSurface.copy(alpha = 0.06f),
             focusedContainerColor = ZenithFocusContainerActive
@@ -198,20 +210,27 @@ private fun ChannelRowTv(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
-        Row(Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS), verticalAlignment = Alignment.CenterVertically) {
-            Text("${item.channelNumber}", style = MaterialTheme.typography.labelLarge, color = ZenithOnSurface.copy(alpha = 0.5f), modifier = Modifier.width(44.dp))
-            ChannelLogo(item, 48.dp)
-            Spacer(Modifier.width(ZenithDimens.paddingM))
-            Column(Modifier.weight(1f)) {
-                Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val program = now
-                if (program != null) {
-                    Text(program.first, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(4.dp))
-                    ProgressLine(program.second)
-                }
+        Column(Modifier.padding(ZenithDimens.paddingS)) {
+            // Верх плитки: логотип на светлой подложке (тёмные логотипы читаются), номер и звезда по углам.
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
+                Alignment.Center
+            ) {
+                if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+                else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
+                Text("${item.channelNumber}", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
-            if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = ZenithDimens.paddingS))
+            Spacer(Modifier.height(ZenithDimens.paddingXS))
+            Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val program = now
+            if (program != null) {
+                Text(program.first, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(4.dp))
+                ProgressLine(program.second)
+            } else {
+                Text("—", style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.3f), maxLines = 1)
+            }
         }
     }
 }

@@ -185,6 +185,7 @@ private fun ContinueWatchingRow(entries: List<WatchHistoryEntity>, onClick: (Str
             items(entries, key = { it.contentId }) { entry ->
                 MovieCard(
                     title = entry.title, poster = entry.poster ?: "", year = 0, onClick = { onClick(entry.contentId) },
+                    contentScale = com.platinum.ott.presentation.components.contentScaleForId(entry.contentId),
                     progress = if (entry.durationMs > 0) (entry.positionMs.toFloat() / entry.durationMs).coerceIn(0f, 1f) else null
                 )
             }

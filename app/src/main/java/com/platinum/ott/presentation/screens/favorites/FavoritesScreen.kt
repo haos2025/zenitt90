@@ -74,7 +74,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                         }
                     }
                 }
-                OutlinedButton(onClick = { showFolderManager = true }) { Text("+ Папка") }
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showFolderManager = true }) { Text("+ Папка") }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
 
@@ -98,7 +98,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                 itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
-                            MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) })
+                            MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
                             // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
                             // п.3) заменяет собой прежнюю отдельную кнопку "📁 В
                             // папку" — три действия в одном месте: переместить в

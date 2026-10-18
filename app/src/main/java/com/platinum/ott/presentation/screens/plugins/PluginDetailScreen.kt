@@ -48,10 +48,10 @@ fun PluginDetailScreen(
 
             Spacer(Modifier.height(ZenithDimens.paddingM))
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                Button(onClick = { viewModel.togglePlugin(pluginId, !current.isEnabled) }) {
+                Button(scale = ButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.togglePlugin(pluginId, !current.isEnabled) }) {
                     Text(if (current.isEnabled) "Отключить" else "Включить")
                 }
-                OutlinedButton(onClick = { viewModel.uninstallPlugin(pluginId); onBackPressed() }) {
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { viewModel.uninstallPlugin(pluginId); onBackPressed() }) {
                     Text("Удалить", color = MaterialTheme.colorScheme.error)
                 }
             }

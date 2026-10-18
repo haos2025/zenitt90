@@ -49,6 +49,9 @@ class ChannelMatchingRepository(
     private val channelDao: ChannelDao,
     private val channelStreamDao: ChannelStreamDao
 ) {
+    /** Все каналы (для сопоставления EPG по названию). */
+    suspend fun allChannels(): List<com.platinum.ott.data.local.entity.ChannelEntity> = channelDao.getAll()
+
     /**
      * Обрабатывает полный список каналов ОДНОГО источника за один refresh().
      * Тот же принцип "не чистим кэш, пока не убедились", что и в

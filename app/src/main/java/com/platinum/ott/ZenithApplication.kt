@@ -58,6 +58,7 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         SeriesUpdateWorker.enqueue(this)
         ChannelHealthCheckWorker.enqueue(this)
         EpgCleanupWorker.enqueue(this)
+        com.platinum.ott.worker.EpgRefreshWorker.enqueue(this)
     }
 
     private fun createNotificationChannel() {
