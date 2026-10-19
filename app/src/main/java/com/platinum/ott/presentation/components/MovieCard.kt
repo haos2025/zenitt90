@@ -54,7 +54,10 @@ fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) 
         title = movie.title, poster = movie.poster, year = movie.year, onClick = onClick, modifier = modifier,
         rating = movie.rating.takeIf { it > 0.0 },
         // Логотипы из плейлистов (широкие/квадратные) вписываем целиком, настоящие постеры — по карточке.
-        contentScale = if (movie.isPlaylistSourced) ContentScale.Fit else ContentScale.Crop
+        contentScale = if (movie.isPlaylistSourced) ContentScale.Fit else ContentScale.Crop,
+        // Поля нужны логотипам каналов (ch_). Широкий кадр серии/фильма из плейлиста вписываем
+        // на всю ширину карточки без полей — иначе вокруг кадра остаётся много пустого места.
+        logoPadding = movie.id.startsWith("ch_")
     )
 }
 
@@ -68,7 +71,8 @@ fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) 
 @Composable
 fun MovieCard(
     title: String, poster: String, year: Int, onClick: () -> Unit, modifier: Modifier = Modifier,
-    rating: Double? = null, progress: Float? = null, contentScale: ContentScale = ContentScale.Crop
+    rating: Double? = null, progress: Float? = null, contentScale: ContentScale = ContentScale.Crop,
+    logoPadding: Boolean = true
 ) {
     val cardWidth = ZenithDimens.cardWidth
     val cardHeight = ZenithDimens.cardHeight
@@ -118,7 +122,7 @@ fun MovieCard(
                 contentDescription = title,
                 contentScale = contentScale,
                 // Логотипы (Fit) — с полями, чтобы не упирались в края и не были огромными.
-                modifier = if (contentScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 28.dp, vertical = 44.dp) else Modifier.fillMaxSize(),
+                modifier = if (contentScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).let { if (logoPadding) it.padding(horizontal = 28.dp, vertical = 44.dp) else it } else Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                 onError = { posterFailed = true },

@@ -30,7 +30,15 @@ class PlaylistRepository(
         // Обновляем каждый источник отдельно (свой TTL/URL/тип). Ошибка
         // одного источника не должна ронять остальные — refresh() сам ловит
         // исключение и пишет lastRefreshStatus, здесь ловить нечего.
-        enabledSources.forEach { source -> sourceRepository.refresh(source.id, forceRefresh = forceRefresh) }
+        // Главная не должна ждать сеть, если есть что показать: источник с уже сохранёнными
+        // данными (и любой источник живых каналов — в каталог он не попадает) обновляется в фоне,
+        // ждём только тех, у кого данных ещё нет, или явный forceRefresh.
+        enabledSources.forEach { source ->
+            val canShowCached = !forceRefresh &&
+                (source.contentKind == "live" || sourceRepository.hasCachedData(source.id))
+            if (canShowCached) sourceRepository.refreshInBackground(source.id)
+            else sourceRepository.refresh(source.id, forceRefresh = forceRefresh)
+        }
 
         val entities = movieDao.getAllForSources(enabledSources.map { it.id })
 

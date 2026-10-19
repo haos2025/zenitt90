@@ -32,8 +32,8 @@ import com.platinum.ott.presentation.components.PersonFilmographyRow
 import com.platinum.ott.ui.theme.*
 import kotlinx.coroutines.launch
 
-private val photoWidth = 150.dp
-private val photoHeight = 225.dp
+private val photoWidth = 110.dp
+private val photoHeight = 165.dp
 
 /**
  * Экран актёра (подзадача 4 прогона про фокус/оверлей/актёров) — открывается
@@ -90,7 +90,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                 // Шапка (фото + данные) НЕПОДВИЖНА, прокручивается только фильмография под ней.
                 // Раньше всё было одним LazyColumn: при фокусе на ряд «Фильмы» шапка уезжала
                 // за край, а во время прокрутки тексты двоились (виден на скриншоте с ТВ).
-                Column(modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingXL), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                Column(modifier = Modifier.fillMaxSize().padding(start = ZenithDimens.paddingXL, end = ZenithDimens.paddingXL, top = ZenithDimens.paddingL, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     run {
                         Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
                             Box(
@@ -132,7 +132,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                                     var isBioExpandable by remember(personId) { mutableStateOf(false) }
                                     Text(
                                         bio, color = ZenithOnSurface.copy(0.8f), style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = if (isBioExpanded) 10 else 3,
+                                        maxLines = if (isBioExpanded) 10 else 2,
                                         overflow = TextOverflow.Ellipsis,
                                         onTextLayout = { if (!isBioExpanded) isBioExpandable = it.hasVisualOverflow }
                                     )

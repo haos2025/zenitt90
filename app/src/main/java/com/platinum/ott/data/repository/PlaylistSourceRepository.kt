@@ -14,10 +14,15 @@ import com.platinum.ott.data.playlist.XmltvSaxParser
 import com.platinum.ott.data.playlist.XtreamEpgClient
 import com.platinum.ott.data.playlist.XtreamLiveStreamInfo
 import com.platinum.ott.data.playlist.XtreamVodClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -227,11 +232,44 @@ class PlaylistSourceRepository(
         }
     }
 
+    // Фоновая работа репозитория: EPG и «тихое» обновление источников, у которых уже есть кэш.
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Один XMLTV за раз — два параллельных разбора больших файлов съедают память ТВ-приставки.
+    private val epgMutex = Mutex()
+    private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun launchEpg(block: suspend () -> Unit) {
+        backgroundScope.launch {
+            epgMutex.withLock {
+                try { block() } catch (_: Exception) { /* EPG — дополнение, не ломает каталог */ }
+            }
+        }
+    }
+
+    /** Есть ли у источника уже сохранённые данные (тогда главную можно не задерживать обновлением). */
+    suspend fun hasCachedData(sourceId: String): Boolean = withContext(Dispatchers.IO) {
+        val source = sourceDao.getById(sourceId) ?: return@withContext false
+        (movieDao.getLatestCacheTimeForSource(sourceId) ?: 0L) > 0L ||
+            (source.lastRefreshStatus == "ok" && (source.lastRefreshedAt ?: 0L) > 0L)
+    }
+
+    /** Обновить источник в фоне (по TTL), не дожидаясь; повторный запуск того же источника игнорируется. */
+    fun refreshInBackground(sourceId: String) {
+        if (!inFlight.add(sourceId)) return
+        backgroundScope.launch {
+            try { refresh(sourceId, forceRefresh = false) } finally { inFlight.remove(sourceId) }
+        }
+    }
+
     suspend fun refresh(sourceId: String, forceRefresh: Boolean = true): Unit = withContext(Dispatchers.IO) {
         val source = sourceDao.getById(sourceId) ?: return@withContext
         if (!forceRefresh) {
+            // Свежесть: по строкам каталога ИЛИ по времени последнего УСПЕШНОГО обновления.
+            // У источника живых каналов строк в playlist_movies нет вовсе — раньше он считался
+            // «протухшим» всегда и перекачивался при каждом открытии главной.
             val lastCache = movieDao.getLatestCacheTimeForSource(sourceId) ?: 0L
-            if (System.currentTimeMillis() - lastCache <= SOURCE_REFRESH_TTL_MS) return@withContext
+            val lastOk = if (source.lastRefreshStatus == "ok") (source.lastRefreshedAt ?: 0L) else 0L
+            if (System.currentTimeMillis() - maxOf(lastCache, lastOk) <= SOURCE_REFRESH_TTL_MS) return@withContext
         }
         try {
             when (source.type) {
@@ -266,13 +304,16 @@ class PlaylistSourceRepository(
                         channelMatchingRepository.matchAndStore(sourceId, rawEntries.map { it.toRawChannelCandidate() })
                         // EPG — ПОСЛЕ сохранения каналов: сопоставление по названию работает по уже
                         // существующим каналам (раньше шло до — при первом обновлении каналов ещё не было).
-                        val handled = mutableSetOf<String>()
-                        var epgOk = false
-                        ownEpgUrls.forEach { if (refreshEpgFromXmltv(it, null, handled)) epgOk = true }
-                        if (!epgOk) refreshEpgFromFallbackSources(null, handled)
+                        // Фоном: каталог не ждёт скачивания/разбора XMLTV (десятки МБ).
+                        launchEpg {
+                            val handled = mutableSetOf<String>()
+                            var epgOk = false
+                            ownEpgUrls.forEach { if (refreshEpgFromXmltv(it, null, handled)) epgOk = true }
+                            if (!epgOk) refreshEpgFromFallbackSources(null, handled)
+                        }
                     } else {
                         storeVodEntries(source, sourceId, rawEntries)
-                        ownEpgUrls.forEach { refreshEpgFromXmltv(it) }
+                        launchEpg { ownEpgUrls.forEach { refreshEpgFromXmltv(it) } }
                     }
                 }
                 "xtream" -> {
@@ -293,10 +334,12 @@ class PlaylistSourceRepository(
                     // если он не дал ни одной программы, используем per-channel
                     // fallback (get_short_epg), который раньше был реализован,
                     // но никогда не вызывался.
-                    val xmltvOk = refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
-                    if (!xmltvOk) {
-                        refreshEpgFromShortEpgFallback(host, user, pass, storedStreams)
-                        refreshEpgFromFallbackSources()
+                    launchEpg {
+                        val xmltvOk = refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass))
+                        if (!xmltvOk) {
+                            refreshEpgFromShortEpgFallback(host, user, pass, storedStreams)
+                            refreshEpgFromFallbackSources()
+                        }
                     }
                 }
                 else -> {}
@@ -382,6 +425,22 @@ class PlaylistSourceRepository(
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
                 .build()
             val xmltvNames = mutableMapOf<String, MutableList<String>>()
+            // Потоковый фильтр: в память попадают только программы каналов НАШИХ плейлистов
+            // (по tvg-id или по названию из <channel>, которые в XMLTV идут раньше <programme>).
+            // Раньше копились все программы всех каналов файла на 48 часов — на ТВ-приставке это
+            // сотни тысяч объектов и OutOfMemoryError.
+            val ourTvg = HashSet<String>()
+            val ourNameKeys = HashSet<String>()
+            for (c in channelMatchingRepository.allChannels()) {
+                c.tvgId?.let { ourTvg += it.lowercase().trim() }
+                ourNameKeys += EpgNameMatcher.keys(c.canonicalName)
+            }
+            val accept = { xid: String ->
+                xid.lowercase().trim() in ourTvg ||
+                    (xmltvNames[xid].orEmpty() + xid.substringBeforeLast('.')).any { n ->
+                        EpgNameMatcher.keys(n).any { it in ourNameKeys }
+                    }
+            }
             var httpCode = 0
             val programs = epgClient.newCall(req).execute().use { resp ->
                 httpCode = resp.code
@@ -395,7 +454,7 @@ class PlaylistSourceRepository(
                     buffered.reset()
                     val stream: java.io.InputStream =
                         if (b0 == 0x1f && b1 == 0x8b) java.util.zip.GZIPInputStream(buffered, 8192) else buffered
-                    XmltvSaxParser.parse(stream, windowStart, windowEnd) { id, name ->
+                    XmltvSaxParser.parse(stream, windowStart, windowEnd, accept = accept) { id, name ->
                         xmltvNames.getOrPut(id) { mutableListOf() }.add(name)
                     }
                 } ?: emptyList()
@@ -439,6 +498,10 @@ class PlaylistSourceRepository(
             }
             report?.add("$shortUrl: программ ${programs.size}, каналов в файле ${byXmltv.size}; сопоставлено по id $byId, по названию $byName")
             true
+        } catch (e: OutOfMemoryError) {
+            // Error, не Exception: раньше такой сбой ронял приложение или молча обрывал загрузку.
+            report?.add("$shortUrl: не хватило памяти при разборе файла")
+            false
         } catch (e: Exception) {
             // Источник без EPG/с битым XMLTV не должен мешать основному контенту обновиться.
             report?.add("$shortUrl: ошибка ${e.javaClass.simpleName}: ${e.message?.take(80)}")

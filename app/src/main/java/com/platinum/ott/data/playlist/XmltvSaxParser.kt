@@ -67,13 +67,16 @@ object XmltvSaxParser {
         input: InputStream,
         windowStartMillis: Long,
         windowEndMillis: Long,
+        // Фильтр по каналу XMLTV: false — программы этого канала отбрасываются сразу при разборе
+        // (не попадают в память). null — брать все. Решение кэшируется на канал.
+        accept: ((channelId: String) -> Boolean)? = null,
         onChannelName: ((channelId: String, displayName: String) -> Unit)? = null
     ): List<XmltvProgram> {
         val result = mutableListOf<XmltvProgram>()
         val factory = SAXParserFactory.newInstance()
         disableExternalEntitiesQuietly(factory)
         val parser = factory.newSAXParser()
-        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis, onChannelName) { result.add(it) })
+        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis, accept, onChannelName) { result.add(it) })
         return result
     }
 
@@ -104,10 +107,14 @@ object XmltvSaxParser {
 private class XmltvHandler(
     private val windowStartMillis: Long,
     private val windowEndMillis: Long,
+    private val accept: ((String) -> Boolean)?,
     private val onChannelName: ((String, String) -> Unit)?,
     private val onProgramme: (XmltvProgram) -> Unit
 ) : DefaultHandler() {
     private var inProgramme = false
+    // true — программа чужого (не нашего) канала: тексты не читаем, в результат не кладём.
+    private var skipProgramme = false
+    private val acceptCache = HashMap<String, Boolean>()
     private var currentChannelDef: String? = null
     private var channel: String? = null
     private var startMillis: Long? = null
@@ -130,6 +137,9 @@ private class XmltvHandler(
             "programme" -> {
                 inProgramme = true
                 channel = attributes.getValue("channel")
+                skipProgramme = accept != null && channel.let { id ->
+                    id == null || !acceptCache.getOrPut(id) { accept.invoke(id) }
+                }
                 startMillis = attributes.getValue("start")?.let(::parseXmltvTimestamp)
                 endMillis = attributes.getValue("stop")?.let(::parseXmltvTimestamp)
                 title = null; description = null; category = null
@@ -138,9 +148,9 @@ private class XmltvHandler(
             // XMLTV-файлы нередко несут несколько штук на разных lang=
             // (ДОПУЩЕНИЕ, честно: без выбора по предпочитаемому языку,
             // это отдельное расширение, не архитектурное решение).
-            "title" -> if (inProgramme && title == null) startCapturing()
-            "desc" -> if (inProgramme && description == null) startCapturing()
-            "category" -> if (inProgramme && category == null) startCapturing()
+            "title" -> if (inProgramme && !skipProgramme && title == null) startCapturing()
+            "desc" -> if (inProgramme && !skipProgramme && description == null) startCapturing()
+            "category" -> if (inProgramme && !skipProgramme && category == null) startCapturing()
         }
     }
 
@@ -160,9 +170,9 @@ private class XmltvHandler(
                 val id = currentChannelDef
                 if (id != null && onChannelName != null) { capturedTextOrNull()?.let { onChannelName.invoke(id, it) }; currentTextTarget = null }
             }
-            "title" -> if (inProgramme && title == null) { title = capturedTextOrNull(); currentTextTarget = null }
-            "desc" -> if (inProgramme && description == null) { description = capturedTextOrNull(); currentTextTarget = null }
-            "category" -> if (inProgramme && category == null) { category = capturedTextOrNull(); currentTextTarget = null }
+            "title" -> if (inProgramme && !skipProgramme && title == null) { title = capturedTextOrNull(); currentTextTarget = null }
+            "desc" -> if (inProgramme && !skipProgramme && description == null) { description = capturedTextOrNull()?.take(600); currentTextTarget = null }
+            "category" -> if (inProgramme && !skipProgramme && category == null) { category = capturedTextOrNull(); currentTextTarget = null }
             "programme" -> {
                 inProgramme = false
                 val ch = channel; val start = startMillis; val end = endMillis; val t = title
@@ -170,7 +180,7 @@ private class XmltvHandler(
                 // то, что вне скользящего окна или не распарсилось,
                 // отбрасывается сразу, не попадая даже во временный
                 // список результата.
-                if (ch != null && start != null && end != null && t != null && end > windowStartMillis && start < windowEndMillis) {
+                if (!skipProgramme && ch != null && start != null && end != null && t != null && end > windowStartMillis && start < windowEndMillis) {
                     onProgramme(XmltvProgram(ch, t, description, category, start, end))
                 }
                 channel = null; startMillis = null; endMillis = null; title = null; description = null; category = null

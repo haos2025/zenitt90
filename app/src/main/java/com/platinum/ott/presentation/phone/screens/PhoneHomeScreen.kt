@@ -119,10 +119,12 @@ fun PhoneHomeScreen(navController: NavHostController, viewModel: HomeViewModel =
                         val headerOffset = (if (recentlyAiredEpisode != null || continueWatching.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
                         val totalItems = headerOffset + grouped.size
 
-                        LaunchedEffect(listState, totalItems) {
+                        LaunchedEffect(listState, totalItems, selectedFilter) {
                             snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                                 .collect { lastVisibleIndex ->
-                                    if (lastVisibleIndex != null && lastVisibleIndex >= totalItems - 2) {
+                                    // Под фильтром (не «Все») страницы backend не подгружаем: нужных карточек там нет,
+                                // а список всегда «близок к концу» — загрузка шла бы до последней страницы.
+                                if (selectedFilter == HomeContentFilter.ALL && lastVisibleIndex != null && lastVisibleIndex >= totalItems - 2) {
                                         viewModel.loadMore()
                                     }
                                 }

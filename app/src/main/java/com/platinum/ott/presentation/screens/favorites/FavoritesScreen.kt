@@ -41,6 +41,7 @@ private const val NO_FOLDER_SENTINEL = -1L
 fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEntity) -> Unit, viewModel: FavoritesViewModel = hiltViewModel()) {
     val favorites by viewModel.favorites.collectAsState(initial = emptyList())
     val folders by viewModel.folders.collectAsState(initial = emptyList())
+    val posterFallbacks by viewModel.posterFallbacks.collectAsState()
     var selectedType by remember { mutableStateOf<String?>(null) }
     var selectedFolderId by remember { mutableStateOf<Long?>(null) }
     var showFolderManager by remember { mutableStateOf(false) }
@@ -99,7 +100,7 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                 itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
-                            MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
+                            MovieCard(title = fav.title, poster = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: "", year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
                         }
                         // Действия — отдельная кнопка ПОД постером (раньше «⋮» лежала на углу карточки,
                         // и пультом на неё нельзя было навести фокус).

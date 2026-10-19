@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FolderEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -15,6 +17,30 @@ class FavoritesViewModel @Inject constructor(
 ) : ViewModel() {
     val favorites = sessionGraph.favoritesUseCase.getAllFavorites()
     val folders = sessionGraph.favoritesUseCase.getAllFolders()
+
+    // Постеры для СТАРЫХ записей, сохранённых с пустым poster: берём из кэша метаданных TMDB
+    // (getMetadata сначала смотрит в Room, в сеть идёт только при промахе). Только для backend-контента —
+    // по названию плейлистных каналов TMDB даёт случайные совпадения (см. ContentIdKind).
+    private val _posterFallbacks = MutableStateFlow<Map<String, String>>(emptyMap())
+    val posterFallbacks: StateFlow<Map<String, String>> = _posterFallbacks
+    private val resolvingPosters = mutableSetOf<String>()
+
+    init {
+        viewModelScope.launch {
+            sessionGraph.favoritesUseCase.getAllFavorites().collect { list ->
+                for (fav in list) {
+                    if (!fav.poster.isNullOrBlank()) continue
+                    if (!com.platinum.ott.domain.ContentIdKind.isZenithBackendContent(fav.contentId)) continue
+                    if (fav.contentId in _posterFallbacks.value || !resolvingPosters.add(fav.contentId)) continue
+                    launch {
+                        val path = sessionGraph.tmdbRepository.getMetadata(fav.contentId, fav.title).getOrNull()?.posterPath
+                        val url = com.platinum.ott.core.platform.TmdbImage.posterUrl(path, 400)
+                        if (url != null) _posterFallbacks.value = _posterFallbacks.value + (fav.contentId to url)
+                    }
+                }
+            }
+        }
+    }
 
     fun createFolder(name: String, color: String) {
         if (name.isBlank()) return

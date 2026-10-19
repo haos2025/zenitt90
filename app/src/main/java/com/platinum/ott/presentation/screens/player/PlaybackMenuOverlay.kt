@@ -8,7 +8,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -103,10 +108,21 @@ fun PlaybackMenuOverlay(
         PlaybackMenuTab.SPEED -> speedOptions.indexOf(playbackSpeed)
         PlaybackMenuTab.SUBTITLES -> 0
     }.coerceAtLeast(0)
+    // Собственный фокус панели: если в списке нет ни одной строки с listFocus (одна аудиодорожка,
+    // субтитры ещё не скомпонованы), фокус всё равно остаётся ВНУТРИ панели — иначе Влево/Вправо
+    // уходят в плеер и вкладки не переключаются.
+    val panelFocus = remember { FocusRequester() }
+    var panelHasFocus by remember { mutableStateOf(false) }
+    // Отпускание OK, начавшееся ДО открытия панели (нажатие, которое открыло меню), не должно
+    // «нажимать» строку: tv-Surface кликает по KeyUp. Съедаем KeyUp, пока в панели не было KeyDown.
+    val okDownInPanel = remember { booleanArrayOf(false) }
     LaunchedEffect(tab) {
         try { listState.scrollToItem(focusIdx) } catch (_: Exception) {}
-        kotlinx.coroutines.yield()
+        // Несколько кадров: LazyColumn создаёт строки не мгновенно после смены вкладки.
+        repeat(3) { androidx.compose.runtime.withFrameNanos { } }
         listFocus.safeRequestFocus()
+        androidx.compose.runtime.withFrameNanos { }
+        if (!panelHasFocus) panelFocus.safeRequestFocus()
     }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
@@ -121,6 +137,15 @@ fun PlaybackMenuOverlay(
                 .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeLarge)
                 .padding(vertical = ZenithDimens.paddingL)
                 .onPreviewKeyEvent { e ->
+                    val isOk = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                    if (isOk) {
+                        if (e.type == KeyEventType.KeyDown) { okDownInPanel[0] = true; return@onPreviewKeyEvent false }
+                        if (e.type == KeyEventType.KeyUp) {
+                            if (!okDownInPanel[0]) return@onPreviewKeyEvent true // «хвост» нажатия, открывшего меню
+                            okDownInPanel[0] = false
+                            return@onPreviewKeyEvent false
+                        }
+                    }
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     val i = tabs.indexOf(tab)
                     when (e.key) {
@@ -129,6 +154,9 @@ fun PlaybackMenuOverlay(
                         else -> false
                     }
                 }
+                .onFocusChanged { panelHasFocus = it.hasFocus }
+                .focusRequester(panelFocus)
+                .focusable()
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM),

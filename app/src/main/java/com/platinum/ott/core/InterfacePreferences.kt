@@ -29,7 +29,7 @@ class InterfacePreferences(context: Context) {
         }.apply()
 
     var showProgressStrip: Boolean
-        get() = prefs.getBoolean("player_progress_strip", true)
+        get() = prefs.getBoolean("player_progress_strip", false)
         set(value) = prefs.edit().putBoolean("player_progress_strip", value).apply()
 
     var progressStripDp: Int

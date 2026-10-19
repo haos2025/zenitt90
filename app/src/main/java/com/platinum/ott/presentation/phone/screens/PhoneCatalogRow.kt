@@ -74,7 +74,9 @@ fun PhoneCatalogRow(
                     poster = resolvedPosters[movie.id] ?: movie.poster,
                     onClick = { onMovieClick(movie.id) },
                     rating = movie.rating.takeIf { it > 0.0 },
-                    contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop
+                    contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
+                    // Ряд плейлиста — серии/фильмы (широкие кадры): вписываем на всю ширину, без полей.
+                    logoPadding = !isPlaylistRow
                 )
             }
         }

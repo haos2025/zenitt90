@@ -44,6 +44,7 @@ fun PhoneFavoritesScreen(navController: NavHostController) {
 val viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewModel = hiltViewModel()
 val favorites by viewModel.favorites.collectAsState(initial = emptyList())
 val folders by viewModel.folders.collectAsState(initial = emptyList())
+val posterFallbacks by viewModel.posterFallbacks.collectAsState()
 var selectedType by remember { mutableStateOf<String?>(null) }
 var selectedFolderId by remember { mutableStateOf<Long?>(null) }
 var showFolderManager by remember { mutableStateOf(false) }
@@ -95,7 +96,7 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
             itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
                 Box {
-                    MovieCard(title = fav.title, poster = fav.poster ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
+                    MovieCard(title = fav.title, poster = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
                     // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
                     // п.3) заменяет прежнюю отдельную иконку "Переместить в
                     // папку" — три действия в одном месте: переместить в

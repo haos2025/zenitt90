@@ -9,7 +9,7 @@ package com.platinum.ott.core
  */
 data class PlayerOverlaySettings(
     val hideDelayMs: Int? = null,
-    val showProgressStrip: Boolean = true,
+    val showProgressStrip: Boolean = false,
     val progressStripDp: Int = DEFAULT_PROGRESS_STRIP_DP,
     val keepControlsWhenPaused: Boolean = true,
     val showBuffered: Boolean = true,

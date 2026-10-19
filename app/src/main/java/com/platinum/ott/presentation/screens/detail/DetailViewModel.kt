@@ -96,7 +96,11 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val current = _uiState.value as? DetailUiState.Success
             val isAnime = current?.metadata.looksLikeAnime()
-            favorites.add(FavoriteEntity(contentId = movieId, title = title, poster = poster, folderId = folderId, isAnime = isAnime))
+            // Постер TMDB (если метаданные уже загружены) надёжнее, чем movie.poster: у backend-контента
+            // он часто пустой, у плейлиста — скриншот кадра. Иначе в «Избранном» оставалась пустая карточка.
+            val tmdbPoster = com.platinum.ott.core.platform.TmdbImage.posterUrl(current?.metadata?.posterPath, 400)
+            val savedPoster = tmdbPoster ?: poster?.takeIf { it.isNotBlank() }
+            favorites.add(FavoriteEntity(contentId = movieId, title = title, poster = savedPoster, folderId = folderId, isAnime = isAnime))
             if (current != null) _uiState.value = current.copy(isFavorite = true, isAnime = isAnime)
         }
     }

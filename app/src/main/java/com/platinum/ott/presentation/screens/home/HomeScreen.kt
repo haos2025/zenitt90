@@ -3,6 +3,7 @@ package com.platinum.ott.presentation.screens.home
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -45,7 +46,7 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
     val homeFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Row(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavSidebar(navController)
-        Column(Modifier.weight(1f).fillMaxHeight().padding(top = ZenithDimens.paddingL, bottom = ZenithDimens.paddingL)) {
+        Column(Modifier.weight(1f).fillMaxHeight().padding(top = ZenithDimens.paddingL)) {
             // Wordmark "ZENITH" убран: знак бренда теперь вверху боковой панели (NavSidebar.kt).
 
             // Решение 5 — вкладки-фильтры сверху, чистый клиентский фильтр
@@ -115,10 +116,12 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                     val headerOffset = (if (recentlyAiredEpisode != null || continueWatching.isNotEmpty()) 1 else 0) + (if (continueWatching.isNotEmpty()) 1 else 0)
                     val totalItems = headerOffset + grouped.size
 
-                    LaunchedEffect(listState, totalItems) {
+                    LaunchedEffect(listState, totalItems, selectedFilter) {
                         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                             .collect { lastVisibleIndex ->
-                                if (lastVisibleIndex != null && lastVisibleIndex >= totalItems - 2) {
+                                // Под фильтром (не «Все») страницы backend не подгружаем: нужных карточек там нет,
+                                // а список всегда «близок к концу» — загрузка шла бы до последней страницы.
+                                if (selectedFilter == HomeContentFilter.ALL && lastVisibleIndex != null && lastVisibleIndex >= totalItems - 2) {
                                     viewModel.loadMore()
                                 }
                             }
@@ -127,6 +130,7 @@ fun HomeScreen(navController: NavHostController, onMovieClick: (String) -> Unit,
                     LazyColumn(
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL),
+                        contentPadding = PaddingValues(bottom = 16.dp),
                         // Вверх из любого ряда: если штатный поиск фокуса не нашёл элемент выше — уходим на чипсы.
                         modifier = Modifier.onPreviewKeyEvent { e ->
                             if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionUp) {
