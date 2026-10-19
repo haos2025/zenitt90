@@ -7,9 +7,12 @@ import com.platinum.ott.data.local.dao.PlaylistSourceDao
 import com.platinum.ott.data.local.entity.EpgProgramEntity
 import com.platinum.ott.data.local.entity.PlaylistMovieEntity
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
+import com.platinum.ott.data.playlist.EntryClassifier
+import com.platinum.ott.data.playlist.EntryKind
 import com.platinum.ott.data.playlist.EpgFallbackSources
 import com.platinum.ott.data.playlist.EpgNameMatcher
 import com.platinum.ott.data.playlist.M3uPlaylistParser
+import com.platinum.ott.data.playlist.ParsedEntry
 import com.platinum.ott.data.playlist.XmltvSaxParser
 import com.platinum.ott.data.playlist.XtreamEpgClient
 import com.platinum.ott.data.playlist.XtreamLiveStreamInfo
@@ -151,7 +154,7 @@ class PlaylistSourceRepository(
     suspend fun addM3uUrlSource(label: String, url: String, isLiveChannels: Boolean = false): PlaylistSourceEntity = withContext(Dispatchers.IO) {
         val entity = PlaylistSourceEntity(
             id = UUID.randomUUID().toString(), type = "m3u", label = label, url = url, priority = nextPriority(),
-            contentKind = if (isLiveChannels) "live" else "vod"
+            contentKind = if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
         )
         sourceDao.upsert(entity)
         entity
@@ -164,7 +167,7 @@ class PlaylistSourceRepository(
         snapshotFile.writeText(fileContent)
         val entity = PlaylistSourceEntity(
             id = id, type = "m3u", label = label, url = "file://${snapshotFile.absolutePath}", priority = nextPriority(),
-            contentKind = if (isLiveChannels) "live" else "vod"
+            contentKind = if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
         )
         sourceDao.upsert(entity)
         entity
@@ -217,6 +220,9 @@ class PlaylistSourceRepository(
         val source = sourceDao.getById(sourceId) ?: return@withContext
         movieDao.deleteBySource(sourceId)
         source.url?.let { url -> if (url.startsWith("file://")) runCatching { File(url.removePrefix("file://")).delete() } }
+        runCatching { bodySnapshotFile(sourceId).delete() }
+        // Каналы источника уходят вместе с ним; неподписанные сироты чистятся, подписанные остаются.
+        runCatching { channelMatchingRepository.clearSourceAndCleanOrphans(sourceId) }
         sourceDao.deleteById(sourceId)
     }
 
@@ -281,40 +287,12 @@ class PlaylistSourceRepository(
                         val req = Request.Builder().url(url).build()
                         client.newCall(req).execute().use { it.body?.string() ?: "" }
                     }
-                    val rawEntries = M3uPlaylistParser.parse(body)
-                    // PROMPT_EPG.md, подзадача 2 — парсится при каждом
-                    // refresh() независимо от contentKind (обычный VOD-плейлист
-                    // тоже технически может нести url-tvg, хотя типичный
-                    // случай — именно contentKind == "live"). null тоже
-                    // пишется явно: если провайдер уберёт url-tvg из шапки,
-                    // источник не должен продолжать молча ссылаться на
-                    // устаревший адрес.
-                    val epgUrl = M3uPlaylistParser.parseEpgUrl(body)
-                    sourceDao.updateEpgUrl(sourceId, epgUrl)
-                    // PROMPT_EPG.md, подзадача 3 — независимо от того,
-                    // "live" этот источник или "vod": обычный VOD-плейлист
-                    // с url-tvg в шапке технически тоже может встретиться,
-                    // хоть и нетипично (см. допущение у sourceDao.updateEpgUrl
-                    // выше в предыдущей подзадаче).
-                    val ownEpgUrls = M3uPlaylistParser.parseEpgUrls(epgUrl)
-                    if (source.contentKind == "live") {
-                        // Живой эфир целиком уходит в Channel/ChannelStream —
-                        // не пишется в playlist_movies вообще (см.
-                        // PROMPT_IPTV_FOUNDATION.md, ChannelMatchingRepository).
-                        channelMatchingRepository.matchAndStore(sourceId, rawEntries.map { it.toRawChannelCandidate() })
-                        // EPG — ПОСЛЕ сохранения каналов: сопоставление по названию работает по уже
-                        // существующим каналам (раньше шло до — при первом обновлении каналов ещё не было).
-                        // Фоном: каталог не ждёт скачивания/разбора XMLTV (десятки МБ).
-                        launchEpg {
-                            val handled = mutableSetOf<String>()
-                            var epgOk = false
-                            ownEpgUrls.forEach { if (refreshEpgFromXmltv(it, null, handled)) epgOk = true }
-                            if (!epgOk) refreshEpgFromFallbackSources(null, handled)
-                        }
-                    } else {
-                        storeVodEntries(source, sourceId, rawEntries)
-                        launchEpg { ownEpgUrls.forEach { refreshEpgFromXmltv(it) } }
+                    // Тело плейлиста по ссылке сохраняем рядом со снапшотами файловых источников —
+                    // чтобы пересчитать разведение (переопределение группы) без повторной загрузки.
+                    if (!url.startsWith("file://") && body.isNotBlank()) {
+                        runCatching { bodySnapshotFile(sourceId).writeText(body) }
                     }
+                    processM3uBody(source, sourceId, body)
                 }
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
@@ -350,7 +328,89 @@ class PlaylistSourceRepository(
         }
     }
 
-    private suspend fun storeVodEntries(source: PlaylistSourceEntity, sourceId: String, rawEntries: List<PlaylistMovieEntity>) {
+    /** «Управление кэшем»: удаляет сохранённые тела плейлистов по ссылке (`<id>.m3u`); файловые снапшоты НЕ трогает. */
+    suspend fun clearBodyCache() = withContext(Dispatchers.IO) {
+        sourceDao.getAll().filter { it.type == "m3u" && it.url?.startsWith("file://") != true }
+            .forEach { runCatching { bodySnapshotFile(it.id).delete() } }
+    }
+
+    private fun bodySnapshotFile(sourceId: String) = File(snapshotDir, "$sourceId.m3u")
+
+    /**
+     * Разбирает тело M3U, разводит записи на каналы и фильмы/сериалы (EntryClassifier) и
+     * записывает обе стороны. Если разбор дал записи, обе стороны ЗАМЕНЯЮТСЯ — в том числе
+     * пустой (иначе после смены классификации старые фильмы/каналы остались бы).
+     * Пустой разбор (сетевой сбой, битый файл) ничего не стирает.
+     */
+    private suspend fun processM3uBody(source: PlaylistSourceEntity, sourceId: String, body: String) {
+        val parsed = M3uPlaylistParser.parseEntries(body)
+        // PROMPT_EPG.md, подзадача 2: url-tvg из шапки; null пишется явно (см. историю в git).
+        val epgUrl = M3uPlaylistParser.parseEpgUrl(body)
+        sourceDao.updateEpgUrl(sourceId, epgUrl)
+        val ownEpgUrls = M3uPlaylistParser.parseEpgUrls(epgUrl)
+
+        val kinds = EntryClassifier.classifyAll(parsed, source.contentKind, EntryClassifier.parseOverrides(source.groupOverrides))
+        val channelEntries = ArrayList<ParsedEntry>()
+        val vodEntries = ArrayList<ParsedEntry>()
+        parsed.forEachIndexed { i, e -> if (kinds[i] == EntryKind.CHANNEL) channelEntries.add(e) else vodEntries.add(e) }
+
+        if (parsed.isNotEmpty()) {
+            if (channelEntries.isNotEmpty()) {
+                // Живой эфир уходит в Channel/ChannelStream, не в playlist_movies.
+                channelMatchingRepository.matchAndStore(sourceId, channelEntries.map { it.entity.toRawChannelCandidate() })
+                channelMatchingRepository.cleanOrphans()
+            } else {
+                channelMatchingRepository.clearSourceAndCleanOrphans(sourceId)
+            }
+            storeVodEntries(source, sourceId, vodEntries.map { it.entity }, replaceEvenIfEmpty = true)
+        }
+
+        if (channelEntries.isNotEmpty()) {
+            // EPG — ПОСЛЕ сохранения каналов (сопоставление по названию идёт по уже созданным каналам),
+            // фоном: каталог не ждёт скачивания/разбора XMLTV.
+            launchEpg {
+                val handled = mutableSetOf<String>()
+                var epgOk = false
+                ownEpgUrls.forEach { if (refreshEpgFromXmltv(it, null, handled)) epgOk = true }
+                if (!epgOk) refreshEpgFromFallbackSources(null, handled)
+            }
+        } else {
+            launchEpg { ownEpgUrls.forEach { refreshEpgFromXmltv(it) } }
+        }
+    }
+
+    /**
+     * Пересчитать разведение M3U-источника после смены переопределений групп/режима.
+     * Берёт сохранённое тело (файловый снапшот или `<id>.m3u`) — без загрузки из сети;
+     * если тела нет, делает обычное обновление.
+     */
+    suspend fun reclassify(sourceId: String) = withContext(Dispatchers.IO) {
+        val source = sourceDao.getById(sourceId) ?: return@withContext
+        if (source.type != "m3u") return@withContext
+        val url = source.url
+        val file = if (url != null && url.startsWith("file://")) File(url.removePrefix("file://")) else bodySnapshotFile(sourceId)
+        if (!file.exists()) { refresh(sourceId, forceRefresh = true); return@withContext }
+        try {
+            processM3uBody(source, sourceId, file.readText())
+            sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), "ok")
+        } catch (e: Exception) {
+            sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), e.message ?: "Ошибка пересчёта")
+        }
+    }
+
+    /** Сохранить переопределения групп ("group-title" → "live"/"vod") и пересчитать; пустая карта = сброс. */
+    suspend fun setGroupOverrides(sourceId: String, overrides: Map<String, String>) = withContext(Dispatchers.IO) {
+        sourceDao.updateGroupOverrides(sourceId, EntryClassifier.overridesToJson(overrides))
+        reclassify(sourceId)
+    }
+
+    /** Режим разведения M3U: "auto" | "live" | "vod" — и пересчёт. */
+    suspend fun setContentKind(sourceId: String, kind: String) = withContext(Dispatchers.IO) {
+        sourceDao.updateContentKind(sourceId, kind)
+        reclassify(sourceId)
+    }
+
+    private suspend fun storeVodEntries(source: PlaylistSourceEntity, sourceId: String, rawEntries: List<PlaylistMovieEntity>, replaceEvenIfEmpty: Boolean = false) {
         val scoped = rawEntries.map { entry ->
             if (source.legacyIds) {
                 entry.copy(sourceId = sourceId)
@@ -366,9 +426,9 @@ class PlaylistSourceRepository(
         // пришли — иначе временный сетевой сбой посреди refresh() стёр бы
         // уже рабочий кэш этого источника и заменил его пустотой (тот же
         // принцип, что был в предыдущей версии PlaylistRepository).
-        if (scoped.isNotEmpty()) {
+        if (scoped.isNotEmpty() || replaceEvenIfEmpty) {
             movieDao.deleteBySource(sourceId)
-            movieDao.upsertAll(scoped)
+            if (scoped.isNotEmpty()) movieDao.upsertAll(scoped)
         }
     }
 

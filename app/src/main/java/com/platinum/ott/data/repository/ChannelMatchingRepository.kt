@@ -65,6 +65,19 @@ class ChannelMatchingRepository(
     // когда у панели нет xmltv.php. Раньше matchAndStore() ничего не
     // возвращал, и единственный уже готовый способ узнать channelId по
     // Xtream stream_id пришлось бы писать заново отдельным запросом.
+    /**
+     * Убирает все потоки каналов источника (когда после пересчёта разведения у источника
+     * не осталось записей-каналов) и чистит неподписанные каналы-сироты. Вызывать только
+     * после УСПЕШНОГО разбора плейлиста с записями — не при сетевом сбое.
+     */
+    suspend fun clearSourceAndCleanOrphans(sourceId: String) = withContext(Dispatchers.IO) {
+        channelStreamDao.deleteBySourceId(sourceId)
+        channelDao.deleteUnsubscribedOrphans()
+    }
+
+    /** Только чистка сирот (после обычной замены потоков источника). */
+    suspend fun cleanOrphans() = withContext(Dispatchers.IO) { channelDao.deleteUnsubscribedOrphans() }
+
     suspend fun matchAndStore(sourceId: String, candidates: List<RawChannelCandidate>): List<ChannelStreamEntity> {
         if (candidates.isEmpty()) return emptyList()
         return withContext(Dispatchers.IO) {

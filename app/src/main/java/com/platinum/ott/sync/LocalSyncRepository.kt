@@ -185,7 +185,8 @@ class LocalSyncRepository(
                 LocalSyncSourceDto(
                     id = it.id, type = it.type, label = it.label, url = it.url,
                     host = it.host, username = it.username, password = it.password,
-                    enabled = it.enabled, priority = it.priority
+                    enabled = it.enabled, priority = it.priority,
+                    contentKind = it.contentKind, groupOverrides = it.groupOverrides
                 )
             }
         val plugins = pluginDao.getAll().first().map {
@@ -258,11 +259,16 @@ class LocalSyncRepository(
         // обновит их само при следующем refresh().
         if (payload.sources.isNotEmpty()) {
             for (dto in payload.sources) {
+                // contentKind/groupOverrides: если устройство-отправитель их не прислало (старая версия) —
+                // оставляем то, что уже есть у этого источника здесь, а не затираем умолчанием.
+                val existing = playlistSourceDao.getById(dto.id)
                 playlistSourceDao.upsert(
                     PlaylistSourceEntity(
                         id = dto.id, type = dto.type, label = dto.label, url = dto.url,
                         host = dto.host, username = dto.username, password = dto.password,
-                        enabled = dto.enabled, priority = dto.priority
+                        enabled = dto.enabled, priority = dto.priority,
+                        contentKind = dto.contentKind ?: existing?.contentKind ?: "vod",
+                        groupOverrides = dto.groupOverrides ?: existing?.groupOverrides ?: "{}"
                     )
                 )
             }

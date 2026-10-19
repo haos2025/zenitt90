@@ -60,7 +60,11 @@ data class LocalSyncSourceDto(
     val username: String? = null,
     val password: String? = null,
     val enabled: Boolean = true,
-    val priority: Int = 0
+    val priority: Int = 0,
+    // План 07: режим разведения M3U ("auto"|"vod"|"live") и переопределения групп.
+    // Nullable: старые устройства этих полей не шлют — тогда у получателя остаются прежние значения.
+    val contentKind: String? = null,
+    val groupOverrides: String? = null
 )
 
 data class LocalSyncPayload(

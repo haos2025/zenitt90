@@ -32,7 +32,20 @@ import com.platinum.ott.data.local.entity.PlaylistMovieEntity
  * одного и того же канала у разных провайдеров — без него дедуп каналов
  * между несколькими источниками по одному лишь названию небезопасен.
  */
+/**
+ * Запись плейлиста + подсказки для классификатора (EntryClassifier), которые
+ * НЕ хранятся в БД (PlaylistMovieEntity не расширяем — см. план 07, п. 4.2).
+ * durationSec: число из "#EXTINF:<сек>" (-1/0 у живого эфира), null — не удалось прочитать.
+ * rawGroup: group-title как в файле (null, если не задан) — у entity.genre в этом случае "Мой плейлист".
+ */
+data class ParsedEntry(
+    val entity: PlaylistMovieEntity,
+    val durationSec: Int?,
+    val rawGroup: String?
+)
+
 object M3uPlaylistParser {
+    private val DURATION_REGEX = Regex("^#EXTINF:\\s*(-?\\d+(?:\\.\\d+)?)")
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
     private val ATTR_REGEX = Regex("(tvg-id|tvg-logo|group-title|catchup|catchup-days|catchup-source|tvg-chno)=\"([^\"]*)\"")
     private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
@@ -49,9 +62,11 @@ object M3uPlaylistParser {
     // См. комментарий у вычисления catchupDays в parse() ниже.
     private const val DEFAULT_CATCHUP_DAYS_WHEN_UNSPECIFIED = 1
 
-    fun parse(raw: String): List<PlaylistMovieEntity> {
+    fun parse(raw: String): List<PlaylistMovieEntity> = parseEntries(raw).map { it.entity }
+
+    fun parseEntries(raw: String): List<ParsedEntry> {
         val lines = raw.lines()
-        val result = mutableListOf<PlaylistMovieEntity>()
+        val result = mutableListOf<ParsedEntry>()
         var i = 0
         while (i < lines.size) {
             val line = lines[i].trim()
@@ -118,8 +133,12 @@ object M3uPlaylistParser {
                     // ФИКС (аудит): стабильный id вместо "m3u_$index" — см.
                     // комментарий в KDoc файла выше.
                     val stableKey = tvgId ?: "$title|$url"
-                    result.add(
-                        PlaylistMovieEntity(
+                    val durationSec = DURATION_REGEX.find(line)?.groupValues?.get(1)?.toDoubleOrNull()?.toInt()
+                    val rawGroup = attrs["group-title"]?.ifBlank { null }
+                    result.add(ParsedEntry(
+                        durationSec = durationSec,
+                        rawGroup = rawGroup,
+                        entity = PlaylistMovieEntity(
                             id = "m3u_" + stableKey.hashCode().toUInt().toString(16),
                             title = title,
                             year = year,
@@ -137,7 +156,7 @@ object M3uPlaylistParser {
                             catchupTemplate = catchupTemplate,
                             channelNumber = channelNumber
                         )
-                    )
+                    ))
                 }
                 i = j + 1
             } else {

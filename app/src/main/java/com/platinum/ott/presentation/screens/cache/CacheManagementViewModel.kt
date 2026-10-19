@@ -43,6 +43,7 @@ class CacheManagementViewModel @Inject constructor(
     // подумать, что что-то сломалось. Обновляем источники сразу же.
     fun clearPlaylist() = clearAndRefresh {
         sessionGraph.cacheManagementUseCase.clearPlaylist()
+        sessionGraph.playlistSourceRepository.clearBodyCache()
         sessionGraph.playlistSourceRepository.refreshAll()
     }
     fun clearMetadata() = clearAndRefresh { sessionGraph.cacheManagementUseCase.clearMetadata() }

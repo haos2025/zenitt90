@@ -37,4 +37,9 @@ interface ChannelDao {
 
     @Query("DELETE FROM channels WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    // Каналы-сироты (потоков больше нет ни в одном источнике): чистим ТОЛЬКО неподписанные,
+    // подписанные остаются (план 07, п. 11). Int-возврат — обход бага KSP2 с неявным Unit.
+    @Query("DELETE FROM channels WHERE isSubscribed = 0 AND id NOT IN (SELECT DISTINCT channelId FROM channel_streams)")
+    suspend fun deleteUnsubscribedOrphans(): Int
 }

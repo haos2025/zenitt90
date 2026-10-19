@@ -48,4 +48,10 @@ interface PlaylistSourceDao {
     // явно при чтении вызывающего кода.
     @Query("UPDATE playlist_sources SET epgUrl = :epgUrl WHERE id = :id")
     suspend fun updateEpgUrl(id: String, epgUrl: String?)
+
+    @Query("UPDATE playlist_sources SET groupOverrides = :json WHERE id = :id")
+    suspend fun updateGroupOverrides(id: String, json: String)
+
+    @Query("UPDATE playlist_sources SET contentKind = :kind WHERE id = :id")
+    suspend fun updateContentKind(id: String, kind: String)
 }
