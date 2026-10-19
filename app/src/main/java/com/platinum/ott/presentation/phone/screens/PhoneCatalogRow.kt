@@ -76,7 +76,10 @@ fun PhoneCatalogRow(
                     rating = movie.rating.takeIf { it > 0.0 },
                     contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
                     // Ряд плейлиста — серии/фильмы (широкие кадры): вписываем на всю ширину, без полей.
-                    logoPadding = !isPlaylistRow
+                    logoPadding = !isPlaylistRow,
+                    // Ряд плейлиста — горизонтальные карточки 16:9, способ вписывания — по реальной картинке.
+                    wide = isPlaylistRow,
+                    autoScale = isPlaylistRow
                 )
             }
         }

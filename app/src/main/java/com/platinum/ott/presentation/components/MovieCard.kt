@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.domain.model.Movie
@@ -48,6 +49,13 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 fun contentScaleForId(contentId: String): ContentScale =
     if (contentId.startsWith("ch_")) ContentScale.Fit else ContentScale.Crop
 
+/**
+ * Серия/фильм из собственного плейлиста (не канал): у такого контента кадр почти всегда широкий
+ * (скриншот 16:9), поэтому карточка для него — горизонтальная (wide), а не высокий постер 2:3.
+ */
+fun isPlaylistVodId(id: String): Boolean =
+    !id.startsWith("ch_") && (id.startsWith("m3u_") || id.contains("_m3u_") || id.startsWith("xt_") || id.contains("_xt_"))
+
 @Composable
 fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
     MovieCard(
@@ -55,8 +63,9 @@ fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) 
         rating = movie.rating.takeIf { it > 0.0 },
         // Логотипы из плейлистов (широкие/квадратные) вписываем целиком, настоящие постеры — по карточке.
         contentScale = if (movie.isPlaylistSourced) ContentScale.Fit else ContentScale.Crop,
-        // Поля нужны логотипам каналов (ch_). Широкий кадр серии/фильма из плейлиста вписываем
-        // на всю ширину карточки без полей — иначе вокруг кадра остаётся много пустого места.
+        // Для контента плейлиста способ вписывания выбирается по РЕАЛЬНОЙ картинке (см. autoScale).
+        autoScale = isPlaylistVodId(movie.id),
+        // Поля нужны только логотипам каналов (ch_).
         logoPadding = movie.id.startsWith("ch_")
     )
 }
@@ -72,10 +81,22 @@ fun MovieCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) 
 fun MovieCard(
     title: String, poster: String, year: Int, onClick: () -> Unit, modifier: Modifier = Modifier,
     rating: Double? = null, progress: Float? = null, contentScale: ContentScale = ContentScale.Crop,
-    logoPadding: Boolean = true
+    logoPadding: Boolean = true,
+    // wide — горизонтальная карточка 16:9 (для рядов плейлиста): ниже обычной, но шире.
+    wide: Boolean = false,
+    // autoScale — Crop, если форма картинки близка к форме карточки (теряется немного), иначе Fit
+    // с фоном по бокам/сверху-снизу: постер или логотип не обрезается, широкий кадр заполняет wide-карточку.
+    autoScale: Boolean = false
 ) {
-    val cardWidth = ZenithDimens.cardWidth
-    val cardHeight = ZenithDimens.cardHeight
+    val baseHeight = ZenithDimens.cardHeight
+    val cardHeight = if (wide) baseHeight * 0.7f else baseHeight
+    val cardWidth = if (wide) cardHeight * (16f / 9f) else ZenithDimens.cardWidth
+    val cardAspect = cardWidth.value / cardHeight.value
+    var imageAspect by remember(poster) { mutableStateOf<Float?>(null) }
+    val effectiveScale = if (autoScale) {
+        val a = imageAspect
+        if (a == null || abs(a / cardAspect - 1f) < 0.4f) ContentScale.Crop else ContentScale.Fit
+    } else contentScale
     val context = LocalContext.current
     val density = LocalDensity.current
     val isTv = remember { isTV(context) }
@@ -120,13 +141,19 @@ fun MovieCard(
             AsyncImage(
                 model = request,
                 contentDescription = title,
-                contentScale = contentScale,
+                contentScale = effectiveScale,
                 // Логотипы (Fit) — с полями, чтобы не упирались в края и не были огромными.
-                modifier = if (contentScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).let { if (logoPadding) it.padding(horizontal = 28.dp, vertical = 44.dp) else it } else Modifier.fillMaxSize(),
+                modifier = if (effectiveScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).let { if (logoPadding) it.padding(horizontal = 28.dp, vertical = 44.dp) else it } else Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                 onError = { posterFailed = true },
-                onSuccess = { posterFailed = false }
+                onSuccess = {
+                    posterFailed = false
+                    val d = it.result.drawable
+                    if (autoScale && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                        imageAspect = d.intrinsicWidth.toFloat() / d.intrinsicHeight
+                    }
+                }
             )
             // Явное имя пакета: внутри Card неявный ColumnScope делал вызов
             // неоднозначным (ошибка сборки "cannot be called with an implicit receiver").
