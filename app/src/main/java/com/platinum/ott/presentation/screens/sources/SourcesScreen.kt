@@ -49,6 +49,8 @@ import com.platinum.ott.ui.theme.*
 fun SourcesScreen(
     onBackPressed: () -> Unit,
     onAddSourceClick: () -> Unit,
+    // Вкладки раздела «Каналы» (план 07): если заданы — рисуются в шапке рядом с заголовком.
+    headerExtra: (@Composable () -> Unit)? = null,
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,7 +84,12 @@ fun SourcesScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Источники", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
+            if (headerExtra != null) {
+                headerExtra()
+                Spacer(Modifier.weight(1f))
+            } else {
+                Text("Источники", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
+            }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))
 

@@ -2,6 +2,7 @@ package com.platinum.ott.presentation.screens.channels
 
 import android.content.Context
 import com.platinum.ott.ui.theme.ZenithOnSurface
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,6 +29,7 @@ import com.platinum.ott.core.platform.safeRequestFocus
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -63,7 +65,14 @@ private const val KEY_FAVS = "favorite_ids"
 fun ChannelsBrowseScreen(
     onBackPressed: () -> Unit,
     onPlayChannel: (String) -> Unit,
-    onManageClick: () -> Unit,
+    // Режим «Править» (план 07, п. 12): вместо отдельного экрана «Управление».
+    // OK по каналу — подписка/отписка, долгое OK — меню действий.
+    editMode: Boolean,
+    onEditModeChange: (Boolean) -> Unit,
+    // Вкладки «Смотреть/Источники» рисует ChannelsHubScreen и подставляет в шапку.
+    tabs: @Composable () -> Unit,
+    // false — не забирать фокус на первый канал (после переключения вкладки фокус остаётся на вкладке).
+    autoFocusContent: Boolean = true,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -78,14 +87,28 @@ fun ChannelsBrowseScreen(
         prefs.edit().putStringSet(KEY_FAVS, favorites).apply()
     }
 
-    val subscribedChannels = remember(uiState) {
-        (uiState as? ChannelsUiState.Success)?.channels.orEmpty().filter { it.isSubscribed }.sortedBy { it.channelNumber }
+    val allChannels = remember(uiState) {
+        (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
     }
+    // В режиме «Править» показываем ВСЕ каналы (в том числе ещё не подписанные), иначе — только подписанные.
+    val subscribedChannels = remember(allChannels, editMode) {
+        if (editMode) allChannels else allChannels.filter { it.isSubscribed }
+    }
+    val isChecking by viewModel.isChecking.collectAsStateWithLifecycle()
+    var actionsTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    var renameTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    var mergeTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    var deleteTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    // «Назад» в режиме «Править» сначала выходит из режима.
+    BackHandler(enabled = editMode) { onEditModeChange(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(ALL_CATEGORY) }
     val firstRowRequester = remember { FocusRequester() }
     var initialFocusDone by remember { mutableStateOf(false) }
     var focusedId by remember { mutableStateOf<String?>(null) }
+
+    // «Избранные» есть только в обычном режиме — при входе в «Править» сбрасываем на «Все каналы».
+    LaunchedEffect(editMode) { if (editMode && selectedCategory == FAV_CATEGORY) selectedCategory = ALL_CATEGORY }
 
     val categoryCounts = remember(subscribedChannels) {
         subscribedChannels.groupBy { it.category?.ifBlank { null } ?: "Без категории" }
@@ -105,7 +128,7 @@ fun ChannelsBrowseScreen(
 
     val hasVisible = visibleChannels.isNotEmpty()
     LaunchedEffect(hasVisible) {
-        if (hasVisible && !initialFocusDone) {
+        if (hasVisible && !initialFocusDone && autoFocusContent) {
             withFrameNanos { }
             firstRowRequester.safeRequestFocus()
             initialFocusDone = true
@@ -119,23 +142,37 @@ fun ChannelsBrowseScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Каналы", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            ChannelSearchField(query = searchQuery, onChange = { searchQuery = it }, modifier = Modifier.width(240.dp))
+            // Заголовок «Каналы» не повторяем: раздел назван в боковой панели, в шапке — вкладки
+            // (иначе шапка не помещается на ТВ с малой шириной в dp).
+            tabs()
+            Spacer(Modifier.weight(1f))
+            ChannelSearchField(query = searchQuery, onChange = { searchQuery = it }, modifier = Modifier.width(200.dp))
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(
-                scale = OutlinedButtonDefaults.scale(focusedScale = 1f),
-                enabled = !epgBusy,
-                onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
-            ) { Text(if (epgBusy) "Загрузка программы…" else "Обновить программу") }
+            if (editMode) {
+                OutlinedButton(
+                    scale = OutlinedButtonDefaults.scale(focusedScale = 1f),
+                    enabled = !isChecking,
+                    onClick = { viewModel.checkAll() }
+                ) { Text(if (isChecking) "Проверка…" else "Проверить все") }
+            } else {
+                OutlinedButton(
+                    scale = OutlinedButtonDefaults.scale(focusedScale = 1f),
+                    enabled = !epgBusy,
+                    onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
+                ) { Text(if (epgBusy) "Загрузка программы…" else "Обновить программу") }
+            }
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onManageClick) { Text("Управление") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { onEditModeChange(!editMode) }) {
+                Text(if (editMode) "Готово" else "Править")
+            }
         }
         Spacer(Modifier.height(ZenithDimens.paddingL))
 
         if (subscribedChannels.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(
-                    "Нет подписанных каналов — зайдите в \"Управление\", чтобы\nподписаться на каналы из уже добавленных источников",
+                    if (allChannels.isEmpty()) "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»"
+                    else "Нет подписанных каналов — нажмите «Править»\nи включите нужные",
                     color = ZenithOnSurface.copy(alpha = 0.6f)
                 )
             }
@@ -166,14 +203,17 @@ fun ChannelsBrowseScreen(
                         verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
                         horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
                     ) {
-                        gridItemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { index, ch ->
+                        // В режиме «Править» ключ только по id: порядок стабилен (по номеру), и фокус
+                        // не должен «прыгать», когда канал подписывается/отписывается.
+                        gridItemsIndexed(visibleChannels, key = { i, c -> if (editMode) c.id else "${i}_${c.id}" }) { index, ch ->
                             ChannelTileTv(
                                 item = ch,
-                                isFavorite = ch.id in favorites,
+                                isFavorite = !editMode && ch.id in favorites,
+                                editMode = editMode,
                                 epgVersion = epgVersion,
                                 viewModel = viewModel,
-                                onClick = { onPlayChannel(ch.id) },
-                                onLongClick = { toggleFavorite(ch.id) },
+                                onClick = { if (editMode) viewModel.setSubscribed(ch.id, !ch.isSubscribed) else onPlayChannel(ch.id) },
+                                onLongClick = { if (editMode) actionsTarget = ch else toggleFavorite(ch.id) },
                                 onFocused = { focusedId = ch.id },
                                 modifier = if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier
                             )
@@ -186,6 +226,40 @@ fun ChannelsBrowseScreen(
             }
         }
     }
+
+    actionsTarget?.let { target ->
+        ChannelActionsDialog(
+            channel = target,
+            onToggleSubscribed = { viewModel.setSubscribed(target.id, !target.isSubscribed); actionsTarget = null },
+            onCheck = { viewModel.checkOne(target.id); actionsTarget = null },
+            onRename = { renameTarget = target; actionsTarget = null },
+            onMerge = { mergeTarget = target; actionsTarget = null },
+            onDelete = { deleteTarget = target; actionsTarget = null },
+            onDismiss = { actionsTarget = null }
+        )
+    }
+    renameTarget?.let { target ->
+        RenameChannelDialog(
+            channel = target,
+            onConfirm = { name, regionHint -> viewModel.rename(target.id, name, regionHint); renameTarget = null },
+            onDismiss = { renameTarget = null }
+        )
+    }
+    mergeTarget?.let { target ->
+        MergeChannelDialog(
+            source = target,
+            candidates = allChannels.filter { it.id != target.id },
+            onSelect = { targetId -> viewModel.merge(target.id, targetId); mergeTarget = null },
+            onDismiss = { mergeTarget = null }
+        )
+    }
+    deleteTarget?.let { target ->
+        DeleteChannelConfirmDialog(
+            channel = target,
+            onConfirm = { viewModel.delete(target.id); deleteTarget = null },
+            onDismiss = { deleteTarget = null }
+        )
+    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -193,6 +267,7 @@ fun ChannelsBrowseScreen(
 private fun ChannelTileTv(
     item: ChannelUiItem,
     isFavorite: Boolean,
+    editMode: Boolean,
     epgVersion: Int,
     viewModel: ChannelsViewModel,
     onClick: () -> Unit,
@@ -220,7 +295,8 @@ private fun ChannelTileTv(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
-        Column(Modifier.padding(ZenithDimens.paddingS)) {
+        // В режиме «Править» неподписанные каналы приглушены.
+        Column(Modifier.padding(ZenithDimens.paddingS).alpha(if (editMode && !item.isSubscribed) 0.45f else 1f)) {
             // Верх плитки: логотип на светлой подложке (тёмные логотипы читаются), номер и звезда по углам.
             Box(
                 Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
@@ -229,7 +305,8 @@ private fun ChannelTileTv(
                 if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
                 Text("${item.channelNumber}", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                if (editMode) Text(if (item.isSubscribed) "✓" else "○", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                else if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Spacer(Modifier.height(ZenithDimens.paddingXS))
             Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)

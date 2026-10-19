@@ -28,7 +28,7 @@ import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
 import com.platinum.ott.presentation.screens.plugins.PluginDetailScreen
 import com.platinum.ott.presentation.screens.channels.ChannelsBrowseScreen
-import com.platinum.ott.presentation.screens.channels.ChannelsManageScreen
+import com.platinum.ott.presentation.screens.channels.ChannelsHubScreen
 import com.platinum.ott.presentation.screens.epg.EpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneChannelsBrowseScreen
 import com.platinum.ott.presentation.phone.screens.PhoneChannelsManageScreen
@@ -60,7 +60,9 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // первом запуске (startDestination всегда "home", см. MainActivity.kt
         // и комментарий у "home" ниже про NAVIGATION_SIDEBAR).
         composable("sources") {
-            if (isTV) SourcesScreen(onBackPressed = { navController.popBackStack() }, onAddSourceClick = { navController.navigate("add_source") })
+            // ТВ: источники живут на вкладке «Источники» раздела «Каналы» (план 07, этап 2) —
+            // старый маршрут остаётся как перенаправление (ссылки и настройки не ломаются).
+            if (isTV) RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
             else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
         }
         composable("add_source") {
@@ -79,12 +81,20 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // Административная часть (переименовать/слить/удалить/подписка) —
         // отдельный route "channels_manage", туда ведёт кнопка "Управление"
         // прямо с этого экрана, а также SettingsScreen.kt.
-        composable("channels") {
+        composable(
+            "channels?tab={tab}&edit={edit}",
+            arguments = listOf(
+                navArgument("tab") { type = NavType.StringType; defaultValue = "watch" },
+                navArgument("edit") { type = NavType.BoolType; defaultValue = false }
+            )
+        ) { entry ->
             if (isTV) TvWithSidebar(navController) {
-                ChannelsBrowseScreen(
+                ChannelsHubScreen(
+                    initialTab = entry.arguments?.getString("tab") ?: "watch",
+                    initialEdit = entry.arguments?.getBoolean("edit") ?: false,
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
-                    onManageClick = { navController.navigate("channels_manage") }
+                    onAddSourceClick = { navController.navigate("add_source") }
                 )
             }
             else PhoneWithBottomBar(navController) {
@@ -97,7 +107,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             }
         }
         composable("channels_manage") {
-            if (isTV) ChannelsManageScreen(onBackPressed = { navController.popBackStack() })
+            // ТВ: «Управление» заменено режимом «Править» внутри «Каналы».
+            if (isTV) RedirectOnce(navController, from = "channels_manage", to = "channels?tab=watch&edit=true")
             else PhoneChannelsManageScreen(onBackPressed = { navController.popBackStack() })
         }
         // PROMPT_EPG.md, подзадача 4 — тот же уровень вложенности, что и
@@ -228,6 +239,17 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("plugin/{pluginId}", arguments = listOf(navArgument("pluginId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("pluginId") ?: return@composable
             if (isTV) PluginDetailScreen(pluginId = id, onBackPressed = { navController.popBackStack() }) else PhonePluginDetailScreen(id, navController)
+        }
+    }
+}
+
+/** Одноразовое перенаправление со старого маршрута; сам старый экран из стека убирается. */
+@Composable
+private fun RedirectOnce(navController: NavHostController, from: String, to: String) {
+    LaunchedEffect(Unit) {
+        navController.navigate(to) {
+            popUpTo(from) { inclusive = true }
+            launchSingleTop = true
         }
     }
 }

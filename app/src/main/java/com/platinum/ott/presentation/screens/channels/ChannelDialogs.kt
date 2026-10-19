@@ -111,3 +111,35 @@ fun DeleteChannelConfirmDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }
+
+/**
+ * Меню действий над каналом в режиме «Править» (долгое OK на ТВ / долгий тап на телефоне).
+ * Сам диалог ничего не закрывает: вызывающий закрывает его в каждом колбэке.
+ */
+@Composable
+fun ChannelActionsDialog(
+    channel: ChannelUiItem,
+    onToggleSubscribed: () -> Unit,
+    onCheck: () -> Unit,
+    onRename: () -> Unit,
+    onMerge: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(channel.canonicalName, maxLines = 2) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = onToggleSubscribed, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (channel.isSubscribed) "Скрыть из списка (отписаться)" else "Показывать в списке (подписаться)", modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(onClick = onCheck, modifier = Modifier.fillMaxWidth()) { Text("Проверить сейчас", modifier = Modifier.fillMaxWidth()) }
+                TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) { Text("Изменить название/регион", modifier = Modifier.fillMaxWidth()) }
+                TextButton(onClick = onMerge, modifier = Modifier.fillMaxWidth()) { Text("Слить с другим каналом", modifier = Modifier.fillMaxWidth()) }
+                TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) { Text("Удалить", modifier = Modifier.fillMaxWidth()) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
+    )
+}
