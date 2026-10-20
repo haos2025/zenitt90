@@ -66,7 +66,7 @@ fun ChannelsBrowseScreen(
     onBackPressed: () -> Unit,
     onPlayChannel: (String) -> Unit,
     // Режим «Править» (план 07, п. 12): вместо отдельного экрана «Управление».
-    // OK по каналу — подписка/отписка, долгое OK — меню действий.
+    // OK по каналу — меню действий (переименовать, слить, удалить, проверить). Подписок на каналы нет.
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     // Вкладки «Смотреть/Источники» рисует ChannelsHubScreen и подставляет в шапку.
@@ -90,10 +90,8 @@ fun ChannelsBrowseScreen(
     val allChannels = remember(uiState) {
         (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
     }
-    // В режиме «Править» показываем ВСЕ каналы (в том числе ещё не подписанные), иначе — только подписанные.
-    val subscribedChannels = remember(allChannels, editMode) {
-        if (editMode) allChannels else allChannels.filter { it.isSubscribed }
-    }
+    // Подписок на каналы больше нет (20.10.2026): показываются все каналы источников.
+    val subscribedChannels = allChannels
     val isChecking by viewModel.isChecking.collectAsStateWithLifecycle()
     var actionsTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     var renameTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
@@ -171,8 +169,7 @@ fun ChannelsBrowseScreen(
         if (subscribedChannels.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(
-                    if (allChannels.isEmpty()) "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»"
-                    else "Нет подписанных каналов — нажмите «Править»\nи включите нужные",
+                    "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»",
                     color = ZenithOnSurface.copy(alpha = 0.6f)
                 )
             }
@@ -212,7 +209,7 @@ fun ChannelsBrowseScreen(
                                 editMode = editMode,
                                 epgVersion = epgVersion,
                                 viewModel = viewModel,
-                                onClick = { if (editMode) viewModel.setSubscribed(ch.id, !ch.isSubscribed) else onPlayChannel(ch.id) },
+                                onClick = { if (editMode) actionsTarget = ch else onPlayChannel(ch.id) },
                                 onLongClick = { if (editMode) actionsTarget = ch else toggleFavorite(ch.id) },
                                 onFocused = { focusedId = ch.id },
                                 modifier = if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier
@@ -230,7 +227,6 @@ fun ChannelsBrowseScreen(
     actionsTarget?.let { target ->
         ChannelActionsDialog(
             channel = target,
-            onToggleSubscribed = { viewModel.setSubscribed(target.id, !target.isSubscribed); actionsTarget = null },
             onCheck = { viewModel.checkOne(target.id); actionsTarget = null },
             onRename = { renameTarget = target; actionsTarget = null },
             onMerge = { mergeTarget = target; actionsTarget = null },
@@ -296,7 +292,7 @@ private fun ChannelTileTv(
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
         // В режиме «Править» неподписанные каналы приглушены.
-        Column(Modifier.padding(ZenithDimens.paddingS).alpha(if (editMode && !item.isSubscribed) 0.45f else 1f)) {
+        Column(Modifier.padding(ZenithDimens.paddingS)) {
             // Верх плитки: логотип на светлой подложке (тёмные логотипы читаются), номер и звезда по углам.
             Box(
                 Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
@@ -305,8 +301,7 @@ private fun ChannelTileTv(
                 if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
                 Text("${item.channelNumber}", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                if (editMode) Text(if (item.isSubscribed) "✓" else "○", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
-                else if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Spacer(Modifier.height(ZenithDimens.paddingXS))
             Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)

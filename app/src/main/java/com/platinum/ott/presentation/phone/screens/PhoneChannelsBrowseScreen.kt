@@ -77,7 +77,7 @@ fun PhoneChannelsBrowseScreen(
     }
 
     val subscribedChannels = remember(uiState) {
-        (uiState as? ChannelsUiState.Success)?.channels.orEmpty().filter { it.isSubscribed }.sortedBy { it.channelNumber }
+        (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
     }
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
@@ -189,7 +189,6 @@ fun PhoneChannelsBrowseScreen(
                     items(allChannels.sortedBy { it.channelNumber }, key = { it.id }) { item ->
                         PhoneChannelEditCard(
                             item = item,
-                            onToggleSubscribed = { viewModel.setSubscribed(item.id, it) },
                             onRename = { renameTarget = item },
                             onMerge = { mergeTarget = item },
                             onDelete = { deleteTarget = item },
@@ -200,7 +199,7 @@ fun PhoneChannelsBrowseScreen(
             }
             subscribedChannels.isEmpty() -> Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
                 Text(
-                    "Нет подписанных каналов — нажмите «Править» (карандаш сверху), чтобы выбрать каналы,\nили добавьте плейлист на вкладке «Источники»",
+                    "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»",
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.padding(ZenithDimens.paddingXL)

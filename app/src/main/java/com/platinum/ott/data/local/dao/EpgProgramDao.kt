@@ -42,6 +42,12 @@ interface EpgProgramDao {
     )
     suspend fun searchByTitle(query: String, nowMillis: Long, limit: Int): List<EpgProgramEntity>
 
+    @Query("SELECT COUNT(*) FROM epg_programs")
+    suspend fun countAll(): Int
+
+    @Query("SELECT COUNT(DISTINCT channelId) FROM epg_programs WHERE endTimeMillis > :nowMillis")
+    suspend fun countChannelsWithFuture(nowMillis: Long): Int
+
     // Полная замена расписания канала одним свежим фетчем: старые слоты,
     // которых больше нет в новом XMLTV/Xtream-ответе (сетка передач могла
     // измениться), REPLACE по upsertAll не удалит сам по себе — только

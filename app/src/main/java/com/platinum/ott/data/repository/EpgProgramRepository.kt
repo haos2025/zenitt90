@@ -23,6 +23,10 @@ class EpgProgramRepository(
     suspend fun searchByTitle(query: String, nowMillis: Long = System.currentTimeMillis(), limit: Int = 50): List<EpgProgramEntity> =
         withContext(Dispatchers.IO) { epgProgramDao.searchByTitle(query, nowMillis, limit) }
 
+    /** (всего программ в базе, число каналов, у которых есть программа от «сейчас» и дальше). */
+    suspend fun stats(nowMillis: Long = System.currentTimeMillis()): Pair<Int, Int> =
+        withContext(Dispatchers.IO) { epgProgramDao.countAll() to epgProgramDao.countChannelsWithFuture(nowMillis) }
+
     suspend fun getCurrentForChannel(channelId: String, nowMillis: Long = System.currentTimeMillis()): EpgProgramEntity? =
         withContext(Dispatchers.IO) { epgProgramDao.getCurrentForChannel(channelId, nowMillis) }
 

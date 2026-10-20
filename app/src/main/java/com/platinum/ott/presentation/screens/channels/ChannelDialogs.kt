@@ -65,9 +65,7 @@ fun MergeChannelDialog(
     onSelect: (targetChannelId: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val ordered = candidates.sortedWith(
-        compareByDescending<ChannelUiItem> { it.isSubscribed }.thenBy { it.canonicalName.lowercase() }
-    )
+    val ordered = candidates.sortedBy { it.canonicalName.lowercase() }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Слить «${source.canonicalName}» с...") },
@@ -81,12 +79,7 @@ fun MergeChannelDialog(
                 ) {
                     items(ordered, key = { it.id }) { candidate ->
                         TextButton(onClick = { onSelect(candidate.id) }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(candidate.canonicalName, modifier = Modifier.fillMaxWidth())
-                                if (candidate.isSubscribed) {
-                                    Text("Уже в списке", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant)
-                                }
-                            }
+                            Text(candidate.canonicalName, modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -119,7 +112,6 @@ fun DeleteChannelConfirmDialog(
 @Composable
 fun ChannelActionsDialog(
     channel: ChannelUiItem,
-    onToggleSubscribed: () -> Unit,
     onCheck: () -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
@@ -131,9 +123,6 @@ fun ChannelActionsDialog(
         title = { Text(channel.canonicalName, maxLines = 2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                TextButton(onClick = onToggleSubscribed, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (channel.isSubscribed) "Скрыть из списка (отписаться)" else "Показывать в списке (подписаться)", modifier = Modifier.fillMaxWidth())
-                }
                 TextButton(onClick = onCheck, modifier = Modifier.fillMaxWidth()) { Text("Проверить сейчас", modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) { Text("Изменить название/регион", modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = onMerge, modifier = Modifier.fillMaxWidth()) { Text("Слить с другим каналом", modifier = Modifier.fillMaxWidth()) }

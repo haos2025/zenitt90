@@ -72,14 +72,17 @@ class ChannelMatchingRepository(
      */
     suspend fun clearSourceAndCleanOrphans(sourceId: String) = withContext(Dispatchers.IO) {
         channelStreamDao.deleteBySourceId(sourceId)
-        channelDao.deleteUnsubscribedOrphans()
+        channelDao.deleteOrphans()
     }
 
     /** Сколько потоков-каналов принесёт источник (для фильтра «каналы / каталог» в списке источников). */
     suspend fun countStreamsBySource(sourceId: String): Int = withContext(Dispatchers.IO) { channelStreamDao.countBySourceId(sourceId) }
 
     /** Только чистка сирот (после обычной замены потоков источника). */
-    suspend fun cleanOrphans() = withContext(Dispatchers.IO) { channelDao.deleteUnsubscribedOrphans() }
+    suspend fun cleanOrphans() = withContext(Dispatchers.IO) { channelDao.deleteOrphans() }
+
+    /** Подписок на каналы больше нет: все каналы показываются (см. ChannelDao.subscribeAll). */
+    suspend fun subscribeAll() = withContext(Dispatchers.IO) { channelDao.subscribeAll() }
 
     suspend fun matchAndStore(sourceId: String, candidates: List<RawChannelCandidate>): List<ChannelStreamEntity> {
         if (candidates.isEmpty()) return emptyList()
@@ -153,7 +156,7 @@ class ChannelMatchingRepository(
                     tvgId = candidate.tvgId,
                     logo = candidate.logo,
                     category = candidate.category,
-                    isSubscribed = false,
+                    isSubscribed = true,
                     // PROMPT_EPG.md, подзадача 6 — явный tvg-chno/num, если
                     // источник его дал; иначе следующий свободный номер, а
                     // не 0 (0 у всех несопоставленных каналов сразу сделал

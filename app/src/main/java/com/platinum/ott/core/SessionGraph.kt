@@ -139,7 +139,11 @@ class SessionGraph @Inject constructor(
         // fire-and-forget миграция ещё не успела отработать. Сам запрос —
         // это одна дешёвая проверка COUNT(*) (не сетевой вызов), поэтому
         // блокировка потока здесь пренебрежимо короткая.
-        runBlocking(Dispatchers.IO) { playlistSourceRepository.migrateLegacySourceIfNeeded() }
+        runBlocking(Dispatchers.IO) {
+            playlistSourceRepository.migrateLegacySourceIfNeeded()
+            // Подписок на каналы больше нет — показываем все (раньше часть каналов была «отписана»).
+            channelMatchingRepository.subscribeAll()
+        }
         playlistRepository = PlaylistRepository(database.playlistSourceDao(), database.playlistMovieDao(), playlistSourceRepository)
         movieRepository = MovieRepositoryImpl(api, database.movieDao(), playlistRepository)
         val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor(), timeoutSeconds = timeoutSeconds)

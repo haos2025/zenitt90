@@ -57,7 +57,7 @@ import com.platinum.ott.ui.theme.*
 // плагины, синхронизация, подключение источника) не трогаем.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onChannelsClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onEpgClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
@@ -258,6 +258,9 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
                     onClick = onSourcesClick
                 )
+                SettingsDivider()
+                // Загрузка программы передач: статус, журнал, «Обновить сейчас».
+                NavRow("Телепрограмма (EPG)", "Статус и обновление", onClick = onEpgClick)
                 SettingsDivider()
                 NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
             }

@@ -98,6 +98,12 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // План 07, этап 5: источники каналов и управление каналами живут в разделе «Каналы»
         // (вкладка «Источники», режим «Править») — отдельной карточки «Каналы» здесь больше нет.
         Spacer(Modifier.height(ZenithDimens.paddingS))
+        NavCard(
+            title = "Телепрограмма (EPG)",
+            status = "Статус и обновление",
+            onClick = { navController.navigate("epg_settings") }
+        )
+        Spacer(Modifier.height(ZenithDimens.paddingS))
         // Синхронизация — независимая система (пара по 6-значному коду,
         // AuthPreferences.getOrCreateSyncToken()), от источников не зависит,
         // всегда доступна отдельной карточкой (та же развязка, что и на TV

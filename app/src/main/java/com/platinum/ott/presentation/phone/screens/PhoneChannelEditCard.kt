@@ -24,12 +24,11 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 /**
  * План 07, этап 5: строка канала в режиме «Править» (раздел «Каналы» на телефоне).
  * Перенесена из бывшего PhoneChannelsManageScreen.kt без изменений логики —
- * переключатель подписки, проверка, переименование, слияние, удаление.
+ * проверка, переименование, слияние, удаление.
  */
 @Composable
 internal fun PhoneChannelEditCard(
     item: ChannelUiItem,
-    onToggleSubscribed: (Boolean) -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
@@ -86,8 +85,6 @@ internal fun PhoneChannelEditCard(
                     color = if (item.isMergeCandidate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
-
-            Switch(checked = item.isSubscribed, onCheckedChange = onToggleSubscribed)
 
             Box {
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Действия") }

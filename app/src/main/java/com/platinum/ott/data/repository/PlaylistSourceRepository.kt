@@ -23,6 +23,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +39,30 @@ import java.util.concurrent.TimeUnit
 // Тот же час, что и у единственного источника раньше (PlaylistRepository,
 // REFRESH_TTL_MS) — плейлисты бывают большие, не гонять на каждый вход.
 private const val SOURCE_REFRESH_TTL_MS = 60 * 60 * 1000L
+
+/**
+ * Состояние загрузки телепрограммы для экрана «Настройки → Телепрограмма (EPG)».
+ * [lines] — журнал текущего или последнего обновления; [ok] = null, пока ни разу не запускалось.
+ */
+data class EpgStatus(
+    val running: Boolean = false,
+    val lines: List<String> = emptyList(),
+    val startedAt: Long = 0L,
+    val finishedAt: Long = 0L,
+    val ok: Boolean? = null,
+    val programs: Int = 0,
+    val channelsWithEpg: Int = 0,
+    val totalChannels: Int = 0
+)
+
+/** Отчёт, который при каждой новой строке публикует журнал целиком (для живого показа на экране). */
+private class LiveReport(private val onChange: (List<String>) -> Unit) : ArrayList<String>() {
+    override fun add(element: String): Boolean {
+        val r = super.add(element)
+        onChange(ArrayList(this))
+        return r
+    }
+}
 
 /** Итог разведения источника: сколько записей стало каналами, сколько — фильмами/сериалами. */
 data class SourceSplit(val channels: Int, val vod: Int)
@@ -517,6 +544,7 @@ class PlaylistSourceRepository(
         handled: MutableSet<String> = mutableSetOf()
     ): Boolean {
         val shortUrl = url.substringAfter("://").substringBefore('?').take(60)
+        report?.add("Загружаю: $shortUrl …")
         return try {
             val now = System.currentTimeMillis()
             val windowStart = now - TimeUnit.HOURS.toMillis(2)
@@ -619,6 +647,63 @@ class PlaylistSourceRepository(
     }
 
     private val epgPrefs by lazy { appContext.getSharedPreferences("epg_state", Context.MODE_PRIVATE) }
+
+    // ---------- Ручное/фоновое обновление программы с видимым ходом (экран «Телепрограмма (EPG)») ----------
+
+    private val _epgStatus by lazy {
+        val saved = epgPrefs.getString("last_report", null)
+        MutableStateFlow(
+            EpgStatus(
+                lines = saved?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
+                finishedAt = epgPrefs.getLong("last_report_at", 0L),
+                ok = if (epgPrefs.contains("last_report_ok")) epgPrefs.getBoolean("last_report_ok", false) else null,
+                programs = epgPrefs.getInt("last_programs", 0),
+                channelsWithEpg = epgPrefs.getInt("last_channels_with_epg", 0),
+                totalChannels = epgPrefs.getInt("last_total_channels", 0)
+            )
+        )
+    }
+    val epgStatus: StateFlow<EpgStatus> get() = _epgStatus.asStateFlow()
+    private val epgRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Запустить обновление программы в фоне (не блокирует; повторный запуск во время работы игнорируется). */
+    fun startEpgRefresh() {
+        if (!epgRunning.compareAndSet(false, true)) return
+        backgroundScope.launch {
+            try { runTrackedEpgRefresh() } finally { epgRunning.set(false) }
+        }
+    }
+
+    private suspend fun runTrackedEpgRefresh() {
+        val started = System.currentTimeMillis()
+        _epgStatus.value = EpgStatus(running = true, lines = listOf("Обновление программы начато…"), startedAt = started)
+        val report = LiveReport { lines -> _epgStatus.value = _epgStatus.value.copy(lines = lines) }
+        val ok = try {
+            refreshEpgOnly(report)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            report.add("Ошибка: ${e.message}")
+            false
+        }
+        val (programs, channelsWithEpg) = runCatching { epgProgramRepository.stats() }.getOrDefault(0 to 0)
+        val total = runCatching { channelMatchingRepository.allChannels().size }.getOrDefault(0)
+        val finished = System.currentTimeMillis()
+        report.add(
+            (if (ok) "Готово" else "Программу получить не удалось") +
+                ": программ в базе $programs, каналов с программой $channelsWithEpg из $total, " +
+                "заняло ${(finished - started) / 1000} с"
+        )
+        epgPrefs.edit()
+            .putString("last_report", report.joinToString("\n"))
+            .putLong("last_report_at", finished).putBoolean("last_report_ok", ok)
+            .putInt("last_programs", programs).putInt("last_channels_with_epg", channelsWithEpg).putInt("last_total_channels", total)
+            .apply()
+        _epgStatus.value = EpgStatus(
+            running = false, lines = ArrayList(report), startedAt = started, finishedAt = finished,
+            ok = ok, programs = programs, channelsWithEpg = channelsWithEpg, totalChannels = total
+        )
+    }
     private val epgClient by lazy {
         client.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -664,7 +749,7 @@ class PlaylistSourceRepository(
     /** Фоновый запуск при открытии каналов: не чаще раза в maxAgeMs. */
     suspend fun refreshEpgIfStale(maxAgeMs: Long) {
         if (System.currentTimeMillis() - epgPrefs.getLong("last_ok", 0L) < maxAgeMs) return
-        refreshEpgOnly()
+        startEpgRefresh()
     }
 
     /**

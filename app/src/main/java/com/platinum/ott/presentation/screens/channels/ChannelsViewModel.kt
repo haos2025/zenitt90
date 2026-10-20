@@ -42,26 +42,31 @@ class ChannelsViewModel @Inject constructor(
 
     init {
         load()
+        // «Занято» и обновление «сейчас в эфире» следуют общему состоянию загрузки программы.
+        viewModelScope.launch {
+            var was = false
+            sessionGraph.playlistSourceRepository.epgStatus.collect { s ->
+                _epgBusy.value = s.running
+                if (was && !s.running) _epgVersion.value++
+                was = s.running
+            }
+        }
         // Программа не обновлялась больше 6 часов (или никогда) — тихо обновляем в фоне.
         viewModelScope.launch {
             try {
                 sessionGraph.playlistSourceRepository.refreshEpgIfStale(6 * 3_600_000L)
-                _epgVersion.value++
             } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
         }
     }
 
-    /** Ручное обновление программы: onResult получает человекочитаемый отчёт (что скачано, сколько сопоставлено). */
+    /**
+     * Ручное обновление программы: запускается в фоне (продолжается, даже если уйти с экрана), ход и отчёт —
+     * на экране «Настройки → Телепрограмма (EPG)». Здесь только короткое сообщение.
+     */
     fun refreshEpg(onResult: (String) -> Unit) {
         if (_epgBusy.value) return
-        viewModelScope.launch {
-            _epgBusy.value = true
-            val report = mutableListOf<String>()
-            val ok = try { sessionGraph.playlistSourceRepository.refreshEpgOnly(report) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { report.add("Ошибка: ${e.message}"); false }
-            _epgBusy.value = false
-            _epgVersion.value++
-            onResult((if (ok) "Программа обновлена" else "Программу получить не удалось") + "\n" + report.joinToString("\n"))
-        }
+        sessionGraph.playlistSourceRepository.startEpgRefresh()
+        onResult("Загрузка программы запущена. Ход и отчёт — Настройки → Телепрограмма (EPG)")
     }
 
     fun load() {
@@ -71,9 +76,7 @@ class ChannelsViewModel @Inject constructor(
             // разбор кандидатов на подписку/слияние — ниже него.
             // Ошибка чтения БД не должна ронять приложение — показываем пустой список.
             val channels = try {
-                repository.getAll().sortedWith(
-                    compareByDescending<ChannelUiItem> { it.isSubscribed }.thenBy { it.canonicalName.lowercase() }
-                )
+                repository.getAll().sortedBy { it.canonicalName.lowercase() }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
