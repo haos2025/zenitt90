@@ -112,6 +112,7 @@ fun DeleteChannelConfirmDialog(
 @Composable
 fun ChannelActionsDialog(
     channel: ChannelUiItem,
+    onToggleHidden: () -> Unit,
     onCheck: () -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
@@ -123,6 +124,9 @@ fun ChannelActionsDialog(
         title = { Text(channel.canonicalName, maxLines = 2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = onToggleHidden, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (channel.isHidden) "Показывать канал" else "Скрыть канал", modifier = Modifier.fillMaxWidth())
+                }
                 TextButton(onClick = onCheck, modifier = Modifier.fillMaxWidth()) { Text("Проверить сейчас", modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) { Text("Изменить название/регион", modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = onMerge, modifier = Modifier.fillMaxWidth()) { Text("Слить с другим каналом", modifier = Modifier.fillMaxWidth()) }
@@ -130,5 +134,32 @@ fun ChannelActionsDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
+    )
+}
+
+/**
+ * Меню категории в режиме «Править» (OK по категории на ТВ / кнопка на телефоне): скрыть или показать
+ * всю категорию. Скрытая категория скрывает и каналы, которые появятся в ней позже.
+ */
+@Composable
+fun CategoryActionsDialog(
+    category: String,
+    isHidden: Boolean,
+    channelCount: Int,
+    onToggleHidden: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(category, maxLines = 2) },
+        text = {
+            Text(
+                if (isHidden) "Категория скрыта: её каналы ($channelCount) не показываются, новые каналы в ней тоже."
+                else "Каналов в категории: $channelCount. Скрытая категория не показывается вместе со всеми будущими каналами в ней.",
+                color = ZenithOnSurfaceVariant
+            )
+        },
+        confirmButton = { TextButton(onClick = onToggleHidden) { Text(if (isHidden) "Показать категорию" else "Скрыть категорию") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }

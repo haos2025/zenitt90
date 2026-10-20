@@ -254,7 +254,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             // каталога — плейлисты фильмов и сериалов. Строка «Каналы» убрана.
             SettingsGroup("Источники", Icons.Outlined.Source) {
                 NavRow(
-                    "Источники каталога (фильмы и сериалы)",
+                    "Все источники (каналы, фильмы, сериалы)",
                     if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
                     onClick = onSourcesClick
                 )

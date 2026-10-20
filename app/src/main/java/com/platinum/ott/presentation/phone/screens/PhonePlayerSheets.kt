@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -37,6 +38,7 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 fun PhoneChannelsSheet(
     channels: List<ChannelUiItem>?,
     currentId: String,
+    nowPlaying: suspend (String) -> Pair<String, Float>? = { null },
     onPick: (ChannelUiItem) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -83,12 +85,27 @@ fun PhoneChannelsSheet(
                             else Text(ch.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.labelMedium)
                         }
                         Spacer(Modifier.width(ZenithDimens.paddingM))
-                        Text(
-                            ch.canonicalName,
-                            color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
+                        // Текущая передача: грузится только для показанных строк, обновляется раз в минуту.
+                        var now by remember(ch.id) { mutableStateOf<Pair<String, Float>?>(null) }
+                        LaunchedEffect(ch.id) {
+                            while (true) {
+                                now = nowPlaying(ch.id)
+                                kotlinx.coroutines.delay(60_000)
+                            }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                ch.canonicalName,
+                                color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            val program = now
+                            if (program != null) {
+                                Text(program.first, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(progress = { program.second }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape))
+                            }
+                        }
                     }
                 }
             }

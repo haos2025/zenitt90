@@ -640,9 +640,15 @@ class PlaylistSourceRepository(
     }
 
     /** Запасные источники: по очереди, пока один из них не даст программу. */
-    private suspend fun refreshEpgFromFallbackSources(report: MutableList<String>? = null, handled: MutableSet<String> = mutableSetOf()) {
+    private suspend fun refreshEpgFromFallbackSources(
+        report: MutableList<String>? = null, handled: MutableSet<String> = mutableSetOf(),
+        tried: MutableSet<String> = mutableSetOf(), totalChannels: Int = Int.MAX_VALUE
+    ) {
+        // Идём по всем запасным источникам, пока остаются каналы без программы; уже пробованные адреса пропускаем.
         for (url in EpgFallbackSources.URLS) {
-            if (refreshEpgFromXmltv(url, report, handled)) return
+            if (handled.size >= totalChannels) return
+            if (!tried.add(url)) continue
+            refreshEpgFromXmltv(url, report, handled)
         }
     }
 
@@ -709,6 +715,8 @@ class PlaylistSourceRepository(
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
             .callTimeout(5, TimeUnit.MINUTES)
+            // iptvx.one обрывает HTTP/2 (PROTOCOL_ERROR) — для файлов программы используем HTTP/1.1.
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .build()
     }
 
@@ -720,6 +728,7 @@ class PlaylistSourceRepository(
     suspend fun refreshEpgOnly(report: MutableList<String>? = null) = withContext(Dispatchers.IO) {
         var anyOk = false
         val handled = mutableSetOf<String>()
+        val tried = mutableSetOf<String>()
         val sources = sourceDao.getEnabled()
         if (sources.isEmpty()) report?.add("Нет включённых источников")
         for (source in sources) {
@@ -727,19 +736,25 @@ class PlaylistSourceRepository(
                 "m3u" -> {
                     val urls = M3uPlaylistParser.parseEpgUrls(source.epgUrl)
                     if (urls.isEmpty()) report?.add("«${source.label}»: в плейлисте нет адреса программы (url-tvg)")
-                    urls.forEach { if (refreshEpgFromXmltv(it, report, handled)) anyOk = true }
+                    urls.forEach { if (tried.add(it) && refreshEpgFromXmltv(it, report, handled)) anyOk = true }
                 }
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
-                    if (host != null && user != null && pass != null &&
-                        refreshEpgFromXmltv(XtreamEpgClient.buildXmltvUrl(host, user, pass), report, handled)) anyOk = true
+                    if (host != null && user != null && pass != null) {
+                        val xu = XtreamEpgClient.buildXmltvUrl(host, user, pass)
+                        if (tried.add(xu) && refreshEpgFromXmltv(xu, report, handled)) anyOk = true
+                    }
                 }
             }
         }
-        if (!anyOk) {
-            report?.add("Свои источники программы не дали — пробую запасные")
+        val total = runCatching { channelMatchingRepository.allChannels().size }.getOrDefault(Int.MAX_VALUE)
+        if (handled.size < total) {
+            report?.add(
+                if (anyOk) "Программа есть не у всех каналов (${handled.size} из $total) — дополняю запасными источниками"
+                else "Свои источники программы не дали — пробую запасные"
+            )
             val before = handled.size
-            refreshEpgFromFallbackSources(report, handled)
+            refreshEpgFromFallbackSources(report, handled, tried, total)
             if (handled.size > before) anyOk = true
         }
         if (anyOk) epgPrefs.edit().putLong("last_ok", System.currentTimeMillis()).apply()

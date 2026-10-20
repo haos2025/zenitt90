@@ -196,11 +196,15 @@ fun EpisodesModal(seriesTitle: String, episodes: List<Movie>?, currentId: String
 
 /** channels == null — ещё грузится. Слева категории (выбор по фокусу), справа каналы. */
 @Composable
-fun ChannelsModal(channels: List<ChannelUiItem>?, currentId: String?, onPick: (ChannelUiItem) -> Unit) {
+fun ChannelsModal(
+    channels: List<ChannelUiItem>?, currentId: String?,
+    nowPlaying: suspend (String) -> Pair<String, Float>? = { null },
+    onPick: (ChannelUiItem) -> Unit
+) {
     ModalFrame(title = "Каналы", widthFraction = 0.7f) {
         when {
             channels == null -> CenterHint("Загрузка…")
-            channels.isEmpty() -> CenterHint("Нет подписанных каналов")
+            channels.isEmpty() -> CenterHint("Нет каналов")
             else -> {
                 val allLabel = "Все каналы"
                 val categories = remember(channels) {
@@ -244,11 +248,28 @@ fun ChannelsModal(channels: List<ChannelUiItem>?, currentId: String?, onPick: (C
                                     if (ch.logo != null) AsyncImage(model = ch.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
                                 }
                                 Spacer(Modifier.width(ZenithDimens.paddingSM))
-                                Text(
-                                    ch.canonicalName,
-                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else ZenithOnSurface,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
-                                )
+                                var now by remember(ch.id) { mutableStateOf<Pair<String, Float>?>(null) }
+                                LaunchedEffect(ch.id) {
+                                    while (true) {
+                                        now = nowPlaying(ch.id)
+                                        delay(60_000)
+                                    }
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        ch.canonicalName,
+                                        color = if (isCurrent) MaterialTheme.colorScheme.primary else ZenithOnSurface,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                                    )
+                                    val program = now
+                                    if (program != null) {
+                                        Text(program.first, color = ZenithOnSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(3.dp))
+                                        Box(Modifier.fillMaxWidth().height(3.dp).clip(ZenithShapeSmall).background(ZenithOnSurface.copy(alpha = 0.15f))) {
+                                            Box(Modifier.fillMaxWidth(program.second).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+                                        }
+                                    }
+                                }
                                 if (isCurrent) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             }
                         }

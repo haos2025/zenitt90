@@ -62,30 +62,16 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // первом запуске (startDestination всегда "home", см. MainActivity.kt
         // и комментарий у "home" ниже про NAVIGATION_SIDEBAR).
         composable("sources") {
-            // ТВ: источники живут на вкладке «Источники» раздела «Каналы» (план 07, этап 2) —
-            // старый маршрут остаётся как перенаправление (ссылки и настройки не ломаются).
-            // Телефон: то же самое — вкладка «Источники» в «Каналах» (план 07, этап 5).
-            RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
+            // Все источники одним списком (каналы и фильмы/сериалы). Вкладка «Источники» в «Каналах» убрана.
+            if (isTV) SourcesScreen(
+                onBackPressed = { navController.popBackStack() },
+                onAddSourceClick = { navController.navigate("add_source") }
+            )
+            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
         }
-        // План 07, этап 4: «Источники каталога (фильмы и сериалы)» из Настроек. На TV — тот же
-        // список источников без вкладок раздела «Каналы», добавление открывается с подсказкой «каталог».
         // «Настройки → Телепрограмма (EPG)»: статус загрузки, журнал, «Обновить сейчас».
         composable("epg_settings") {
             if (isTV) EpgSettingsScreen() else PhoneEpgSettingsScreen(navController)
-        }
-        composable("catalog_sources") {
-            if (isTV) SourcesScreen(
-                onBackPressed = { navController.popBackStack() },
-                onAddSourceClick = { navController.navigate("add_source?hint=catalog") },
-                title = "Источники каталога",
-                filter = SourceFilter.CATALOG
-            )
-            else PhoneSourcesScreen(
-                navController,
-                onAddSourceClick = { navController.navigate("add_source?hint=catalog") },
-                filter = SourceFilter.CATALOG,
-                title = "Источники каталога"
-            )
         }
         composable(
             route = "add_source?hint={hint}",
@@ -115,11 +101,12 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         ) { entry ->
             if (isTV) TvWithSidebar(navController) {
                 ChannelsHubScreen(
-                    initialTab = entry.arguments?.getString("tab") ?: "watch",
+                    initialTab = "watch",
                     initialEdit = entry.arguments?.getBoolean("edit") ?: false,
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
-                    onAddSourceClick = { navController.navigate("add_source?hint=channels") }
+                    onAddSourceClick = { navController.navigate("add_source") },
+                    onOpenSources = { navController.navigate("sources") }
                 )
             }
             else PhoneWithBottomBar(navController) {
@@ -127,8 +114,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
                     onOpenEpgGrid = { navController.navigate("epg_grid") },
-                    onAddSourceClick = { navController.navigate("add_source?hint=channels") },
-                    initialTab = entry.arguments?.getString("tab") ?: "watch",
+                    onAddSourceClick = { navController.navigate("add_source") },
+                    onOpenSources = { navController.navigate("sources") },
                     initialEdit = entry.arguments?.getBoolean("edit") ?: false
                 )
             }

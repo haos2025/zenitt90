@@ -59,6 +59,8 @@ class SessionGraph @Inject constructor(
     // playlistSourceRepository.refresh() и будет нужен напрямую следующим
     // подзадачам (UI слияния каналов, health-check).
     lateinit var channelMatchingRepository: ChannelMatchingRepository; private set
+    // Скрытые каналы и категории (заменили подписки на каналы) — см. HiddenChannelsStore.
+    lateinit var hiddenChannelsStore: HiddenChannelsStore; private set
     // Читающая/управляющая сторона того же слоя (список каналов для UI,
     // подписка/переименование/слияние) — см. заголовок ChannelRepository.kt.
     lateinit var channelRepository: ChannelRepository; private set
@@ -128,8 +130,9 @@ class SessionGraph @Inject constructor(
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
         channelMatchingRepository = ChannelMatchingRepository(database.channelDao(), database.channelStreamDao())
-        channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao())
-        channelHealthChecker = ChannelHealthChecker(database.channelDao(), database.channelStreamDao())
+        hiddenChannelsStore = HiddenChannelsStore(appContext)
+        channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao(), hiddenChannelsStore)
+        channelHealthChecker = ChannelHealthChecker(database.channelDao(), database.channelStreamDao(), hiddenChannelsStore)
         epgProgramRepository = EpgProgramRepository(database.epgProgramDao())
         playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient, channelMatchingRepository, epgProgramRepository)
         // Синхронно (runBlocking) и до создания playlistRepository — иначе
@@ -160,7 +163,7 @@ class SessionGraph @Inject constructor(
         localSyncRepository = LocalSyncRepository(
             appContext, database.favoritesDao(), database.watchHistoryDao(), database.playlistSourceDao(),
             playlistSourceRepository, database.pluginDao(), pluginManager, pluginRepository,
-            networkPreferences, notificationPreferences
+            networkPreferences, notificationPreferences, hiddenChannelsStore
         )
         appScope.launch { pluginManager.loadAllEnabled() }
         getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, database.channelDao(), database.channelStreamDao(), database.playlistSourceDao())

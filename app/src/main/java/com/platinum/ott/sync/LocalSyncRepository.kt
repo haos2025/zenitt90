@@ -20,6 +20,7 @@ import com.platinum.ott.data.local.entity.FavoriteEntity
 import com.platinum.ott.data.local.entity.PlaylistSourceEntity
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import com.platinum.ott.data.remote.dto.FavoriteDto
+import com.platinum.ott.data.repository.HiddenChannelsStore
 import com.platinum.ott.data.remote.dto.LocalSyncPayload
 import com.platinum.ott.data.remote.dto.LocalSyncPluginDto
 import com.platinum.ott.data.remote.dto.LocalSyncRequestDto
@@ -65,7 +66,8 @@ class LocalSyncRepository(
     private val pluginManager: PluginManager,
     private val pluginRepository: PluginRepository,
     private val networkPreferences: NetworkPreferences,
-    private val notificationPreferences: NotificationPreferences
+    private val notificationPreferences: NotificationPreferences,
+    private val hiddenChannelsStore: HiddenChannelsStore
 ) {
     private val gson = Gson()
     // ФИКС (аудит): раньше playlistSourceRepository.refreshAll() ждали
@@ -208,7 +210,8 @@ class LocalSyncRepository(
         )
         LocalSyncPayload(
             favorites = favorites, watchHistory = history, settings = settings,
-            plugins = plugins, sources = sources, deviceTimestamp = System.currentTimeMillis()
+            plugins = plugins, sources = sources, hiddenItems = hiddenChannelsStore.snapshot(),
+            deviceTimestamp = System.currentTimeMillis()
         )
     }
 
@@ -235,6 +238,9 @@ class LocalSyncRepository(
                 )
             )
         }
+
+        // Скрытые каналы/категории — слияние по времени изменения (см. HiddenChannelsStore).
+        hiddenChannelsStore.merge(payload.hiddenItems)
 
         // История — contentId уже первичный ключ (WatchHistoryEntity),
         // upsertAll с REPLACE безопасен напрямую.

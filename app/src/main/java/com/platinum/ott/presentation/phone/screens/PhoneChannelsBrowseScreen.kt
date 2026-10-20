@@ -40,12 +40,12 @@ import com.platinum.ott.presentation.screens.channels.ChannelsViewModel
 import com.platinum.ott.presentation.screens.channels.DeleteChannelConfirmDialog
 import com.platinum.ott.presentation.screens.channels.MergeChannelDialog
 import com.platinum.ott.presentation.screens.channels.RenameChannelDialog
-import com.platinum.ott.presentation.screens.sources.SourceFilter
 
 private const val ALL_CATEGORY = "__all__"
 private const val FAV_CATEGORY = "__fav__"
 private const val PREFS = "phone_channels"
 private const val KEY_FAVS = "favorite_ids"
+private const val KEY_CATEGORY = "last_category"
 
 /**
  * Телефон: список каналов «как в TiviMate» — строка = номер, логотип, название и
@@ -60,7 +60,7 @@ fun PhoneChannelsBrowseScreen(
     onPlayChannel: (String) -> Unit,
     onOpenEpgGrid: () -> Unit,
     onAddSourceClick: () -> Unit,
-    initialTab: String = "watch",
+    onOpenSources: () -> Unit,
     initialEdit: Boolean = false,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
@@ -76,26 +76,37 @@ fun PhoneChannelsBrowseScreen(
         prefs.edit().putStringSet(KEY_FAVS, favorites).apply()
     }
 
-    val subscribedChannels = remember(uiState) {
+    val allChannels = remember(uiState) {
         (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
     }
+    // Режим «Править» (вместо отдельного «Управления»). Вкладка «Источники» убрана (21.10.2026) — источники в Настройках.
+    var editMode by rememberSaveable { mutableStateOf(initialEdit) }
+    // Подписок нет. Обычный режим — только видимые каналы; «Править» — все, скрытые приглушены.
+    val subscribedChannels = remember(allChannels, editMode) { if (editMode) allChannels else allChannels.filter { it.isVisible } }
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf(ALL_CATEGORY) }
-
-    // План 07, этап 5: вкладки «Смотреть» / «Источники» и режим «Править» (вместо отдельного «Управления»).
-    var tab by rememberSaveable { mutableStateOf(if (initialTab == "sources") 1 else 0) }
-    var editMode by rememberSaveable { mutableStateOf(initialEdit && initialTab != "sources") }
+    // Выбранная категория запоминается (в том числе «Избранные») — после просмотра канала экран возвращается в неё.
+    var selectedCategoryRaw by remember { mutableStateOf(prefs.getString(KEY_CATEGORY, ALL_CATEGORY) ?: ALL_CATEGORY) }
+    LaunchedEffect(selectedCategoryRaw) { prefs.edit().putString(KEY_CATEGORY, selectedCategoryRaw).apply() }
     val isChecking by viewModel.isChecking.collectAsStateWithLifecycle()
-    val allChannels = (uiState as? ChannelsUiState.Success)?.channels.orEmpty()
+    val hiddenCategoryNames by viewModel.hiddenCategories.collectAsStateWithLifecycle()
     var renameTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     var mergeTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     var deleteTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     BackHandler(enabled = editMode) { editMode = false }
 
     val categories = remember(subscribedChannels) {
-        subscribedChannels.groupBy { it.category?.ifBlank { null } ?: "Без категории" }
-            .mapValues { it.value.size }.toList().sortedByDescending { it.second }
+        subscribedChannels.groupBy { it.category?.trim()?.ifBlank { null } ?: "Без категории" }
+            .map { (name, list) -> Triple(name, list.size, list.all { it.categoryHidden }) }
+            .sortedByDescending { it.second }
+    }
+    // Запомненная категория могла исчезнуть (источник удалён, категория скрыта) — тогда «Все»; запись не затираем.
+    // «Избранные» в режиме «Править» не показываются — там тоже «Все».
+    val selectedCategory = when {
+        selectedCategoryRaw == ALL_CATEGORY -> ALL_CATEGORY
+        selectedCategoryRaw == FAV_CATEGORY -> if (editMode) ALL_CATEGORY else FAV_CATEGORY
+        categories.any { it.first == selectedCategoryRaw } -> selectedCategoryRaw
+        else -> ALL_CATEGORY
     }
     val visibleChannels = remember(subscribedChannels, selectedCategory, searchQuery, favorites) {
         subscribedChannels
@@ -103,7 +114,7 @@ fun PhoneChannelsBrowseScreen(
                 when (selectedCategory) {
                     ALL_CATEGORY -> true
                     FAV_CATEGORY -> it.id in favorites
-                    else -> (it.category?.ifBlank { null } ?: "Без категории") == selectedCategory
+                    else -> (it.category?.trim()?.ifBlank { null } ?: "Без категории") == selectedCategory
                 }
             }
             .filter { searchQuery.isBlank() || it.canonicalName.contains(searchQuery, ignoreCase = true) }
@@ -116,32 +127,26 @@ fun PhoneChannelsBrowseScreen(
                     title = { Text("Каналы") },
                     navigationIcon = { IconButton(onClick = onBackPressed) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") } },
                     actions = {
-                        if (tab == 0 && !editMode) {
+                        if (!editMode) {
                             IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) { Icon(Icons.Filled.Search, contentDescription = "Поиск") }
                             IconButton(
                                 enabled = !epgBusy,
                                 onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
                             ) { Icon(Icons.Filled.Refresh, contentDescription = "Обновить программу") }
                         }
-                        if (tab == 0 && editMode) {
+                        if (editMode) {
                             IconButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
                                 if (isChecking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                 else Icon(Icons.Filled.Refresh, contentDescription = "Проверить все каналы")
                             }
                         }
-                        if (tab == 0) {
-                            IconButton(onClick = { editMode = !editMode; searchActive = false; searchQuery = "" }) {
-                                if (editMode) Icon(Icons.Filled.Check, contentDescription = "Готово")
-                                else Icon(Icons.Filled.Edit, contentDescription = "Править")
-                            }
+                        IconButton(onClick = { editMode = !editMode; searchActive = false; searchQuery = "" }) {
+                            if (editMode) Icon(Icons.Filled.Check, contentDescription = "Готово")
+                            else Icon(Icons.Filled.Edit, contentDescription = "Править")
                         }
                     }
                 )
-                TabRow(selectedTabIndex = tab) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Смотреть") })
-                    Tab(selected = tab == 1, onClick = { tab = 1; editMode = false }, text = { Text("Источники") })
-                }
-                if (tab == 0 && !editMode && searchActive) {
+                if (!editMode && searchActive) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -150,15 +155,15 @@ fun PhoneChannelsBrowseScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS)
                     )
                 }
-                if (tab == 0 && !editMode && subscribedChannels.isNotEmpty()) {
+                if (subscribedChannels.isNotEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS),
                         horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
                     ) {
-                        item("all") { CategoryChip("Все", selectedCategory == ALL_CATEGORY) { selectedCategory = ALL_CATEGORY } }
-                        item("fav") { CategoryChip("★ Избранные", selectedCategory == FAV_CATEGORY) { selectedCategory = FAV_CATEGORY } }
-                        items(categories, key = { "c_" + it.first }) { (name, _) ->
-                            CategoryChip(name, selectedCategory == name) { selectedCategory = name }
+                        item("all") { CategoryChip("Все", selectedCategory == ALL_CATEGORY) { selectedCategoryRaw = ALL_CATEGORY } }
+                        if (!editMode) item("fav") { CategoryChip("★ Избранные", selectedCategory == FAV_CATEGORY) { selectedCategoryRaw = FAV_CATEGORY } }
+                        items(categories, key = { "c_" + it.first }) { (name, _, hidden) ->
+                            CategoryChip(if (editMode && hidden) "$name (скрыта)" else name, selectedCategory == name) { selectedCategoryRaw = name }
                         }
                     }
                 }
@@ -166,29 +171,63 @@ fun PhoneChannelsBrowseScreen(
         }
     ) { padding ->
         when {
-            tab == 1 -> PhoneSourcesList(
-                filter = SourceFilter.CHANNELS,
-                onAddSourceClick = onAddSourceClick,
-                modifier = Modifier.padding(padding)
-            )
-            editMode -> if (allChannels.isEmpty()) {
-                Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
-                    Text(
-                        "Пока нет каналов — добавьте плейлист каналов или Xtream-панель на вкладке «Источники»",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(ZenithDimens.paddingXL)
-                    )
-                }
-            } else {
+            editMode -> {
+                val selectedInfo = categories.firstOrNull { it.first == selectedCategory }
                 LazyColumn(
                     modifier = Modifier.padding(padding).fillMaxSize(),
                     contentPadding = PaddingValues(ZenithDimens.paddingM),
                     verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
                 ) {
-                    items(allChannels.sortedBy { it.channelNumber }, key = { it.id }) { item ->
+                    item("sources") {
+                        OutlinedButton(onClick = onOpenSources, modifier = Modifier.fillMaxWidth()) { Text("Источники") }
+                    }
+                    // Скрыть/показать выбранную категорию целиком (новые каналы в ней тоже скрыты).
+                    if (selectedInfo != null) {
+                        item("category_action") {
+                            val hidden = selectedInfo.third
+                            Card(Modifier.fillMaxWidth()) {
+                                Row(Modifier.padding(ZenithDimens.paddingM), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Категория «${selectedInfo.first}»", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            if (hidden) "скрыта (каналов: ${selectedInfo.second})" else "каналов: ${selectedInfo.second}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        viewModel.setCategoryHidden(if (selectedInfo.first == "Без категории") null else selectedInfo.first, !hidden)
+                                    }) { Text(if (hidden) "Показать" else "Скрыть категорию") }
+                                }
+                            }
+                        }
+                    }
+                    // Список скрытых категорий — чтобы вернуть их, даже если в них сейчас нет каналов.
+                    if (hiddenCategoryNames.isNotEmpty()) {
+                        item("hidden_title") {
+                            Text("Скрытые категории", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = ZenithDimens.paddingS))
+                        }
+                        items(hiddenCategoryNames, key = { "hc_$it" }) { name ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = { viewModel.setCategoryHidden(if (name == "Без категории") null else name, false) }) { Text("Показать") }
+                            }
+                        }
+                    }
+                    if (visibleChannels.isEmpty()) {
+                        item("empty") {
+                            Text(
+                                if (allChannels.isEmpty()) "Пока нет каналов — добавьте плейлист каналов или Xtream-панель в «Источники»" else "Ничего не найдено",
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.fillMaxWidth().padding(ZenithDimens.paddingXL)
+                            )
+                        }
+                    }
+                    items(visibleChannels, key = { it.id }) { item ->
                         PhoneChannelEditCard(
                             item = item,
+                            onToggleHidden = { viewModel.setHidden(item.id, !item.isHidden) },
                             onRename = { renameTarget = item },
                             onMerge = { mergeTarget = item },
                             onDelete = { deleteTarget = item },
@@ -198,12 +237,15 @@ fun PhoneChannelsBrowseScreen(
                 }
             }
             subscribedChannels.isEmpty() -> Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
-                Text(
-                    "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»",
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(ZenithDimens.paddingXL)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                    Text(
+                        if (allChannels.isEmpty()) "Каналов пока нет — добавьте плейлист или панель" else "Все каналы скрыты — нажмите карандаш, чтобы показать",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(horizontal = ZenithDimens.paddingXL)
+                    )
+                    if (allChannels.isEmpty()) Button(onClick = onAddSourceClick) { Text("Добавить источник") }
+                }
             }
             visibleChannels.isEmpty() -> Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
                 Text(

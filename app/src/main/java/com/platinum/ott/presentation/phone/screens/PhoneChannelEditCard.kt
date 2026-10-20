@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -29,6 +30,7 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 @Composable
 internal fun PhoneChannelEditCard(
     item: ChannelUiItem,
+    onToggleHidden: () -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
@@ -36,7 +38,8 @@ internal fun PhoneChannelEditCard(
 ) {
     var showMenu by remember(item.id) { mutableStateOf(false) }
     Surface(
-        shape = ZenithShapeMedium, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()
+        shape = ZenithShapeMedium, tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth().alpha(if (item.isVisible) 1f else 0.45f)
     ) {
         Row(Modifier.padding(ZenithDimens.paddingM).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -80,6 +83,7 @@ internal fun PhoneChannelEditCard(
                         append(if (item.streamCount == 1) "1 источник" else "${item.streamCount} источника(ов)")
                         item.category?.let { append(" • $it") }
                         if (item.isMergeCandidate) append(" • не сопоставлен")
+                        if (item.isHidden) append(" • скрыт") else if (item.categoryHidden) append(" • категория скрыта")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (item.isMergeCandidate) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -89,6 +93,7 @@ internal fun PhoneChannelEditCard(
             Box {
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Действия") }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(text = { Text(if (item.isHidden) "Показывать канал" else "Скрыть канал") }, onClick = { showMenu = false; onToggleHidden() })
                     DropdownMenuItem(text = { Text("Проверить сейчас") }, onClick = { showMenu = false; onCheckNow() })
                     DropdownMenuItem(text = { Text("Изменить название/регион") }, onClick = { showMenu = false; onRename() })
                     DropdownMenuItem(text = { Text("Слить с другим каналом") }, onClick = { showMenu = false; onMerge() })

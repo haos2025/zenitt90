@@ -52,6 +52,7 @@ private const val ALL_CATEGORY = "__all__"
 private const val FAV_CATEGORY = "__fav__"
 private const val PREFS = "tv_channels"
 private const val KEY_FAVS = "favorite_ids"
+private const val KEY_CATEGORY = "last_category"
 
 /**
  * ТВ: три колонки «как в TiviMate» — слева категории («Все», «★ Избранные», группы), в центре список
@@ -69,10 +70,9 @@ fun ChannelsBrowseScreen(
     // OK по каналу — меню действий (переименовать, слить, удалить, проверить). Подписок на каналы нет.
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
-    // Вкладки «Смотреть/Источники» рисует ChannelsHubScreen и подставляет в шапку.
-    tabs: @Composable () -> Unit,
-    // false — не забирать фокус на первый канал (после переключения вкладки фокус остаётся на вкладке).
-    autoFocusContent: Boolean = true,
+    // Пустой экран («Каналов пока нет») ведёт к добавлению источника; в «Править» — быстрый переход к списку источников.
+    onAddSourceClick: () -> Unit,
+    onOpenSources: () -> Unit,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,8 +90,9 @@ fun ChannelsBrowseScreen(
     val allChannels = remember(uiState) {
         (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
     }
-    // Подписок на каналы больше нет (20.10.2026): показываются все каналы источников.
-    val subscribedChannels = allChannels
+    // Подписок на каналы нет. В обычном режиме — только видимые (не скрытые сами и не в скрытой категории);
+    // в «Править» — все, скрытые приглушены и подписаны «скрыт».
+    val subscribedChannels = remember(allChannels, editMode) { if (editMode) allChannels else allChannels.filter { it.isVisible } }
     val isChecking by viewModel.isChecking.collectAsStateWithLifecycle()
     var actionsTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
     var renameTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
@@ -100,17 +101,26 @@ fun ChannelsBrowseScreen(
     // «Назад» в режиме «Править» сначала выходит из режима.
     BackHandler(enabled = editMode) { onEditModeChange(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(ALL_CATEGORY) }
+    // Выбранная категория запоминается (в том числе «Избранные») — после просмотра канала экран возвращается в неё.
+    var selectedCategoryRaw by remember { mutableStateOf(prefs.getString(KEY_CATEGORY, ALL_CATEGORY) ?: ALL_CATEGORY) }
+    LaunchedEffect(selectedCategoryRaw) { prefs.edit().putString(KEY_CATEGORY, selectedCategoryRaw).apply() }
+    var categoryTarget by remember { mutableStateOf<String?>(null) }
     val firstRowRequester = remember { FocusRequester() }
     var initialFocusDone by remember { mutableStateOf(false) }
     var focusedId by remember { mutableStateOf<String?>(null) }
 
-    // «Избранные» есть только в обычном режиме — при входе в «Править» сбрасываем на «Все каналы».
-    LaunchedEffect(editMode) { if (editMode && selectedCategory == FAV_CATEGORY) selectedCategory = ALL_CATEGORY }
-
     val categoryCounts = remember(subscribedChannels) {
-        subscribedChannels.groupBy { it.category?.ifBlank { null } ?: "Без категории" }
-            .mapValues { it.value.size }.toList().sortedByDescending { it.second }
+        subscribedChannels.groupBy { it.category?.trim()?.ifBlank { null } ?: "Без категории" }
+            .map { (name, list) -> Triple(name, list.size, list.all { it.categoryHidden }) }
+            .sortedByDescending { it.second }
+    }
+    // Запомненная категория могла исчезнуть (источник удалён, категория скрыта) — тогда «Все каналы».
+    // Саму запись не затираем: категория может вернуться.
+    val selectedCategory = when {
+        selectedCategoryRaw == ALL_CATEGORY -> ALL_CATEGORY
+        selectedCategoryRaw == FAV_CATEGORY -> FAV_CATEGORY
+        categoryCounts.any { it.first == selectedCategoryRaw } -> selectedCategoryRaw
+        else -> ALL_CATEGORY
     }
     val visibleChannels = remember(subscribedChannels, selectedCategory, searchQuery, favorites) {
         subscribedChannels
@@ -118,7 +128,7 @@ fun ChannelsBrowseScreen(
                 when (selectedCategory) {
                     ALL_CATEGORY -> true
                     FAV_CATEGORY -> it.id in favorites
-                    else -> (it.category?.ifBlank { null } ?: "Без категории") == selectedCategory
+                    else -> (it.category?.trim()?.ifBlank { null } ?: "Без категории") == selectedCategory
                 }
             }
             .filter { searchQuery.isBlank() || it.canonicalName.contains(searchQuery, ignoreCase = true) }
@@ -126,7 +136,7 @@ fun ChannelsBrowseScreen(
 
     val hasVisible = visibleChannels.isNotEmpty()
     LaunchedEffect(hasVisible) {
-        if (hasVisible && !initialFocusDone && autoFocusContent) {
+        if (hasVisible && !initialFocusDone) {
             withFrameNanos { }
             firstRowRequester.safeRequestFocus()
             initialFocusDone = true
@@ -140,9 +150,7 @@ fun ChannelsBrowseScreen(
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXL)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Заголовок «Каналы» не повторяем: раздел назван в боковой панели, в шапке — вкладки
-            // (иначе шапка не помещается на ТВ с малой шириной в dp).
-            tabs()
+            Text("Каналы", style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface)
             Spacer(Modifier.weight(1f))
             ChannelSearchField(query = searchQuery, onChange = { searchQuery = it }, modifier = Modifier.width(200.dp))
             Spacer(Modifier.width(ZenithDimens.paddingS))
@@ -152,6 +160,8 @@ fun ChannelsBrowseScreen(
                     enabled = !isChecking,
                     onClick = { viewModel.checkAll() }
                 ) { Text(if (isChecking) "Проверка…" else "Проверить все") }
+                Spacer(Modifier.width(ZenithDimens.paddingS))
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onOpenSources) { Text("Источники") }
             } else {
                 OutlinedButton(
                     scale = OutlinedButtonDefaults.scale(focusedScale = 1f),
@@ -168,19 +178,29 @@ fun ChannelsBrowseScreen(
 
         if (subscribedChannels.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    "Каналов пока нет — добавьте плейлист или панель\nна вкладке «Источники»",
-                    color = ZenithOnSurface.copy(alpha = 0.6f)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                    Text(
+                        if (allChannels.isEmpty()) "Каналов пока нет — добавьте плейлист или панель" else "Все каналы скрыты — нажмите «Править», чтобы показать",
+                        color = ZenithOnSurface.copy(alpha = 0.6f)
+                    )
+                    if (allChannels.isEmpty()) {
+                        OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onAddSourceClick) { Text("Добавить источник") }
+                    }
+                }
             }
         } else {
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
                 // 1. Категории.
                 LazyColumn(modifier = Modifier.width(200.dp), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)) {
-                    item("all") { CategoryRow("Все каналы", subscribedChannels.size, selectedCategory == ALL_CATEGORY) { selectedCategory = ALL_CATEGORY } }
-                    item("fav") { CategoryRow("★ Избранные", favorites.count { id -> subscribedChannels.any { it.id == id } }, selectedCategory == FAV_CATEGORY) { selectedCategory = FAV_CATEGORY } }
-                    lazyColumnItems(categoryCounts, key = { "c_" + it.first }) { (category, count) ->
-                        CategoryRow(category, count, selectedCategory == category) { selectedCategory = category }
+                    item("all") { CategoryRow("Все каналы", subscribedChannels.size, selectedCategory == ALL_CATEGORY) { selectedCategoryRaw = ALL_CATEGORY } }
+                    item("fav") { CategoryRow("★ Избранные", favorites.count { id -> subscribedChannels.any { it.id == id } }, selectedCategory == FAV_CATEGORY) { selectedCategoryRaw = FAV_CATEGORY } }
+                    lazyColumnItems(categoryCounts, key = { "c_" + it.first }) { (category, count, hidden) ->
+                        // В «Править» OK по категории открывает меню «Скрыть/Показать категорию»; фокус по-прежнему выбирает её.
+                        CategoryRow(
+                            title = category, count = count, selected = selectedCategory == category,
+                            hiddenMark = editMode && hidden,
+                            onClick = if (editMode) { { categoryTarget = category } } else null
+                        ) { selectedCategoryRaw = category }
                     }
                 }
                 // 2. Список каналов.
@@ -227,11 +247,25 @@ fun ChannelsBrowseScreen(
     actionsTarget?.let { target ->
         ChannelActionsDialog(
             channel = target,
+            onToggleHidden = { viewModel.setHidden(target.id, !target.isHidden); actionsTarget = null },
             onCheck = { viewModel.checkOne(target.id); actionsTarget = null },
             onRename = { renameTarget = target; actionsTarget = null },
             onMerge = { mergeTarget = target; actionsTarget = null },
             onDelete = { deleteTarget = target; actionsTarget = null },
             onDismiss = { actionsTarget = null }
+        )
+    }
+    categoryTarget?.let { name ->
+        val info = categoryCounts.firstOrNull { it.first == name }
+        CategoryActionsDialog(
+            category = name,
+            isHidden = info?.third == true,
+            channelCount = info?.second ?: 0,
+            onToggleHidden = {
+                viewModel.setCategoryHidden(if (name == "Без категории") null else name, info?.third != true)
+                categoryTarget = null
+            },
+            onDismiss = { categoryTarget = null }
         )
     }
     renameTarget?.let { target ->
@@ -291,8 +325,8 @@ private fun ChannelTileTv(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
-        // В режиме «Править» неподписанные каналы приглушены.
-        Column(Modifier.padding(ZenithDimens.paddingS)) {
+        // В режиме «Править» скрытые каналы приглушены.
+        Column(Modifier.padding(ZenithDimens.paddingS).alpha(if (editMode && !item.isVisible) 0.45f else 1f)) {
             // Верх плитки: логотип на светлой подложке (тёмные логотипы читаются), номер и звезда по углам.
             Box(
                 Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
@@ -301,7 +335,8 @@ private fun ChannelTileTv(
                 if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
                 Text("${item.channelNumber}", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                if (editMode && !item.isVisible) Text("скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                else if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Spacer(Modifier.height(ZenithDimens.paddingXS))
             Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -367,7 +402,11 @@ private fun ProgressLine(fraction: Float) {
 
 /** Категория выбирается фокусом (быстрый просмотр без лишнего OK). */
 @Composable
-private fun CategoryRow(title: String, count: Int, selected: Boolean, onSelect: () -> Unit) {
+private fun CategoryRow(
+    title: String, count: Int, selected: Boolean,
+    hiddenMark: Boolean = false, onClick: (() -> Unit)? = null,
+    onSelect: () -> Unit
+) {
     var isFocused by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
@@ -381,11 +420,11 @@ private fun CategoryRow(title: String, count: Int, selected: Boolean, onSelect: 
                 }
             )
             .onFocusChanged { isFocused = it.isFocused; if (it.isFocused) onSelect() }
-            .clickable(onClick = onSelect)
+            .clickable(onClick = onClick ?: onSelect)
             .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium, color = if (selected) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(if (hiddenMark) "$title (скрыта)" else title, style = MaterialTheme.typography.bodyMedium, color = if (selected) ZenithOnSurface else ZenithOnSurface.copy(alpha = if (hiddenMark) 0.4f else 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Text("$count", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.5f))
     }
 }

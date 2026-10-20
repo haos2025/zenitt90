@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -213,9 +215,13 @@ fun PhoneEpgGridScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = ZenithOnSurfaceVariant
                 )
+                // Длинное описание прокручивается, кнопка ниже всегда остаётся на виду.
                 slot.program.description?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        it, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                    )
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 when {

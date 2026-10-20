@@ -120,15 +120,6 @@ fun AddSourceScreen(
         ) {
             Text("Добавить источник", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
 
-            val hintText = when (entryHint) {
-                "channels" -> "Обычно здесь плейлисты каналов"
-                "catalog" -> "Плейлисты фильмов и сериалов"
-                else -> null
-            }
-            if (hintText != null) {
-                Text(hintText, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface.copy(alpha = 0.6f))
-            }
-
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 TabButton("M3U Плейлист", sourceType == SourceType.M3U) { sourceType = SourceType.M3U }
                 TabButton("Xtream Codes", sourceType == SourceType.XTREAM) { sourceType = SourceType.XTREAM }

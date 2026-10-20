@@ -91,9 +91,9 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // TV, см. SettingsViewModel.sourcesCount.
         SectionHeader("Источники", Icons.Outlined.Source)
         NavCard(
-            title = "Источники каталога (фильмы и сериалы)",
+            title = "Все источники (каналы, фильмы, сериалы)",
             status = if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
-            onClick = { navController.navigate("catalog_sources") }
+            onClick = { navController.navigate("sources") }
         )
         // План 07, этап 5: источники каналов и управление каналами живут в разделе «Каналы»
         // (вкладка «Источники», режим «Править») — отдельной карточки «Каналы» здесь больше нет.

@@ -67,12 +67,24 @@ data class LocalSyncSourceDto(
     val groupOverrides: String? = null
 )
 
+// Скрытый/показанный канал или категория (21.10.2026). kind = "channel" | "category"; key — id канала или
+// категория в нижнем регистре; побеждает запись с более поздним updatedAt (показанные хранятся как «надгробия»).
+data class HiddenItemDto(
+    val kind: String,
+    val key: String,
+    val name: String,
+    val hidden: Boolean,
+    val updatedAt: Long
+)
+
 data class LocalSyncPayload(
     val favorites: List<FavoriteDto> = emptyList(),
     val watchHistory: List<WatchHistoryDto> = emptyList(),
     val settings: LocalSyncSettingsDto? = null,
     val plugins: List<LocalSyncPluginDto> = emptyList(),
     val sources: List<LocalSyncSourceDto> = emptyList(),
+    // Nullable: старые устройства поля не шлют — тогда скрытые каналы просто не трогаем.
+    val hiddenItems: List<HiddenItemDto>? = null,
     val deviceTimestamp: Long = 0
 )
 

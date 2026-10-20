@@ -80,15 +80,6 @@ fun PhoneAddSourceScreen(
         Column(
             Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM)
         ) {
-            val hintText = when (entryHint) {
-                "channels" -> "Обычно здесь плейлисты каналов"
-                "catalog" -> "Плейлисты фильмов и сериалов"
-                else -> null
-            }
-            if (hintText != null) {
-                Text(hintText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                Spacer(Modifier.height(ZenithDimens.paddingS))
-            }
             TabRow(selectedTabIndex = sourceType.ordinal) {
                 Tab(sourceType == SourceTypeTab.M3U, onClick = { sourceType = SourceTypeTab.M3U }) { Text("M3U", modifier = Modifier.padding(ZenithDimens.paddingS)) }
                 Tab(sourceType == SourceTypeTab.XTREAM, onClick = { sourceType = SourceTypeTab.XTREAM }) { Text("Xtream", modifier = Modifier.padding(ZenithDimens.paddingS)) }

@@ -34,6 +34,10 @@ class ChannelsViewModel @Inject constructor(
     private val _isChecking = MutableStateFlow(false)
     val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
 
+    // Названия скрытых категорий — для списка «Скрытые категории» в режиме «Править».
+    private val _hiddenCategories = MutableStateFlow<List<String>>(emptyList())
+    val hiddenCategories: StateFlow<List<String>> = _hiddenCategories.asStateFlow()
+
     private val _epgBusy = MutableStateFlow(false)
     val epgBusy: kotlinx.coroutines.flow.StateFlow<Boolean> = _epgBusy
     // Увеличивается после обновления программы — экраны перечитывают «сейчас в эфире».
@@ -83,6 +87,7 @@ class ChannelsViewModel @Inject constructor(
                 android.util.Log.e("ChannelsViewModel", "load failed", e)
                 emptyList()
             }
+            _hiddenCategories.value = repository.hiddenCategoryNames()
             _uiState.value = ChannelsUiState.Success(channels)
         }
     }
@@ -121,8 +126,14 @@ class ChannelsViewModel @Inject constructor(
         null
     }
 
-    fun setSubscribed(channelId: String, isSubscribed: Boolean) {
-        viewModelScope.launch { repository.setSubscribed(channelId, isSubscribed); load() }
+    /** Скрыть/показать канал. */
+    fun setHidden(channelId: String, hidden: Boolean) {
+        viewModelScope.launch { repository.setHidden(channelId, hidden); load() }
+    }
+
+    /** Скрыть/показать категорию целиком (новые каналы в ней тоже скрыты). */
+    fun setCategoryHidden(category: String?, hidden: Boolean) {
+        viewModelScope.launch { repository.setCategoryHidden(category, hidden); load() }
     }
 
     fun rename(channelId: String, name: String, regionHint: String?) {

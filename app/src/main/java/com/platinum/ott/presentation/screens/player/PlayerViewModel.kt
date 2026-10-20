@@ -698,6 +698,19 @@ class PlayerViewModel @Inject constructor(
     suspend fun getCurrentChannel(): com.platinum.ott.data.repository.ChannelUiItem? =
         if (currentMovieId.startsWith("ch_")) runCatching { channelRepository.getById(currentMovieId) }.getOrNull() else null
 
+    /** Текущая передача канала и доля прошедшего времени (для списка каналов в плеере). */
+    suspend fun nowPlaying(channelId: String): Pair<String, Float>? = try {
+        val now = System.currentTimeMillis()
+        epgProgramRepository.getCurrentForChannel(channelId, now)?.let { p ->
+            val total = (p.endTimeMillis - p.startTimeMillis).coerceAtLeast(1L)
+            p.title to ((now - p.startTimeMillis).toFloat() / total).coerceIn(0f, 1f)
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
     suspend fun getChannelProgram(channelId: String, fromMs: Long, toMs: Long): List<com.platinum.ott.data.local.entity.EpgProgramEntity> =
         runCatching { epgProgramRepository.getForChannelInRange(channelId, fromMs, toMs) }.getOrDefault(emptyList())
 

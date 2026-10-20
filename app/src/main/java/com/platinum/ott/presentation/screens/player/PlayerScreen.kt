@@ -507,6 +507,7 @@ fun PlayerScreen(
                     )
                     PlayerModal.CHANNELS -> ChannelsModal(
                         channels = channelsList, currentId = viewModel.currentId,
+                        nowPlaying = { id -> viewModel.nowPlaying(id) },
                         onPick = { c -> modal = PlayerModal.NONE; selectedAction = null; viewModel.switchToChannel(c) }
                     )
                     PlayerModal.PROGRAM -> ProgramModal(

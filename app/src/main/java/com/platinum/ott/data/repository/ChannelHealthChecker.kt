@@ -41,7 +41,8 @@ private const val MAX_CONCURRENT_CHECKS = 4
  */
 class ChannelHealthChecker(
     private val channelDao: ChannelDao,
-    private val channelStreamDao: ChannelStreamDao
+    private val channelStreamDao: ChannelStreamDao,
+    private val hiddenStore: HiddenChannelsStore
 ) {
     // retryOnConnectionFailure(true) — тот же аргумент, что уже применён
     // для mediaHttpClient в PlayerViewModel.kt (архивная нестабильность
@@ -61,7 +62,7 @@ class ChannelHealthChecker(
      * коммит ChannelsViewModel).
      */
     suspend fun checkSubscribedChannels() = withContext(Dispatchers.IO) {
-        val subscribed = channelDao.getSubscribed()
+        val subscribed = channelDao.getSubscribed().filter { hiddenStore.isVisible(it.id, it.category) }
         val due = subscribed
             .flatMap { channelStreamDao.getByChannelId(it.id) }
             .filter { isDue(it) }

@@ -18,7 +18,10 @@ data class ChannelUiItem(
     val logo: String?,
     val category: String?,
     val regionHint: String?,
-    val isSubscribed: Boolean,
+    // Скрыт ли канал сам по себе / скрыта ли его категория (см. HiddenChannelsStore). Видимый канал —
+    // тот, у которого не скрыто ни то, ни другое (isVisible).
+    val isHidden: Boolean,
+    val categoryHidden: Boolean,
     // Есть tvg-id → канал уже надёжно сопоставлен между источниками
     // автоматически, слияние ему не нужно. Нет tvg-id → кандидат на ручное
     // слияние (см. PROMPT_IPTV_FOUNDATION.md, "спрашивать человека, не гадать").
@@ -41,19 +44,26 @@ data class ChannelUiItem(
     // PROMPT_EPG.md, подзадача 6 — ChannelEntity.sortOrder, тот же номер,
     // что и в списке "Каналы" (см. комментарий у поля в ChannelEntity.kt).
     val channelNumber: Int
-)
+) {
+    val isVisible: Boolean get() = !isHidden && !categoryHidden
+}
 
 class ChannelRepository(
     private val channelDao: ChannelDao,
-    private val channelStreamDao: ChannelStreamDao
+    private val channelStreamDao: ChannelStreamDao,
+    private val hiddenStore: HiddenChannelsStore
 ) {
+    // Все каналы, которые не скрыты (ни сами, ни категорией). Подписок на каналы нет, поэтому в базе
+    // isSubscribed у всех = 1 — «видимость» целиком определяется HiddenChannelsStore.
+    private suspend fun visibleEntities() = channelDao.getSubscribed().filter { hiddenStore.isVisible(it.id, it.category) }
+
     suspend fun getAll(): List<ChannelUiItem> = withContext(Dispatchers.IO) { toUiItems(channelDao.getAll()) }
 
     // PROMPT_EPG.md, подзадача 4 (сетка программ) — только подписанные,
     // не весь каталог: сетка по определению показывает "мои каналы", как
     // и сам список каналов в разделе Настройки (см. комментарий у
     // ChannelsViewModel.load() про сортировку "подписанные — сначала").
-    suspend fun getSubscribed(): List<ChannelUiItem> = withContext(Dispatchers.IO) { toUiItems(channelDao.getSubscribed()) }
+    suspend fun getSubscribed(): List<ChannelUiItem> = withContext(Dispatchers.IO) { toUiItems(visibleEntities()) }
 
     // Общая часть getAll()/getSubscribed() — раньше (до этой подзадачи)
     // была только внутри getAll(), дублировать её ради getSubscribed()
@@ -76,7 +86,8 @@ class ChannelRepository(
                 logo = channel.logo,
                 category = channel.category,
                 regionHint = channel.regionHint,
-                isSubscribed = channel.isSubscribed,
+                isHidden = hiddenStore.isChannelHidden(channel.id),
+                categoryHidden = hiddenStore.isCategoryHidden(channel.category),
                 isMergeCandidate = channel.tvgId == null,
                 streamCount = streams.size,
                 healthStatus = when {
@@ -96,7 +107,7 @@ class ChannelRepository(
     // чтобы healthStatus/streamCount/catchupDaysAvailable считались тем же
     // кодом, что и везде, не отдельной (и рискующей разойтись) копией.
     suspend fun getSubscribedByNumber(number: Int): ChannelUiItem? = withContext(Dispatchers.IO) {
-        channelDao.getSubscribedByNumber(number)?.let { toUiItems(listOf(it)).firstOrNull() }
+        visibleEntities().firstOrNull { it.sortOrder == number }?.let { toUiItems(listOf(it)).firstOrNull() }
     }
 
     // НОВОЕ (заппинг стрелками вверх/вниз во время просмотра): следующий/
@@ -105,7 +116,7 @@ class ChannelRepository(
     // getSubscribedByNumber() выше — переиспользует toUiItems(), не строит
     // ChannelUiItem вручную.
     suspend fun getAdjacentSubscribed(currentChannelId: String, forward: Boolean): ChannelUiItem? = withContext(Dispatchers.IO) {
-        val sorted = toUiItems(channelDao.getSubscribed()).sortedBy { it.channelNumber }
+        val sorted = toUiItems(visibleEntities()).sortedBy { it.channelNumber }
         if (sorted.isEmpty()) return@withContext null
         val currentIndex = sorted.indexOfFirst { it.id == currentChannelId }
         if (currentIndex == -1) return@withContext sorted.firstOrNull()
@@ -117,11 +128,15 @@ class ChannelRepository(
         channelDao.getById(channelId)?.let { toUiItems(listOf(it)).firstOrNull() }
     }
 
-    suspend fun getSubscribedCount(): Int = withContext(Dispatchers.IO) { channelDao.getSubscribed().size }
+    suspend fun getSubscribedCount(): Int = withContext(Dispatchers.IO) { visibleEntities().size }
 
-    suspend fun setSubscribed(channelId: String, isSubscribed: Boolean) = withContext(Dispatchers.IO) {
-        channelDao.setSubscribed(channelId, isSubscribed)
-    }
+    /** Скрыть/показать один канал (запоминается и синхронизируется между устройствами). */
+    fun setHidden(channelId: String, hidden: Boolean) = hiddenStore.setChannelHidden(channelId, hidden)
+
+    /** Скрыть/показать всю категорию — в том числе каналы, которые появятся в ней позже. */
+    fun setCategoryHidden(category: String?, hidden: Boolean) = hiddenStore.setCategoryHidden(category, hidden)
+
+    fun hiddenCategoryNames(): List<String> = hiddenStore.hiddenCategoryNames()
 
     suspend fun rename(channelId: String, name: String, regionHint: String?) = withContext(Dispatchers.IO) {
         channelDao.rename(channelId, name, regionHint)

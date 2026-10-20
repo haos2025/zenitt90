@@ -392,6 +392,7 @@ fun PhonePlayerScreen(
                 if (showList) {
                     if (isLive) PhoneChannelsSheet(
                         channels = channelsList, currentId = viewModel.currentId,
+                        nowPlaying = { id -> viewModel.nowPlaying(id) },
                         onPick = { c -> showList = false; viewModel.switchToChannel(c) },
                         onDismiss = { showList = false }
                     ) else PhoneEpisodesSheet(
