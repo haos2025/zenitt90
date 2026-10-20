@@ -37,6 +37,12 @@ import java.util.concurrent.TimeUnit
 // REFRESH_TTL_MS) — плейлисты бывают большие, не гонять на каждый вход.
 private const val SOURCE_REFRESH_TTL_MS = 60 * 60 * 1000L
 
+/** Итог разведения источника: сколько записей стало каналами, сколько — фильмами/сериалами. */
+data class SourceSplit(val channels: Int, val vod: Int)
+
+/** Группа (group-title) M3U-источника: счётчики по текущему разведению и текущее переопределение ("live"/"vod"/null). */
+data class GroupStat(val name: String, val channels: Int, val vod: Int, val override: String?)
+
 /**
  * До этой задачи (PROMPT_SOURCES_SCREEN.md) источник был один, его конфиг
  * целиком лежал в AuthPreferences (encrypted SharedPreferences), а фетч и
@@ -74,6 +80,39 @@ class PlaylistSourceRepository(
     }
 
     suspend fun getAll(): List<PlaylistSourceEntity> = withContext(Dispatchers.IO) { sourceDao.getAll() }
+
+    // Итог последнего разведения каждого источника (для экрана результата после добавления).
+    private val lastSplits = java.util.concurrent.ConcurrentHashMap<String, SourceSplit>()
+
+    fun lastSplit(sourceId: String): SourceSplit? = lastSplits[sourceId]
+
+    private fun m3uBodyFile(source: PlaylistSourceEntity): File {
+        val url = source.url
+        return if (url != null && url.startsWith("file://")) File(url.removePrefix("file://")) else bodySnapshotFile(source.id)
+    }
+
+    /**
+     * Группы M3U-источника с числом записей-каналов и записей-фильмов по текущему разведению
+     * (для экрана «Разделено неверно?»). Записи без group-title не показываются — переопределять нечего.
+     */
+    suspend fun getGroupStats(sourceId: String): List<GroupStat> = withContext(Dispatchers.IO) {
+        val source = sourceDao.getById(sourceId) ?: return@withContext emptyList()
+        if (source.type != "m3u") return@withContext emptyList()
+        val file = m3uBodyFile(source)
+        if (!file.exists()) return@withContext emptyList()
+        val parsed = M3uPlaylistParser.parseEntries(file.readText())
+        val overrides = EntryClassifier.parseOverrides(source.groupOverrides)
+        val kinds = EntryClassifier.classifyAll(parsed, source.contentKind, overrides)
+        val counts = LinkedHashMap<String, IntArray>()
+        parsed.forEachIndexed { i, e ->
+            val g = e.rawGroup ?: return@forEachIndexed
+            val a = counts.getOrPut(g) { IntArray(2) }
+            if (kinds[i] == EntryKind.CHANNEL) a[0]++ else a[1]++
+        }
+        counts.map { (name, a) ->
+            GroupStat(name, a[0], a[1], overrides[name] ?: overrides.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value)
+        }.sortedBy { it.name.lowercase() }
+    }
 
     suspend fun getContentCount(sourceId: String): Int = withContext(Dispatchers.IO) {
         movieDao.getCountBySource(sourceId)
@@ -151,23 +190,23 @@ class PlaylistSourceRepository(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    suspend fun addM3uUrlSource(label: String, url: String, isLiveChannels: Boolean = false): PlaylistSourceEntity = withContext(Dispatchers.IO) {
+    suspend fun addM3uUrlSource(label: String, url: String, isLiveChannels: Boolean = false, mode: String? = null): PlaylistSourceEntity = withContext(Dispatchers.IO) {
         val entity = PlaylistSourceEntity(
             id = UUID.randomUUID().toString(), type = "m3u", label = label, url = url, priority = nextPriority(),
-            contentKind = if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
+            contentKind = mode ?: if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
         )
         sourceDao.upsert(entity)
         entity
     }
 
     /** См. заголовок класса — снапшот копируется один раз при добавлении. */
-    suspend fun addM3uFileSource(label: String, fileContent: String, isLiveChannels: Boolean = false): PlaylistSourceEntity = withContext(Dispatchers.IO) {
+    suspend fun addM3uFileSource(label: String, fileContent: String, isLiveChannels: Boolean = false, mode: String? = null): PlaylistSourceEntity = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
         val snapshotFile = File(snapshotDir, "$id.m3u")
         snapshotFile.writeText(fileContent)
         val entity = PlaylistSourceEntity(
             id = id, type = "m3u", label = label, url = "file://${snapshotFile.absolutePath}", priority = nextPriority(),
-            contentKind = if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
+            contentKind = mode ?: if (isLiveChannels) EntryClassifier.MODE_LIVE else EntryClassifier.MODE_AUTO
         )
         sourceDao.upsert(entity)
         entity
@@ -297,7 +336,8 @@ class PlaylistSourceRepository(
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
                     if (host == null || user == null || pass == null) return@withContext
-                    storeVodEntries(source, sourceId, XtreamVodClient.fetch(client, host, user, pass))
+                    val vodItems = XtreamVodClient.fetch(client, host, user, pass)
+                    storeVodEntries(source, sourceId, vodItems)
 
                     // Живой эфир — отдельный эндпоинт Xtream, не зависит от
                     // contentKind (то поле имеет смысл только для M3U — Xtream
@@ -307,6 +347,7 @@ class PlaylistSourceRepository(
                     // выше этим не роняется.
                     val liveStreams = XtreamVodClient.fetchLiveStreams(client, host, user, pass)
                     val storedStreams = channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
+                    lastSplits[sourceId] = SourceSplit(liveStreams.size, vodItems.size)
 
                     // ФИКС (аудит): xmltv.php есть не у каждой Xtream-панели —
                     // если он не дал ни одной программы, используем per-channel
@@ -354,6 +395,8 @@ class PlaylistSourceRepository(
         val vodEntries = ArrayList<ParsedEntry>()
         parsed.forEachIndexed { i, e -> if (kinds[i] == EntryKind.CHANNEL) channelEntries.add(e) else vodEntries.add(e) }
 
+        if (parsed.isNotEmpty()) lastSplits[sourceId] = SourceSplit(channelEntries.size, vodEntries.size)
+
         if (parsed.isNotEmpty()) {
             if (channelEntries.isNotEmpty()) {
                 // Живой эфир уходит в Channel/ChannelStream, не в playlist_movies.
@@ -387,8 +430,7 @@ class PlaylistSourceRepository(
     suspend fun reclassify(sourceId: String) = withContext(Dispatchers.IO) {
         val source = sourceDao.getById(sourceId) ?: return@withContext
         if (source.type != "m3u") return@withContext
-        val url = source.url
-        val file = if (url != null && url.startsWith("file://")) File(url.removePrefix("file://")) else bodySnapshotFile(sourceId)
+        val file = m3uBodyFile(source)
         if (!file.exists()) { refresh(sourceId, forceRefresh = true); return@withContext }
         try {
             processM3uBody(source, sourceId, file.readText())

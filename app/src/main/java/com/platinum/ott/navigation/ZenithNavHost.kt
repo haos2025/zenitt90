@@ -65,8 +65,11 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
             else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
         }
-        composable("add_source") {
-            if (isTV) AddSourceScreen(onDone = { navController.popBackStack() })
+        composable(
+            route = "add_source?hint={hint}",
+            arguments = listOf(navArgument("hint") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { entry ->
+            if (isTV) AddSourceScreen(onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
             else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() })
         }
         // PROMPT_IPTV_FOUNDATION.md, подзадача "UI слияния каналов" — тот
@@ -94,7 +97,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                     initialEdit = entry.arguments?.getBoolean("edit") ?: false,
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
-                    onAddSourceClick = { navController.navigate("add_source") }
+                    onAddSourceClick = { navController.navigate("add_source?hint=channels") }
                 )
             }
             else PhoneWithBottomBar(navController) {

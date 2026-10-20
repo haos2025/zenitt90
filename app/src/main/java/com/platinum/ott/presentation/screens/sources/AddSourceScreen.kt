@@ -31,6 +31,7 @@ import androidx.tv.material3.*
 import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.data.playlist.EntryClassifier
 import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.ui.theme.*
 
@@ -55,6 +56,7 @@ private enum class M3uMethod { URL, FILE, QR }
 @Composable
 fun AddSourceScreen(
     onDone: () -> Unit,
+    entryHint: String? = null,
     viewModel: AddSourceViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -68,7 +70,9 @@ fun AddSourceScreen(
     var xtHost by remember { mutableStateOf("") }
     var xtUser by remember { mutableStateOf("") }
     var xtPass by remember { mutableStateOf("") }
-    var isLiveChannels by remember { mutableStateOf(false) }
+    // «Дополнительно»: режим разведения M3U (по умолчанию «Авто»).
+    var showAdvanced by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(EntryClassifier.MODE_AUTO) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -104,6 +108,10 @@ fun AddSourceScreen(
     }
     BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
 
+    val result = uiState as? AddSourceUiState.Result
+    if (result != null) {
+        AddSourceResultScreen(result, viewModel, onFinish = { viewModel.resetState(); onDone() })
+    } else {
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -111,6 +119,15 @@ fun AddSourceScreen(
             modifier = Modifier.align(Alignment.Center).width(520.dp)
         ) {
             Text("Добавить источник", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
+
+            val hintText = when (entryHint) {
+                "channels" -> "Обычно здесь плейлисты каналов"
+                "catalog" -> "Плейлисты фильмов и сериалов"
+                else -> null
+            }
+            if (hintText != null) {
+                Text(hintText, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface.copy(alpha = 0.6f))
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
                 TabButton("M3U Плейлист", sourceType == SourceType.M3U) { sourceType = SourceType.M3U }
@@ -138,19 +155,17 @@ fun AddSourceScreen(
                             if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = ZenithOnSurface.copy(alpha = 0.5f))
                         }
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
-                        modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS)
-                    ) {
-                        com.platinum.ott.presentation.components.FocusSwitch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
-                        Column {
-                            Text("Это плейлист живых каналов", color = ZenithOnSurface)
-                            Text(
-                                "Каналы попадут в раздел «Каналы», а не в общий каталог фильмов",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = ZenithOnSurface.copy(alpha = 0.5f)
-                            )
+                    TabButton(if (showAdvanced) "Дополнительно ▾" else "Дополнительно ▸", false) { showAdvanced = !showAdvanced }
+                    if (showAdvanced) {
+                        Text(
+                            "Как разделить плейлист на каналы и фильмы",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ZenithOnSurface.copy(alpha = 0.5f)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+                            TabButton("Авто", mode == EntryClassifier.MODE_AUTO) { mode = EntryClassifier.MODE_AUTO }
+                            TabButton("Только каналы", mode == EntryClassifier.MODE_LIVE) { mode = EntryClassifier.MODE_LIVE }
+                            TabButton("Только фильмы и сериалы", mode == EntryClassifier.MODE_VOD) { mode = EntryClassifier.MODE_VOD }
                         }
                     }
                 }
@@ -172,10 +187,10 @@ fun AddSourceScreen(
                     onClick = {
                         when (sourceType) {
                             SourceType.M3U -> when (m3uMethod) {
-                                M3uMethod.URL, M3uMethod.QR -> viewModel.addM3uUrl(label, m3uUrl, isLiveChannels, onDone)
-                                M3uMethod.FILE -> fileContent?.let { viewModel.addM3uFile(label, it, isLiveChannels, onDone) }
+                                M3uMethod.URL, M3uMethod.QR -> viewModel.addM3uUrlWithResult(label, m3uUrl, mode)
+                                M3uMethod.FILE -> fileContent?.let { viewModel.addM3uFileWithResult(label, it, mode) }
                             }
-                            SourceType.XTREAM -> viewModel.addXtream(label, xtHost, xtUser, xtPass, onDone)
+                            SourceType.XTREAM -> viewModel.addXtreamWithResult(label, xtHost, xtUser, xtPass)
                         }
                     },
                     enabled = uiState !is AddSourceUiState.Loading,
@@ -186,6 +201,7 @@ fun AddSourceScreen(
             }
         }
     }
+    }
 
     if (showCompanionQr) {
         QrScanScreen(content = companionAddress, onDismiss = { showCompanionQr = false }, modifier = Modifier.fillMaxSize())
@@ -194,7 +210,7 @@ fun AddSourceScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
  scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         onClick = onClick,
