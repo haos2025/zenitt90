@@ -53,6 +53,7 @@ fun SourcesScreen(
     headerExtra: (@Composable () -> Unit)? = null,
     // Заголовок, когда вкладок нет (экран «Источники каталога» из Настроек).
     title: String = "Источники",
+    filter: SourceFilter = SourceFilter.ALL,
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -77,7 +78,7 @@ fun SourcesScreen(
     // при возврате с AddSourceScreen (отдельный ViewModel) новый источник
     // не появлялся, пока не выйти с экрана целиком и не зайти заново.
     // Тот же приём, что уже есть в SettingsScreen.kt для аналогичного случая.
-    LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(filter) { viewModel.setFilter(filter); viewModel.load() }
 
     Column(
         modifier = Modifier
@@ -206,7 +207,7 @@ private fun SourceCard(
                     )
                 }
                 Text(
-                    "${item.contentCount} в каталоге • ${formatLastRefreshed(item.lastRefreshedAt)}",
+                    "${sourceCountsText(item)} • ${formatLastRefreshed(item.lastRefreshedAt)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = ZenithOnSurface.copy(alpha = 0.5f)
                 )
@@ -244,6 +245,14 @@ private fun SourceCard(
             }
         }
     }
+}
+
+/** «N каналов • M в каталоге» — показываются только ненулевые части. */
+internal fun sourceCountsText(item: SourceUiItem): String {
+    val parts = ArrayList<String>()
+    if (item.channelCount > 0) parts.add("${item.channelCount} каналов")
+    if (item.contentCount > 0 || item.channelCount == 0) parts.add("${item.contentCount} в каталоге")
+    return parts.joinToString(" • ")
 }
 
 private fun statusColor(enabled: Boolean, lastRefreshStatus: String?): Color = when {

@@ -125,7 +125,7 @@ internal fun AddSourceResultScreen(
     }
 }
 
-private fun splitSummary(channels: Int, vod: Int): String {
+internal fun splitSummary(channels: Int, vod: Int): String {
     val parts = ArrayList<String>()
     if (channels > 0) parts.add("$channels ${plural(channels, "канал", "канала", "каналов")}")
     if (vod > 0) parts.add("$vod ${plural(vod, "фильм или сериал", "фильма и сериала", "фильмов и сериалов")}")

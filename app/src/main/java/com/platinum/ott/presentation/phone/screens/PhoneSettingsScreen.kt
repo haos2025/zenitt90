@@ -60,7 +60,6 @@ fun PhoneSettingsScreen(navController: NavHostController, viewModel: SettingsVie
 Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
-    val channelsCount by viewModel.channelsCount.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
 
     // Экран — обычный composable() в NavHost, не сохранённая вкладка, так
@@ -92,22 +91,12 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
         // TV, см. SettingsViewModel.sourcesCount.
         SectionHeader("Источники", Icons.Outlined.Source)
         NavCard(
-            title = "Источники",
+            title = "Источники каталога (фильмы и сериалы)",
             status = if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
-            onClick = { navController.navigate("sources") }
+            onClick = { navController.navigate("catalog_sources") }
         )
-        Spacer(Modifier.height(ZenithDimens.paddingS))
-        // PROMPT_IPTV_FOUNDATION.md — отдельная карточка, не подпункт
-        // "Источников": каналы агрегируются из ВСЕХ live-источников сразу
-        // (Channel/ChannelStream объединяет их), это не настройка одного
-        // конкретного источника. channelsCount — подписанные каналы (то,
-        // что реально попадёт в раздел "Каналы"), не общее число
-        // импортированных записей — см. SettingsViewModel.channelsCount.
-        NavCard(
-            title = "Каналы",
-            status = if (channelsCount == 0) "Нет подписок" else "$channelsCount в списке",
-            onClick = { navController.navigate("channels_manage") }
-        )
+        // План 07, этап 5: источники каналов и управление каналами живут в разделе «Каналы»
+        // (вкладка «Источники», режим «Править») — отдельной карточки «Каналы» здесь больше нет.
         Spacer(Modifier.height(ZenithDimens.paddingS))
         // Синхронизация — независимая система (пара по 6-значному коду,
         // AuthPreferences.getOrCreateSyncToken()), от источников не зависит,

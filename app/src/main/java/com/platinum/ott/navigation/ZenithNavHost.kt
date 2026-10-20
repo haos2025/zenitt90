@@ -17,6 +17,7 @@ import com.platinum.ott.presentation.phone.screens.PhoneWithBottomBar
 import com.platinum.ott.presentation.screens.detail.DetailScreen
 import com.platinum.ott.presentation.screens.person.PersonDetailScreen
 import com.platinum.ott.presentation.screens.player.PlayerScreen
+import com.platinum.ott.presentation.screens.sources.SourceFilter
 import com.platinum.ott.presentation.screens.sources.SourcesScreen
 import com.platinum.ott.presentation.screens.sources.AddSourceScreen
 import com.platinum.ott.presentation.screens.favorites.FavoritesScreen
@@ -31,7 +32,6 @@ import com.platinum.ott.presentation.screens.channels.ChannelsBrowseScreen
 import com.platinum.ott.presentation.screens.channels.ChannelsHubScreen
 import com.platinum.ott.presentation.screens.epg.EpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneChannelsBrowseScreen
-import com.platinum.ott.presentation.phone.screens.PhoneChannelsManageScreen
 import com.platinum.ott.presentation.phone.screens.PhoneEpgGridScreen
 import com.platinum.ott.presentation.phone.screens.PhoneHomeScreen
 import com.platinum.ott.presentation.phone.screens.PhoneDetailScreen
@@ -62,8 +62,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("sources") {
             // ТВ: источники живут на вкладке «Источники» раздела «Каналы» (план 07, этап 2) —
             // старый маршрут остаётся как перенаправление (ссылки и настройки не ломаются).
-            if (isTV) RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
-            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
+            // Телефон: то же самое — вкладка «Источники» в «Каналах» (план 07, этап 5).
+            RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
         }
         // План 07, этап 4: «Источники каталога (фильмы и сериалы)» из Настроек. На TV — тот же
         // список источников без вкладок раздела «Каналы», добавление открывается с подсказкой «каталог».
@@ -71,16 +71,22 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) SourcesScreen(
                 onBackPressed = { navController.popBackStack() },
                 onAddSourceClick = { navController.navigate("add_source?hint=catalog") },
+                title = "Источники каталога",
+                filter = SourceFilter.CATALOG
+            )
+            else PhoneSourcesScreen(
+                navController,
+                onAddSourceClick = { navController.navigate("add_source?hint=catalog") },
+                filter = SourceFilter.CATALOG,
                 title = "Источники каталога"
             )
-            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
         }
         composable(
             route = "add_source?hint={hint}",
             arguments = listOf(navArgument("hint") { type = NavType.StringType; nullable = true; defaultValue = null })
         ) { entry ->
             if (isTV) AddSourceScreen(onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
-            else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() })
+            else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
         }
         // PROMPT_IPTV_FOUNDATION.md, подзадача "UI слияния каналов" — тот
         // же уровень вложенности, что и "add_source" выше: достижим из
@@ -115,14 +121,15 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                     onBackPressed = { navController.popBackStack() },
                     onPlayChannel = { navController.navigate("player/$it") },
                     onOpenEpgGrid = { navController.navigate("epg_grid") },
-                    onManageClick = { navController.navigate("channels_manage") }
+                    onAddSourceClick = { navController.navigate("add_source?hint=channels") },
+                    initialTab = entry.arguments?.getString("tab") ?: "watch",
+                    initialEdit = entry.arguments?.getBoolean("edit") ?: false
                 )
             }
         }
         composable("channels_manage") {
-            // ТВ: «Управление» заменено режимом «Править» внутри «Каналы».
-            if (isTV) RedirectOnce(navController, from = "channels_manage", to = "channels?tab=watch&edit=true")
-            else PhoneChannelsManageScreen(onBackPressed = { navController.popBackStack() })
+            // «Управление» заменено режимом «Править» внутри «Каналы» (ТВ — этап 2, телефон — этап 5).
+            RedirectOnce(navController, from = "channels_manage", to = "channels?tab=watch&edit=true")
         }
         // PROMPT_EPG.md, подзадача 4 — тот же уровень вложенности, что и
         // "channels" выше (обычная кнопка "Назад", достижим из ChannelsBrowseScreen,

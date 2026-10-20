@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.data.playlist.EntryClassifier
 import com.platinum.ott.presentation.screens.sources.AddSourceUiState
 import com.platinum.ott.presentation.screens.sources.AddSourceViewModel
 import com.platinum.ott.ui.theme.ZenithShapeMedium
@@ -38,6 +39,7 @@ private enum class M3uMethodTab { URL, FILE }
 fun PhoneAddSourceScreen(
     navController: NavHostController,
     onDone: () -> Unit,
+    entryHint: String? = null,
     viewModel: AddSourceViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -51,12 +53,20 @@ fun PhoneAddSourceScreen(
     var xtHost by remember { mutableStateOf("") }
     var xtUser by remember { mutableStateOf("") }
     var xtPass by remember { mutableStateOf("") }
-    var isLiveChannels by remember { mutableStateOf(false) }
+    // «Дополнительно»: режим разведения M3U (по умолчанию «Авто»).
+    var showAdvanced by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(EntryClassifier.MODE_AUTO) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() }
             .getOrNull()?.let { text -> fileContent = text; fileName = uri.lastPathSegment }
+    }
+
+    val result = uiState as? AddSourceUiState.Result
+    if (result != null) {
+        PhoneAddSourceResultScreen(result, viewModel, onFinish = { viewModel.resetState(); onDone() })
+        return
     }
 
     Scaffold(
@@ -70,6 +80,15 @@ fun PhoneAddSourceScreen(
         Column(
             Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingM)
         ) {
+            val hintText = when (entryHint) {
+                "channels" -> "Обычно здесь плейлисты каналов"
+                "catalog" -> "Плейлисты фильмов и сериалов"
+                else -> null
+            }
+            if (hintText != null) {
+                Text(hintText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+            }
             TabRow(selectedTabIndex = sourceType.ordinal) {
                 Tab(sourceType == SourceTypeTab.M3U, onClick = { sourceType = SourceTypeTab.M3U }) { Text("M3U", modifier = Modifier.padding(ZenithDimens.paddingS)) }
                 Tab(sourceType == SourceTypeTab.XTREAM, onClick = { sourceType = SourceTypeTab.XTREAM }) { Text("Xtream", modifier = Modifier.padding(ZenithDimens.paddingS)) }
@@ -100,19 +119,20 @@ fun PhoneAddSourceScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(fileName ?: "Выбрать файл .m3u") }
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS)
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Это плейлист живых каналов")
-                            Text(
-                                "Каналы попадут в раздел «Каналы», а не в общий каталог фильмов",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
+                    TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                        Text(if (showAdvanced) "Дополнительно ▾" else "Дополнительно ▸")
+                    }
+                    if (showAdvanced) {
+                        Text(
+                            "Как разделить плейлист на каналы и фильмы",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), modifier = Modifier.padding(top = ZenithDimens.paddingXS)) {
+                            FilterChip(selected = mode == EntryClassifier.MODE_AUTO, onClick = { mode = EntryClassifier.MODE_AUTO }, label = { Text("Авто") })
+                            FilterChip(selected = mode == EntryClassifier.MODE_LIVE, onClick = { mode = EntryClassifier.MODE_LIVE }, label = { Text("Только каналы") })
+                            FilterChip(selected = mode == EntryClassifier.MODE_VOD, onClick = { mode = EntryClassifier.MODE_VOD }, label = { Text("Только фильмы", maxLines = 1) })
                         }
-                        Switch(checked = isLiveChannels, onCheckedChange = { isLiveChannels = it })
                     }
                 }
                 SourceTypeTab.XTREAM -> {
@@ -131,10 +151,10 @@ fun PhoneAddSourceScreen(
                 onClick = {
                     when (sourceType) {
                         SourceTypeTab.M3U -> when (m3uMethod) {
-                            M3uMethodTab.URL -> viewModel.addM3uUrl(label, m3uUrl, isLiveChannels, onDone)
-                            M3uMethodTab.FILE -> fileContent?.let { viewModel.addM3uFile(label, it, isLiveChannels, onDone) }
+                            M3uMethodTab.URL -> viewModel.addM3uUrlWithResult(label, m3uUrl, mode)
+                            M3uMethodTab.FILE -> fileContent?.let { viewModel.addM3uFileWithResult(label, it, mode) }
                         }
-                        SourceTypeTab.XTREAM -> viewModel.addXtream(label, xtHost, xtUser, xtPass, onDone)
+                        SourceTypeTab.XTREAM -> viewModel.addXtreamWithResult(label, xtHost, xtUser, xtPass)
                     }
                 },
                 enabled = uiState !is AddSourceUiState.Loading,

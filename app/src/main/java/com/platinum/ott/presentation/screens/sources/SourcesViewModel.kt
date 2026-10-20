@@ -33,8 +33,13 @@ data class SourceUiItem(
     // файл и вызвать reimportFile(), обычный "Обновить" перечитает тот же
     // старый снапшот. У источников по ссылке (http/https) этой кнопки нет —
     // refresh() и так перекачивает свежее.
-    val isFileSource: Boolean
+    val isFileSource: Boolean,
+    // План 07: сколько потоков-каналов даёт источник (contentCount — записи каталога фильмов/сериалов).
+    val channelCount: Int = 0
 )
+
+/** Какие источники показывать: все, дающие каналы (вкладка «Источники» в «Каналах») или каталог (Настройки). */
+enum class SourceFilter { ALL, CHANNELS, CATALOG }
 
 sealed interface SourcesUiState {
     data object Loading : SourcesUiState
@@ -56,6 +61,14 @@ class SourcesViewModel @Inject constructor(
     private val _refreshingIds = MutableStateFlow<Set<String>>(emptySet())
     val refreshingIds: StateFlow<Set<String>> = _refreshingIds.asStateFlow()
 
+    private var filter = SourceFilter.ALL
+
+    fun setFilter(newFilter: SourceFilter) {
+        if (newFilter == filter) return
+        filter = newFilter
+        load()
+    }
+
     init { load() }
 
     fun load() {
@@ -66,7 +79,7 @@ class SourcesViewModel @Inject constructor(
 
     private suspend fun buildItems(): List<SourceUiItem> {
         val sources = repository.getAll() // уже отсортирован по priority ASC
-        return sources.mapIndexed { index, s ->
+        val all = sources.mapIndexed { index, s ->
             SourceUiItem(
                 id = s.id,
                 type = s.type,
@@ -77,8 +90,15 @@ class SourcesViewModel @Inject constructor(
                 lastRefreshStatus = s.lastRefreshStatus,
                 isFirst = index == 0,
                 isLast = index == sources.lastIndex,
-                isFileSource = s.url?.startsWith("file://") == true
+                isFileSource = s.url?.startsWith("file://") == true,
+                channelCount = sessionGraph.channelMatchingRepository.countStreamsBySource(s.id)
             )
+        }
+        // Пустой (ещё не загруженный или сломанный) источник виден в обоих списках — иначе его нельзя было бы ни обновить, ни удалить.
+        return when (filter) {
+            SourceFilter.ALL -> all
+            SourceFilter.CHANNELS -> all.filter { it.channelCount > 0 || it.contentCount == 0 }
+            SourceFilter.CATALOG -> all.filter { it.contentCount > 0 || it.channelCount == 0 }
         }
     }
 

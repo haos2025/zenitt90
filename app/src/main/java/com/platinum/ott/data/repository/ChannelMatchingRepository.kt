@@ -75,6 +75,9 @@ class ChannelMatchingRepository(
         channelDao.deleteUnsubscribedOrphans()
     }
 
+    /** Сколько потоков-каналов принесёт источник (для фильтра «каналы / каталог» в списке источников). */
+    suspend fun countStreamsBySource(sourceId: String): Int = withContext(Dispatchers.IO) { channelStreamDao.countBySourceId(sourceId) }
+
     /** Только чистка сирот (после обычной замены потоков источника). */
     suspend fun cleanOrphans() = withContext(Dispatchers.IO) { channelDao.deleteUnsubscribedOrphans() }
 

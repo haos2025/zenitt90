@@ -17,6 +17,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.platform.safeRequestFocus
+import com.platinum.ott.presentation.screens.sources.SourceFilter
 import com.platinum.ott.presentation.screens.sources.SourcesScreen
 import com.platinum.ott.ui.theme.ZenithFocusContainerActive
 import com.platinum.ott.ui.theme.ZenithOnSurface
@@ -68,7 +69,7 @@ fun ChannelsHubScreen(
     }
 
     if (tab == CHANNELS_TAB_SOURCES) {
-        SourcesScreen(onBackPressed = onBackPressed, onAddSourceClick = onAddSourceClick, headerExtra = tabs)
+        SourcesScreen(onBackPressed = onBackPressed, onAddSourceClick = onAddSourceClick, headerExtra = tabs, filter = SourceFilter.CHANNELS)
     } else {
         ChannelsBrowseScreen(
             onBackPressed = onBackPressed,

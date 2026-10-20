@@ -32,12 +32,47 @@ import com.platinum.ott.ui.theme.*
  * отличается только вёрсткой (Card вместо TV Surface-строк, TopAppBar со
  * стрелкой назад вместо кнопки "Назад" в заголовке — тот же паттерн, что и
  * в PhoneCacheManagementScreen.kt).
+ *
+ * План 07, этап 5: список вынесен в [PhoneSourcesList] — он используется и на вкладке
+ * «Источники» раздела «Каналы» (filter = CHANNELS), и на отдельном экране «Источники каталога»
+ * из Настроек (filter = CATALOG).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhoneSourcesScreen(
     navController: NavHostController,
     onAddSourceClick: () -> Unit,
+    filter: SourceFilter = SourceFilter.ALL,
+    title: String = "Источники",
+    viewModel: SourcesViewModel = hiltViewModel()
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        PhoneSourcesList(
+            filter = filter,
+            onAddSourceClick = onAddSourceClick,
+            modifier = Modifier.padding(padding),
+            viewModel = viewModel
+        )
+    }
+}
+
+/** Список источников с кнопкой «Добавить источник» в начале, переименованием/удалением/обновлением. */
+@Composable
+fun PhoneSourcesList(
+    filter: SourceFilter,
+    onAddSourceClick: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,58 +91,41 @@ fun PhoneSourcesScreen(
     }
 
     // ФИКС (аудит): тот же паттерн, что в TV-версии (SourcesScreen.kt).
-    LaunchedEffect(Unit) { viewModel.load() }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Источники") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
-                    }
-                }
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onAddSourceClick, text = { Text("Добавить") }, icon = {})
-        }
-    ) { padding ->
-        val sources = (uiState as? SourcesUiState.Success)?.sources.orEmpty()
+    LaunchedEffect(filter) { viewModel.setFilter(filter); viewModel.load() }
+    val sources = (uiState as? SourcesUiState.Success)?.sources.orEmpty()
 
-        Box(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingSM),
+            verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
         ) {
+            item(key = "add") {
+                Button(onClick = onAddSourceClick, modifier = Modifier.fillMaxWidth()) { Text("Добавить источник") }
+            }
             if (sources.isEmpty()) {
-                Text(
-                    "Пока нет ни одного источника",
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(ZenithDimens.paddingSM),
-                    verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
-                ) {
-                    items(sources, key = { it.id }) { item ->
-                        PhoneSourceCard(
-                            item = item,
-                            isRefreshing = item.id in refreshingIds,
-                            onToggleEnabled = { viewModel.setEnabled(item.id, it) },
-                            onRefresh = { viewModel.refresh(item.id) },
-                            onRename = { renameTarget = item },
-                            onMoveUp = { viewModel.moveUp(item.id) },
-                            onMoveDown = { viewModel.moveDown(item.id) },
-                            onDelete = { deleteTarget = item },
-                            onReimportFile = {
-                                reimportTargetId = item.id
-                                reimportFilePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*"))
-                            }
-                        )
-                    }
+                item(key = "empty") {
+                    Text(
+                        "Пока нет ни одного источника",
+                        modifier = Modifier.fillMaxWidth().padding(ZenithDimens.paddingL),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+            }
+            items(sources, key = { it.id }) { item ->
+                PhoneSourceCard(
+                    item = item,
+                    isRefreshing = item.id in refreshingIds,
+                    onToggleEnabled = { viewModel.setEnabled(item.id, it) },
+                    onRefresh = { viewModel.refresh(item.id) },
+                    onRename = { renameTarget = item },
+                    onMoveUp = { viewModel.moveUp(item.id) },
+                    onMoveDown = { viewModel.moveDown(item.id) },
+                    onDelete = { deleteTarget = item },
+                    onReimportFile = {
+                        reimportTargetId = item.id
+                        reimportFilePicker.launch(arrayOf("audio/x-mpegurl", "application/x-mpegurl", "*/*"))
+                    }
+                )
             }
         }
     }
@@ -164,7 +182,7 @@ private fun PhoneSourceCard(
                     )
                 }
                 Text(
-                    "${item.contentCount} в каталоге • ${formatLastRefreshed(item.lastRefreshedAt)}",
+                    "${sourceCountsText(item)} • ${formatLastRefreshed(item.lastRefreshedAt)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

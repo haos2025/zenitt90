@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.phone.screens
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -14,7 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +37,10 @@ import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.data.repository.ChannelUiItem
 import com.platinum.ott.presentation.screens.channels.ChannelsUiState
 import com.platinum.ott.presentation.screens.channels.ChannelsViewModel
+import com.platinum.ott.presentation.screens.channels.DeleteChannelConfirmDialog
+import com.platinum.ott.presentation.screens.channels.MergeChannelDialog
+import com.platinum.ott.presentation.screens.channels.RenameChannelDialog
+import com.platinum.ott.presentation.screens.sources.SourceFilter
 
 private const val ALL_CATEGORY = "__all__"
 private const val FAV_CATEGORY = "__fav__"
@@ -52,7 +59,9 @@ fun PhoneChannelsBrowseScreen(
     onBackPressed: () -> Unit,
     onPlayChannel: (String) -> Unit,
     onOpenEpgGrid: () -> Unit,
-    onManageClick: () -> Unit,
+    onAddSourceClick: () -> Unit,
+    initialTab: String = "watch",
+    initialEdit: Boolean = false,
     viewModel: ChannelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -73,6 +82,16 @@ fun PhoneChannelsBrowseScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(ALL_CATEGORY) }
+
+    // План 07, этап 5: вкладки «Смотреть» / «Источники» и режим «Править» (вместо отдельного «Управления»).
+    var tab by rememberSaveable { mutableStateOf(if (initialTab == "sources") 1 else 0) }
+    var editMode by rememberSaveable { mutableStateOf(initialEdit && initialTab != "sources") }
+    val isChecking by viewModel.isChecking.collectAsStateWithLifecycle()
+    val allChannels = (uiState as? ChannelsUiState.Success)?.channels.orEmpty()
+    var renameTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    var mergeTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    var deleteTarget by remember { mutableStateOf<ChannelUiItem?>(null) }
+    BackHandler(enabled = editMode) { editMode = false }
 
     val categories = remember(subscribedChannels) {
         subscribedChannels.groupBy { it.category?.ifBlank { null } ?: "Без категории" }
@@ -97,15 +116,32 @@ fun PhoneChannelsBrowseScreen(
                     title = { Text("Каналы") },
                     navigationIcon = { IconButton(onClick = onBackPressed) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") } },
                     actions = {
-                        IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) { Icon(Icons.Filled.Search, contentDescription = "Поиск") }
-                        IconButton(
-                            enabled = !epgBusy,
-                            onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
-                        ) { Icon(Icons.Filled.Refresh, contentDescription = "Обновить программу") }
-                        IconButton(onClick = onManageClick) { Icon(Icons.Filled.Settings, contentDescription = "Управление каналами") }
+                        if (tab == 0 && !editMode) {
+                            IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) { Icon(Icons.Filled.Search, contentDescription = "Поиск") }
+                            IconButton(
+                                enabled = !epgBusy,
+                                onClick = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }
+                            ) { Icon(Icons.Filled.Refresh, contentDescription = "Обновить программу") }
+                        }
+                        if (tab == 0 && editMode) {
+                            IconButton(onClick = { viewModel.checkAll() }, enabled = !isChecking) {
+                                if (isChecking) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                else Icon(Icons.Filled.Refresh, contentDescription = "Проверить все каналы")
+                            }
+                        }
+                        if (tab == 0) {
+                            IconButton(onClick = { editMode = !editMode; searchActive = false; searchQuery = "" }) {
+                                if (editMode) Icon(Icons.Filled.Check, contentDescription = "Готово")
+                                else Icon(Icons.Filled.Edit, contentDescription = "Править")
+                            }
+                        }
                     }
                 )
-                if (searchActive) {
+                TabRow(selectedTabIndex = tab) {
+                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Смотреть") })
+                    Tab(selected = tab == 1, onClick = { tab = 1; editMode = false }, text = { Text("Источники") })
+                }
+                if (tab == 0 && !editMode && searchActive) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -114,7 +150,7 @@ fun PhoneChannelsBrowseScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS)
                     )
                 }
-                if (subscribedChannels.isNotEmpty()) {
+                if (tab == 0 && !editMode && subscribedChannels.isNotEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS),
                         horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
@@ -130,9 +166,41 @@ fun PhoneChannelsBrowseScreen(
         }
     ) { padding ->
         when {
+            tab == 1 -> PhoneSourcesList(
+                filter = SourceFilter.CHANNELS,
+                onAddSourceClick = onAddSourceClick,
+                modifier = Modifier.padding(padding)
+            )
+            editMode -> if (allChannels.isEmpty()) {
+                Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
+                    Text(
+                        "Пока нет каналов — добавьте плейлист каналов или Xtream-панель на вкладке «Источники»",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(ZenithDimens.paddingXL)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.padding(padding).fillMaxSize(),
+                    contentPadding = PaddingValues(ZenithDimens.paddingM),
+                    verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+                ) {
+                    items(allChannels.sortedBy { it.channelNumber }, key = { it.id }) { item ->
+                        PhoneChannelEditCard(
+                            item = item,
+                            onToggleSubscribed = { viewModel.setSubscribed(item.id, it) },
+                            onRename = { renameTarget = item },
+                            onMerge = { mergeTarget = item },
+                            onDelete = { deleteTarget = item },
+                            onCheckNow = { viewModel.checkOne(item.id) }
+                        )
+                    }
+                }
+            }
             subscribedChannels.isEmpty() -> Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
                 Text(
-                    "Нет подписанных каналов — зайдите в \"Управление каналами\",\nчтобы подписаться на каналы из уже добавленных источников",
+                    "Нет подписанных каналов — нажмите «Править» (карандаш сверху), чтобы выбрать каналы,\nили добавьте плейлист на вкладке «Источники»",
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.padding(ZenithDimens.paddingXL)
@@ -160,6 +228,29 @@ fun PhoneChannelsBrowseScreen(
                 }
             }
         }
+    }
+
+    renameTarget?.let { target ->
+        RenameChannelDialog(
+            channel = target,
+            onConfirm = { name, regionHint -> viewModel.rename(target.id, name, regionHint); renameTarget = null },
+            onDismiss = { renameTarget = null }
+        )
+    }
+    mergeTarget?.let { target ->
+        MergeChannelDialog(
+            source = target,
+            candidates = allChannels.filter { it.id != target.id },
+            onSelect = { targetId -> viewModel.merge(target.id, targetId); mergeTarget = null },
+            onDismiss = { mergeTarget = null }
+        )
+    }
+    deleteTarget?.let { target ->
+        DeleteChannelConfirmDialog(
+            channel = target,
+            onConfirm = { viewModel.delete(target.id); deleteTarget = null },
+            onDismiss = { deleteTarget = null }
+        )
     }
 }
 

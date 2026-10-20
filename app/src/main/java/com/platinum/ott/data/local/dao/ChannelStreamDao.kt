@@ -36,6 +36,9 @@ interface ChannelStreamDao {
     @Query("SELECT * FROM channel_streams WHERE sourceId = :sourceId")
     suspend fun getBySourceId(sourceId: String): List<ChannelStreamEntity>
 
+    @Query("SELECT COUNT(*) FROM channel_streams WHERE sourceId = :sourceId")
+    suspend fun countBySourceId(sourceId: String): Int
+
     @Query("DELETE FROM channel_streams WHERE sourceId = :sourceId")
     suspend fun deleteBySourceId(sourceId: String)
 
