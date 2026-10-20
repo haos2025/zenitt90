@@ -60,7 +60,6 @@ import com.platinum.ott.ui.theme.*
 fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onChannelsClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
-    val channelsCount by viewModel.channelsCount.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -250,15 +249,15 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             // "Синхронизация" — независимый механизм (пара по 6-значному коду),
             // но живёт в той же карточке, т.к. обе строки — про подключение
             // к внешнему состоянию, а не про поведение самого приложения.
+            // План 07, этап 4: источники каналов и управление каналами переехали в раздел
+            // «Каналы» (вкладка «Источники», режим «Править»). Здесь остаются только источники
+            // каталога — плейлисты фильмов и сериалов. Строка «Каналы» убрана.
             SettingsGroup("Источники", Icons.Outlined.Source) {
-                NavRow("Источники", if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено", onClick = onSourcesClick)
-                SettingsDivider()
-                // PROMPT_IPTV_FOUNDATION.md — отдельная строка, не подпункт
-                // "Источников": каналы агрегируются из ВСЕХ live-источников
-                // сразу (Channel/ChannelStream объединяет их по tvg-id), это
-                // не настройка одного конкретного источника. channelsCount —
-                // подписанные каналы, см. SettingsViewModel.channelsCount.
-                NavRow("Каналы", if (channelsCount == 0) "Нет подписок" else "$channelsCount в списке", onClick = onChannelsClick)
+                NavRow(
+                    "Источники каталога (фильмы и сериалы)",
+                    if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
+                    onClick = onSourcesClick
+                )
                 SettingsDivider()
                 NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
             }

@@ -51,6 +51,8 @@ fun SourcesScreen(
     onAddSourceClick: () -> Unit,
     // Вкладки раздела «Каналы» (план 07): если заданы — рисуются в шапке рядом с заголовком.
     headerExtra: (@Composable () -> Unit)? = null,
+    // Заголовок, когда вкладок нет (экран «Источники каталога» из Настроек).
+    title: String = "Источники",
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -88,7 +90,7 @@ fun SourcesScreen(
                 headerExtra()
                 Spacer(Modifier.weight(1f))
             } else {
-                Text("Источники", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
+                Text(title, style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface, modifier = Modifier.weight(1f))
             }
         }
         Spacer(Modifier.height(ZenithDimens.paddingXL))

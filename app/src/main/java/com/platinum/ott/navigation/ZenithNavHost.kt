@@ -65,6 +65,16 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) RedirectOnce(navController, from = "sources", to = "channels?tab=sources")
             else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
         }
+        // План 07, этап 4: «Источники каталога (фильмы и сериалы)» из Настроек. На TV — тот же
+        // список источников без вкладок раздела «Каналы», добавление открывается с подсказкой «каталог».
+        composable("catalog_sources") {
+            if (isTV) SourcesScreen(
+                onBackPressed = { navController.popBackStack() },
+                onAddSourceClick = { navController.navigate("add_source?hint=catalog") },
+                title = "Источники каталога"
+            )
+            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
+        }
         composable(
             route = "add_source?hint={hint}",
             arguments = listOf(navArgument("hint") { type = NavType.StringType; nullable = true; defaultValue = null })
@@ -198,7 +208,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd, onBackPressed = { navController.popBackStack() })
             else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd)
         }
-        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onChannelsClick = { navController.navigate("channels_manage") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("catalog_sources") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
