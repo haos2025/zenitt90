@@ -1,203 +1,174 @@
 package com.platinum.ott.presentation.screens.settings
 
-import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
-import com.platinum.ott.ui.theme.ZenithOnSurface
-import com.platinum.ott.core.CONTROLS_HIDE_DELAY_OPTIONS_MS
-import com.platinum.ott.core.PROGRESS_STRIP_DP_OPTIONS
-import com.platinum.ott.core.formatControlsHideDelay
-import com.platinum.ott.core.nextAfter
-
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Gamepad
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Source
-import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material3.CircularProgressIndicator
-// Явный импорт Icon/HorizontalDivider поверх звёздочного
-// `androidx.tv.material3.*` ниже — тот же приём, что уже применён в
-// NavSidebar.kt для Icon: явный импорт побеждает звёздочный, оба
-// компонента из обычного material3 работают поверх tv-material3 экрана
-// без конфликтов (Icon — проверено там же; HorizontalDivider — тот же
-// принцип, что и androidx.compose.material3.CircularProgressIndicator
-// выше, уже используемый на других TV-экранах проекта).
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.tv.material3.*
+import com.platinum.ott.core.CONTROLS_HIDE_DELAY_OPTIONS_MS
+import com.platinum.ott.core.LiveArrowMode
+import com.platinum.ott.core.PROGRESS_STRIP_DP_OPTIONS
+import com.platinum.ott.core.formatControlsHideDelay
+import com.platinum.ott.core.nextAfter
 import com.platinum.ott.core.platform.ZenithDimens
-import com.platinum.ott.core.QualityPreferences
-import com.platinum.ott.core.NetworkPreferences
-import com.platinum.ott.core.NotificationPreferences
-import com.platinum.ott.core.SubtitlePreferences
+import com.platinum.ott.core.platform.safeRequestFocus
 import com.platinum.ott.presentation.components.NavSidebar
+import com.platinum.ott.presentation.settings.SettingsCategory
 import com.platinum.ott.ui.theme.*
 
-// PROMPT_NAVIGATION_SIDEBAR.md — добавлен navController для постоянного
-// сайдбара; остальные параметры (переходы на не-табовые экраны — кэш,
-// плагины, синхронизация, подключение источника) не трогаем.
+// ТВ: настройки по категориям (план 09). Слева — колонка категорий, справа — строки выбранной.
+// Категория выбирается фокусом; Вправо/OK — в правую панель; Влево/Назад — обратно на выбранную категорию.
+// Ключи SharedPreferences и логика не менялись — только расположение строк.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onEpgClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
-    val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    var selectedId by rememberSaveable { mutableStateOf(SettingsCategory.PLAYBACK.id) }
+    val category = SettingsCategory.fromId(selectedId)
+    val categoryRequesters = remember { SettingsCategory.entries.associateWith { FocusRequester() } }
+    val panelRequester = remember { FocusRequester() }
+    var panelHasFocus by remember { mutableStateOf(false) }
 
-    // Экран — обычный composable() в NavHost, не сохранённая вкладка, так
-    // что при возврате сюда с "Источники"/"Синхронизация" он пересоздаётся
-    // заново и это отрабатывает снова — статус в карточках не залипает на
-    // значении, снятом при первом входе (см. SettingsViewModel.refreshStatusRows()).
-    LaunchedEffect(Unit) { viewModel.refreshStatusRows() }
+    // Экран пересоздаётся при возврате с «Источники»/«Синхронизация» — статусы обновляем заново.
+    LaunchedEffect(Unit) {
+        viewModel.refreshStatusRows()
+        withFrameNanos { }
+        categoryRequesters[SettingsCategory.fromId(selectedId)]?.safeRequestFocus()
+    }
+    // Назад из правой панели — на выбранную категорию; со списка категорий — обычный выход.
+    BackHandler(enabled = panelHasFocus) { categoryRequesters[category]?.safeRequestFocus() }
 
     Row(Modifier.fillMaxSize()) {
         NavSidebar(navController)
-        // Раньше Column был fillMaxSize() без verticalScroll() — тот же баг,
-        // что чинили на телефоне (PhoneSettingsScreen.kt), просто не перенесённый
-        // на TV: контент, не помещающийся по высоте (а тут 6 секций + кнопки),
-        // просто обрезался снизу экрана, ничего не докрутить. Паддинг был
-        // только start/top — без end/bottom нет overscan-запаса, часть TV
-        // физически обрезает пару % по краям картинки. weight(1f) на нижнем
-        // Spacer убран: в скроллящемся Column он несовместим (бесконечная
-        // высота) и раньше просто держал кнопки прижатыми к низу — при скролле
-        // это не нужно, они и так доступны докруткой.
-        Column(
-            modifier = Modifier
+        Row(
+            Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
-                .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXXL)
+                .padding(start = ZenithDimens.paddingL, top = ZenithDimens.paddingXXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXL)
         ) {
-            Text("Настройки", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
-            Spacer(Modifier.height(ZenithDimens.paddingXL))
-            // Sections: Playback, Notifications, Network, Interface, Plugins, Sources
-            SettingsGroup("Воспроизведение", Icons.Outlined.PlayCircle) {
-                // Раньше "Качество по умолчанию"/"Автовоспроизведение"/"Субтитры"
-                // были тремя захардкоженными строками подряд, и для двух из них
-                // не было НИКАКОЙ реализации (ни "следующего эпизода", ни
-                // обработки субтитровых дорожек) — убрали как выдуманные
-                // настройки. Теперь оба реализованы: следующий/предыдущий эпизод
-                // — PlayerViewModel.playNextEpisode()/playPreviousEpisode()
-                // (кнопки в PlayerController.kt/PhonePlayerController.kt вместо
-                // перемотки при просмотре сериала), субтитры — TrackOption/
-                // selectSubtitleTrack. "Автовоспроизведение следующей серии"
-                // по-прежнему не заведено отдельной настройкой — сама
-                // возможность есть, но нет автозапуска без нажатия, это другая
-                // функция, не переименование того, что уже добавлено.
-                val qualityPrefs = remember { QualityPreferences(context) }
-                val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
-                var selectedQuality by remember { mutableStateOf(qualityPrefs.getSelectedQuality() ?: "Авто") }
-                CycleSetting("Качество по умолчанию", selectedQuality) {
-                    val next = qualityOptions[(qualityOptions.indexOf(selectedQuality) + 1) % qualityOptions.size]
-                    if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
-                    selectedQuality = next
-                }
-                SettingsDivider()
-                // Раньше настройки внешних субтитров не было нигде, кроме самого
-                // плеера (ссылка на .srt вводилась заново на каждое видео) — это
-                // единственная ЧАСТЬ субтитров, которая действительно глобальна
-                // (не привязана к конкретному фильму), поэтому именно она здесь,
-                // а не сам ввод ссылки — тот остаётся в плеере, см. комментарий
-                // в PhonePlayerController.kt.
-                val subtitlePrefs = remember { SubtitlePreferences(context) }
-                var showSubsByDefault by remember { mutableStateOf(subtitlePrefs.getShowByDefault()) }
-                CycleSetting("Субтитры по умолчанию", if (showSubsByDefault) "Вкл" else "Выкл") {
-                    showSubsByDefault = !showSubsByDefault
-                    subtitlePrefs.setShowByDefault(showSubsByDefault)
-                }
-                // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/
-                // точность... для тех, кому точность важнее скорости
-                // (сценарий нарушений слуха), должен быть выбор". Влияет
-                // только на локальный Whisper-фолбэк автосубтитров
-                // (подзадача 5/6) — облачный путь эту настройку не читает.
-                var preferAccuracy by remember { mutableStateOf(subtitlePrefs.getPreferLocalAccuracy()) }
-                CycleSetting("Автосубтитры (офлайн)", if (preferAccuracy) "Точность" else "Скорость") {
-                    preferAccuracy = !preferAccuracy
-                    subtitlePrefs.setPreferLocalAccuracy(preferAccuracy)
+            Column(Modifier.width(260.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                Text("Настройки", style = MaterialTheme.typography.displaySmall, color = ZenithOnSurface)
+                Spacer(Modifier.height(ZenithDimens.paddingL))
+                SettingsCategory.entries.forEach { cat ->
+                    CategoryItem(
+                        category = cat,
+                        selected = cat == category,
+                        requester = categoryRequesters.getValue(cat),
+                        panelRequester = panelRequester,
+                        onFocused = { selectedId = cat.id }
+                    )
                 }
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            SettingsGroup("Уведомления", Icons.Outlined.Notifications) {
-                // Раньше все три строки ("Новые серии: Вкл", "Новый контент: Вкл",
-                // "Тихий режим: 23:00-08:00") были захардкожены и ни на что не
-                // влияли. Теперь "Новые серии" реально управляют
-                // SeriesUpdateWorker (см. NotificationPreferences.kt) — сериал
-                // должен быть в Избранном, чтобы отслеживаться.
-                // "Новый контент" оставлен как "Скоро" — в бэкенде физически нет
-                // сигнала "добавлено в каталог", реализовать нечем, не стал
-                // изображать рабочую настройку.
-                val notifPrefs = remember { NotificationPreferences(context) }
-                var newEpisodesEnabled by remember { mutableStateOf(notifPrefs.isNewEpisodesEnabled()) }
-                CycleSetting("Новые серии (избранные сериалы)", if (newEpisodesEnabled) "Вкл" else "Выкл") {
-                    newEpisodesEnabled = !newEpisodesEnabled
-                    notifPrefs.setNewEpisodesEnabled(newEpisodesEnabled)
-                }
-                SettingsDivider()
-                SettingsItem("Новый контент", "Скоро")
+            Spacer(Modifier.width(ZenithDimens.paddingL))
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .focusRequester(panelRequester)
+                    // Влево из любой строки панели — на выбранную категорию, а не на ближайшую по геометрии.
+                    .focusProperties { left = categoryRequesters.getValue(category) }
+                    .onFocusChanged { panelHasFocus = it.hasFocus }
+                    .focusGroup()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(category.title, style = MaterialTheme.typography.headlineMedium, color = ZenithOnSurface)
+                Text(category.subtitle, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurfaceVariant)
+                Spacer(Modifier.height(ZenithDimens.paddingM))
+                CategoryPage(
+                    category = category,
+                    viewModel = viewModel,
+                    onCacheManagementClick = onCacheManagementClick,
+                    onForceOtaUpdateClick = onForceOtaUpdateClick,
+                    onPluginsClick = onPluginsClick,
+                    onSyncClick = onSyncClick,
+                    onSourcesClick = onSourcesClick,
+                    onEpgClick = onEpgClick
+                )
+                Spacer(Modifier.height(ZenithDimens.paddingXL))
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            SettingsGroup("Сеть", Icons.Outlined.Wifi) {
-                // Раньше "Таймаут: 15 сек" и "Макс. качество на моб.: 720p" были
-                // захардкожены. Таймаут теперь реально идёт в RetrofitFactory
-                // через sessionGraph.reinitWithAuth(), чтобы применился без
-                // перезапуска приложения — клиент пересобирается один раз при
-                // инициализации. Ограничение качества на мобильных данных
-                // читает QualityPreferences.getMaxQualityOnMobile() — само поле
-                // существовало в коде с самого начала, просто не использовалось
-                // нигде, включая этот экран.
-                val networkPrefs = remember { NetworkPreferences(context) }
-                val qualityPrefsNet = remember { QualityPreferences(context) }
-                val timeoutOptions = listOf(10, 15, 20, 30)
-                var timeoutSeconds by remember { mutableStateOf(networkPrefs.getTimeoutSeconds()) }
-                CycleSetting("Таймаут запроса", "$timeoutSeconds сек") {
-                    timeoutSeconds = timeoutOptions[(timeoutOptions.indexOf(timeoutSeconds).let { if (it == -1) 0 else it } + 1) % timeoutOptions.size]
-                    networkPrefs.setTimeoutSeconds(timeoutSeconds)
-                    viewModel.applyNetworkTimeoutChange()
-                }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CategoryItem(category: SettingsCategory, selected: Boolean, requester: FocusRequester, panelRequester: FocusRequester, onFocused: () -> Unit) {
+    Surface(
+        onClick = { panelRequester.safeRequestFocus() },
+        shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .focusRequester(requester)
+            // Вправо с категории — всегда в первую строку панели, а не в ближайшую по высоте.
+            .focusProperties { right = panelRequester }
+            .onFocusChanged { if (it.isFocused) onFocused() }
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(category.icon, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else ZenithOnSurfaceVariant, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(ZenithDimens.paddingSM))
+            Text(category.title, color = ZenithOnSurface, maxLines = 1)
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CategoryPage(
+    category: SettingsCategory,
+    viewModel: SettingsViewModel,
+    onCacheManagementClick: () -> Unit,
+    onForceOtaUpdateClick: () -> Unit,
+    onPluginsClick: () -> Unit,
+    onSyncClick: () -> Unit,
+    onSourcesClick: () -> Unit,
+    onEpgClick: () -> Unit
+) {
+    when (category) {
+        SettingsCategory.PLAYBACK -> {
+            val quality by viewModel.quality.collectAsStateWithLifecycle()
+            val subsByDefault by viewModel.subsByDefault.collectAsStateWithLifecycle()
+            val preferAccuracy by viewModel.preferAccuracy.collectAsStateWithLifecycle()
+            SettingsCard {
+                CycleSetting("Качество по умолчанию", quality) { viewModel.cycleQuality() }
                 SettingsDivider()
-                val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
-                var maxMobileQuality by remember { mutableStateOf(qualityPrefsNet.getMaxQualityOnMobile()) }
-                CycleSetting("Макс. качество на моб. данных", maxMobileQuality) {
-                    val next = mobileQualityOptions[(mobileQualityOptions.indexOf(maxMobileQuality).let { if (it == -1) 0 else it } + 1) % mobileQualityOptions.size]
-                    qualityPrefsNet.setMaxQualityOnMobile(next)
-                    maxMobileQuality = next
-                }
+                CycleSetting("Субтитры по умолчанию", if (subsByDefault) "Вкл" else "Выкл") { viewModel.setSubsByDefault(!subsByDefault) }
+                // Влияет только на локальный Whisper-фолбэк автосубтитров — облачный путь настройку не читает.
+                CycleSetting("Автосубтитры (офлайн)", if (preferAccuracy) "Точность" else "Скорость") { viewModel.setPreferAccuracy(!preferAccuracy) }
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            SettingsGroup("Интерфейс", Icons.Outlined.Palette) {
-                // Раньше "Тема: Тёмная" и "Язык: Русский" были захардкоженными
-                // строками, ни к чему не привязанными. Тема теперь реально
-                // переключает ZenithTheme (см. MainActivity.kt) через
-                // ThemeManager.darkThemeFlow. Не использую androidx.tv.material3.Switch
-                // — не смог достоверно подтвердить, что такой компонент вообще
-                // есть в этой версии библиотеки, CycleSetting безопаснее (уже
-                // используется в этом же файле). Язык оставлен видимым, но
-                // намеренно не нажимается: реальный переключатель потребовал бы
-                // вынести весь текст интерфейса в string-ресурсы (сейчас 0
-                // использований stringResource во всём проекте) — отдельная
-                // большая задача, не в этом заходе.
-                val overlay by viewModel.playerOverlay.collectAsState()
-                val hideDelay = overlay.hideDelayMs ?: 0
-                CycleSetting("Автоскрытие управления плеера", formatControlsHideDelay(hideDelay)) {
+        }
+        SettingsCategory.PLAYER -> {
+            val overlay by viewModel.playerOverlay.collectAsState()
+            val hideDelay = overlay.hideDelayMs ?: 0
+            SettingsCard {
+                CycleSetting("Автоскрытие управления", formatControlsHideDelay(hideDelay)) {
                     viewModel.setControlsHideDelayMs(CONTROLS_HIDE_DELAY_OPTIONS_MS.nextAfter(hideDelay))
                 }
                 SettingsDivider()
@@ -208,10 +179,6 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                 CycleSetting("Полоска прогресса", if (overlay.showProgressStrip) "Вкл" else "Выкл") {
                     viewModel.setShowProgressStrip(!overlay.showProgressStrip)
                 }
-                SettingsDivider()
-                CycleSetting("Показывать прогрузку", if (overlay.showBuffered) "Да" else "Нет") {
-                    viewModel.setShowBuffered(!overlay.showBuffered)
-                }
                 if (overlay.showProgressStrip) {
                     SettingsDivider()
                     CycleSetting("Толщина полоски", "${overlay.progressStripDp} dp") {
@@ -219,12 +186,14 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     }
                 }
                 SettingsDivider()
-                SettingsItem("Язык", "Скоро")
+                CycleSetting("Показывать прогрузку", if (overlay.showBuffered) "Да" else "Нет") {
+                    viewModel.setShowBuffered(!overlay.showBuffered)
+                }
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            SettingsGroup("Управление пультом", Icons.Outlined.Gamepad) {
-                val overlay by viewModel.playerOverlay.collectAsState()
-                val modes = com.platinum.ott.core.LiveArrowMode.values().toList()
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            // Бывшая группа «Управление пультом».
+            val modes = LiveArrowMode.values().toList()
+            SettingsCard {
                 CycleSetting("Стрелки в эфире", overlay.liveArrowMode.title) {
                     viewModel.setLiveArrowMode(modes.nextAfter(overlay.liveArrowMode))
                 }
@@ -233,72 +202,69 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     viewModel.setBackClosesAll(!overlay.backClosesAll)
                 }
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            SettingsGroup("Плагины", Icons.Outlined.Extension) {
-                NavRow("Управление плагинами", "Каталог и настройки", onClick = onPluginsClick)
+        }
+        SettingsCategory.APPEARANCE -> {
+            // Раздел «Внешний вид» (план 11) наполняется следующим этапом. «Язык» оставлен заглушкой:
+            // реальный переключатель требует вынести весь текст в string-ресурсы.
+            SettingsCard { SettingsItem("Язык", "Скоро") }
+        }
+        SettingsCategory.NETWORK -> {
+            val timeout by viewModel.timeoutSeconds.collectAsStateWithLifecycle()
+            val maxMobile by viewModel.maxMobileQuality.collectAsStateWithLifecycle()
+            SettingsCard {
+                CycleSetting("Таймаут запроса", "$timeout сек") { viewModel.cycleTimeout() }
+                SettingsDivider()
+                CycleSetting("Макс. качество на моб. данных", maxMobile) { viewModel.cycleMaxMobileQuality() }
+                SettingsDivider()
+                NavRow("Управление кэшем", "Размер по категориям и очистка", onClick = onCacheManagementClick)
             }
-            Spacer(Modifier.height(ZenithDimens.paddingL))
-            // Задача "Источники" (PROMPT_SOURCES_SCREEN.md) заменила прежний
-            // единственный источник (AuthPreferences) на список PlaylistSource —
-            // бинарного "подключён/не подключён" (isConnected(), читал старый
-            // AuthPreferences.type) больше не существует как понятия: источников
-            // может быть 0, 1 или много, у каждого свой статус. Вместо секции
-            // "Аккаунт" с раздельными "Подключить источник"/"Сменить аккаунт" —
-            // один переход на полноценный список источников (SourcesScreen.kt),
-            // где статус/добавление/удаление каждого показаны по отдельности.
-            // "Синхронизация" — независимый механизм (пара по 6-значному коду),
-            // но живёт в той же карточке, т.к. обе строки — про подключение
-            // к внешнему состоянию, а не про поведение самого приложения.
-            // План 07, этап 4: источники каналов и управление каналами переехали в раздел
-            // «Каналы» (вкладка «Источники», режим «Править»). Здесь остаются только источники
-            // каталога — плейлисты фильмов и сериалов. Строка «Каналы» убрана.
-            SettingsGroup("Источники", Icons.Outlined.Source) {
+        }
+        SettingsCategory.NOTIFICATIONS -> {
+            val newEpisodes by viewModel.newEpisodes.collectAsStateWithLifecycle()
+            SettingsCard {
+                // Сериал должен быть в Избранном, чтобы отслеживаться.
+                CycleSetting("Новые серии (избранные сериалы)", if (newEpisodes) "Вкл" else "Выкл") { viewModel.setNewEpisodes(!newEpisodes) }
+                SettingsDivider()
+                SettingsItem("Новый контент", "Скоро")
+            }
+        }
+        SettingsCategory.SOURCES -> {
+            val sourcesCount by viewModel.sourcesCount.collectAsStateWithLifecycle()
+            SettingsCard {
                 NavRow(
                     "Все источники (каналы, фильмы, сериалы)",
                     if (sourcesCount == 0) "Не настроено" else "$sourcesCount подключено",
                     onClick = onSourcesClick
                 )
                 SettingsDivider()
-                // Загрузка программы передач: статус, журнал, «Обновить сейчас».
                 NavRow("Телепрограмма (EPG)", "Статус и обновление", onClick = onEpgClick)
+            }
+        }
+        SettingsCategory.PLUGINS -> {
+            SettingsCard { NavRow("Управление плагинами", "Каталог и настройки", onClick = onPluginsClick) }
+        }
+        SettingsCategory.DEVICES -> {
+            val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
+            SettingsCard { NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick) }
+        }
+        SettingsCategory.MAINTENANCE -> {
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val context = LocalContext.current
+            val versionName = remember {
+                try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—" } catch (_: Exception) { "—" }
+            }
+            val otaStatus = when (val state = uiState) {
+                is SettingsUiState.Loading -> "Обновление…"
+                is SettingsUiState.Success -> "Готово: обновлено ${state.result.updated}, пропущено ${state.result.skipped}, ошибок ${state.result.failed}"
+                is SettingsUiState.Error -> "Ошибка: ${state.message}"
+                else -> "Скачать свежие версии парсеров"
+            }
+            SettingsCard {
+                NavRow("Обновить парсеры", otaStatus, arrow = false) {
+                    if (uiState !is SettingsUiState.Loading) { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }
+                }
                 SettingsDivider()
-                NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
-            }
-            Spacer(Modifier.height(ZenithDimens.paddingXL))
-            // Технические действия — сознательно вне карточек-секций выше и
-            // визуально приглушены (серая обводка/подпись вместо цветной), чтобы
-            // читаться как второстепенные инструменты, а не как настройки.
-            // "Сменить аккаунт"/"Очистить кэш" отсюда убраны не по недосмотру:
-            // логин на один аккаунт удалён вместе с AuthRepository
-            // (PROMPT_REVISION.md), а полноценная очистка по категориям — уже
-            // отдельный экран (onCacheManagementClick, см. CacheManagementScreen.kt),
-            // эта кнопка теперь просто ведёт туда, а не чистит сама.
-            Text("ТЕХНИЧЕСКОЕ", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant, letterSpacing = 1.5.sp)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }, enabled = uiState !is SettingsUiState.Loading) {
-                    if (uiState is SettingsUiState.Loading) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ZenithOnSurfaceVariant)
-                        Spacer(Modifier.width(ZenithDimens.paddingXS))
-                    }
-                    Text("Обновить парсеры")
-                }
-                OutlinedButton(onClick = onCacheManagementClick) { Text("Управление кэшем") }
-            }
-            // Раньше uiState (Loading/Success/Error) велось во ViewModel, но
-            // нигде на экране не отображалось — единственным признаком того,
-            // что "Обновить парсеры" вообще что-то сделало, было отсутствие
-            // краша. Теперь исход виден явно под кнопками.
-            when (val state = uiState) {
-                is SettingsUiState.Success -> {
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text("Готово: обновлено ${state.result.updated}, пропущено ${state.result.skipped}, ошибок ${state.result.failed}", color = ZenithSuccess, style = MaterialTheme.typography.bodySmall)
-                }
-                is SettingsUiState.Error -> {
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text("Ошибка: ${state.message}", color = ZenithError, style = MaterialTheme.typography.bodySmall)
-                }
-                else -> {}
+                SettingsItem("Версия приложения", versionName)
             }
         }
     }
@@ -318,27 +284,18 @@ private fun formatLastSynced(ms: Long): String {
     }
 }
 
-// Иконка + подпись капсом над карточкой секции — раньше это был просто
-// Text(title, titleMedium), не читалось как визуальная группа с рядами
-// ниже. Сама карточка — со скруглением и лёгким фоном/обводкой, ряды
-// внутри разделены SettingsDivider(), не голый список без обрамления.
-@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsGroup(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = ZenithDimens.paddingXS, bottom = ZenithDimens.paddingS)) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(ZenithDimens.paddingXS))
-            Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.5.sp)
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(ZenithShapeMedium)
-                .background(ZenithSurfaceVariant.copy(alpha = 0.5f))
-                .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeMedium)
-                .padding(vertical = ZenithDimens.paddingXS, horizontal = ZenithDimens.paddingS),
-            content = content
-        )
-    }
+// Карточка группы строк внутри страницы категории: скругление, лёгкий фон и обводка,
+// ряды внутри разделены SettingsDivider().
+@Composable private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ZenithShapeMedium)
+            .background(ZenithSurfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, ZenithOnSurface.copy(alpha = 0.08f), ZenithShapeMedium)
+            .padding(vertical = ZenithDimens.paddingXS, horizontal = ZenithDimens.paddingS),
+        content = content
+    )
 }
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsDivider() {
     HorizontalDivider(color = ZenithOnSurface.copy(alpha = 0.08f))
@@ -360,7 +317,7 @@ private fun formatLastSynced(ms: Long): String {
 // увеличении на фокусе строка вылезала за пределы этой рамки и даже за
 // край экрана (реальный скриншот с TV: подсветка и текст обрезаны). Тот
 // же фикс — в CycleSetting ниже.
-@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, onClick: () -> Unit) {
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, arrow: Boolean = true, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
@@ -379,7 +336,7 @@ private fun formatLastSynced(ms: Long): String {
                 Text(label, color = ZenithOnSurface)
                 Text(status, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ZenithOnSurfaceVariant)
+            if (arrow) Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ZenithOnSurfaceVariant)
         }
     }
 }

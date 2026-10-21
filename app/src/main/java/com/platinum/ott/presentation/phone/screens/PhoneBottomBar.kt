@@ -97,7 +97,7 @@ fun PhoneBottomBar(navController: NavHostController) {
             colors = colors,
         )
         NavigationBarItem(
-            selected = MoreItems.any { it.route == currentRoute },
+            selected = MoreItems.any { it.route == currentRoute } || currentRoute?.startsWith("settings_page") == true,
             onClick = { showMore = true },
             icon = { Icon(Icons.Default.Menu, "Ещё") },
             label = { NavLabel("Ещё") },

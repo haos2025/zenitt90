@@ -3,7 +3,14 @@ package com.platinum.ott.presentation.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.AuthPreferences
+import android.content.Context
 import com.platinum.ott.core.InterfacePreferences
+import com.platinum.ott.core.NetworkPreferences
+import com.platinum.ott.core.NotificationPreferences
+import com.platinum.ott.core.QualityPreferences
+import com.platinum.ott.core.SubtitlePreferences
+import com.platinum.ott.core.nextAfter
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.platinum.ott.core.PlayerOverlaySettings
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.di.ThemeManager
@@ -25,8 +32,57 @@ class SettingsViewModel @Inject constructor(
     // Hilt-синглтоном, а не через sessionGraph, только чтобы прочитать
     // lastSyncTimestamp для статуса строки "Синхронизация" (см. ниже).
     private val authPreferences: AuthPreferences,
-    private val interfacePreferences: InterfacePreferences
+    private val interfacePreferences: InterfacePreferences,
+    private val networkPreferences: NetworkPreferences,
+    private val notificationPreferences: NotificationPreferences,
+    @ApplicationContext context: Context
 ) : ViewModel() {
+    // Настройки воспроизведения/сети/уведомлений раньше создавали
+    // QualityPreferences(context) и т.п. прямо внутри composable — отдельно на ТВ и на
+    // телефоне. Теперь одно место (план 09, раздел 5): оба экрана читают эти потоки.
+    private val qualityPrefs = QualityPreferences(context)
+    private val subtitlePrefs = SubtitlePreferences(context)
+
+    val qualityOptions = listOf("Авто", "1080p", "720p", "480p")
+    private val _quality = MutableStateFlow(qualityPrefs.getSelectedQuality() ?: "Авто")
+    val quality: StateFlow<String> = _quality
+    fun cycleQuality() {
+        val next = qualityOptions.nextAfter(_quality.value)
+        if (next == "Авто") qualityPrefs.clearSelectedQuality() else qualityPrefs.setSelectedQuality(next)
+        _quality.value = next
+    }
+
+    private val _subsByDefault = MutableStateFlow(subtitlePrefs.getShowByDefault())
+    val subsByDefault: StateFlow<Boolean> = _subsByDefault
+    fun setSubsByDefault(enabled: Boolean) { subtitlePrefs.setShowByDefault(enabled); _subsByDefault.value = enabled }
+
+    private val _preferAccuracy = MutableStateFlow(subtitlePrefs.getPreferLocalAccuracy())
+    val preferAccuracy: StateFlow<Boolean> = _preferAccuracy
+    fun setPreferAccuracy(enabled: Boolean) { subtitlePrefs.setPreferLocalAccuracy(enabled); _preferAccuracy.value = enabled }
+
+    private val _newEpisodes = MutableStateFlow(notificationPreferences.isNewEpisodesEnabled())
+    val newEpisodes: StateFlow<Boolean> = _newEpisodes
+    fun setNewEpisodes(enabled: Boolean) { notificationPreferences.setNewEpisodesEnabled(enabled); _newEpisodes.value = enabled }
+
+    private val timeoutOptions = listOf(10, 15, 20, 30)
+    private val _timeoutSeconds = MutableStateFlow(networkPreferences.getTimeoutSeconds())
+    val timeoutSeconds: StateFlow<Int> = _timeoutSeconds
+    fun cycleTimeout() {
+        val next = timeoutOptions.nextAfter(_timeoutSeconds.value)
+        networkPreferences.setTimeoutSeconds(next)
+        _timeoutSeconds.value = next
+        applyNetworkTimeoutChange()
+    }
+
+    private val mobileQualityOptions = listOf("480p", "720p", "1080p", "Без ограничений")
+    private val _maxMobileQuality = MutableStateFlow(qualityPrefs.getMaxQualityOnMobile())
+    val maxMobileQuality: StateFlow<String> = _maxMobileQuality
+    fun cycleMaxMobileQuality() {
+        val next = mobileQualityOptions.nextAfter(_maxMobileQuality.value)
+        qualityPrefs.setMaxQualityOnMobile(next)
+        _maxMobileQuality.value = next
+    }
+
     private val _uiState = MutableStateFlow<SettingsUiState>(SettingsUiState.Idle)
     val uiState: StateFlow<SettingsUiState> = _uiState
 

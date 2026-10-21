@@ -202,7 +202,6 @@ dependencies {
     implementation(libs.work.runtime.ktx)
     
     // Testing & Debug
-    debugImplementation(libs.leakcanary)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)

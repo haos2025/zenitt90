@@ -40,6 +40,7 @@ import com.platinum.ott.presentation.phone.screens.PhoneDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneFavoritesScreen
 import com.platinum.ott.presentation.phone.screens.PhoneHistoryScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSettingsScreen
+import com.platinum.ott.presentation.phone.screens.PhoneSettingsCategoryScreen
 import com.platinum.ott.presentation.phone.screens.PhonePlayerScreen
 import com.platinum.ott.presentation.phone.screens.PhoneQrScanScreen
 import com.platinum.ott.presentation.phone.screens.PhoneLocalSyncScreen
@@ -208,7 +209,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             if (isTV) PlayerScreen(movieId = id, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd, onBackPressed = { navController.popBackStack() })
             else PhonePlayerScreen(id, navController, preferredVariantUrl = variantUrl, catchupStartMillis = catchupStart, catchupEndMillis = catchupEnd)
         }
-        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("catalog_sources") }, onEpgClick = { navController.navigate("epg_settings") }) else PhoneSettingsScreen(navController) }
+        composable("settings") { if (isTV) SettingsScreen(navController = navController, onCacheManagementClick = { navController.navigate("cache_management") }, onForceOtaUpdateClick = {}, onPluginsClick = { navController.navigate("plugins") }, onSyncClick = { navController.navigate("sync_pairing") }, onSourcesClick = { navController.navigate("sources") }, onEpgClick = { navController.navigate("epg_settings") }) else PhoneSettingsScreen(navController) }
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
@@ -227,6 +228,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("history") { if (isTV) HistoryScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens
+        composable("settings_page/{cat}") { entry -> PhoneSettingsCategoryScreen(navController, entry.arguments?.getString("cat")) }
         composable("plugins") { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) }
         composable("search?q={q}", arguments = listOf(navArgument("q") { type = NavType.StringType; defaultValue = "" })) { entry ->
             val q = entry.arguments?.getString("q") ?: ""
