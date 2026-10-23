@@ -2,6 +2,10 @@ package com.platinum.ott.presentation.phone.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -171,12 +175,53 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
             }
         }
         SettingsCategory.APPEARANCE -> {
-            // «Внешний вид» (план 11) — следующий этап. «Язык» — заглушка: нужен вынос текста в string-ресурсы.
+            val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+            var confirmReset by remember { mutableStateOf(false) }
+            Box(Modifier.padding(bottom = ZenithDimens.paddingM)) {
+                com.platinum.ott.presentation.components.MovieCard(title = "Пример карточки", poster = "", year = 2024, onClick = {}, rating = 7.8, progress = 0.4f)
+            }
+            SettingsCard {
+                Text("Размер элементов", color = ZenithOnSurface)
+                Row(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)) {
+                    com.platinum.ott.ui.theme.SIZE_STEP_TITLES.forEachIndexed { i, title ->
+                        FilterChip(selected = appearance.sizeStep == i, onClick = { viewModel.setSizeStep(i) }, label = { Text(title, maxLines = 1) })
+                    }
+                }
+                CardDivider()
+                Text("Акцентный цвет", color = ZenithOnSurface)
+                Row(Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
+                    com.platinum.ott.ui.theme.AccentColor.entries.forEach { a ->
+                        Box(
+                            Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(a.color)
+                                .border(if (appearance.accent == a) 3.dp else 0.dp, ZenithOnSurface, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { viewModel.setAccent(a) }
+                        )
+                    }
+                }
+                CardDivider()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Картинки в карточках", color = ZenithOnSurface, modifier = Modifier.weight(1f))
+                    Button(onClick = { viewModel.cycleImageScale() }) { Text(appearance.imageScale.title) }
+                }
+                CardDivider()
+                TextButton(onClick = { confirmReset = true }) { Text("Сбросить внешний вид") }
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            // «Язык» — заглушка: нужен вынос текста в string-ресурсы.
             SettingsCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Язык", color = ZenithOnSurfaceVariant, modifier = Modifier.weight(1f))
                     Text("Скоро", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
+            }
+            if (confirmReset) {
+                AlertDialog(
+                    onDismissRequest = { confirmReset = false },
+                    title = { Text("Сбросить внешний вид?") },
+                    text = { Text("Размер, акцент и картинки вернутся к исходным. Настройки плеера не изменятся.") },
+                    confirmButton = { TextButton(onClick = { viewModel.resetAppearance(); confirmReset = false }) { Text("Сбросить") } },
+                    dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Отмена") } }
+                )
             }
         }
         SettingsCategory.NETWORK -> {

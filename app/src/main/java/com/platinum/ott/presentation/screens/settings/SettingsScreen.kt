@@ -204,8 +204,29 @@ private fun CategoryPage(
             }
         }
         SettingsCategory.APPEARANCE -> {
-            // Раздел «Внешний вид» (план 11) наполняется следующим этапом. «Язык» оставлен заглушкой:
-            // реальный переключатель требует вынести весь текст в string-ресурсы.
+            val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+            var confirmReset by remember { mutableStateOf(false) }
+            // Пример карточки с текущими размером/акцентом — не фокусируется, чтобы не мешать D-pad.
+            Box(Modifier.focusProperties { canFocus = false }.padding(bottom = ZenithDimens.paddingM)) {
+                com.platinum.ott.presentation.components.MovieCard(title = "Пример карточки", poster = "", year = 2024, onClick = {}, rating = 7.8, progress = 0.4f)
+            }
+            SettingsCard {
+                CycleSetting("Размер элементов", com.platinum.ott.ui.theme.SIZE_STEP_TITLES[appearance.sizeStep]) { viewModel.cycleSizeStep() }
+                SettingsDivider()
+                CycleSetting("Акцентный цвет", appearance.accent.title) { viewModel.cycleAccent() }
+                SettingsDivider()
+                CycleSetting("Картинки в карточках", appearance.imageScale.title) { viewModel.cycleImageScale() }
+                SettingsDivider()
+                NavRow(
+                    if (confirmReset) "Нажмите ещё раз — сбросить" else "Сбросить внешний вид",
+                    "Размер, акцент и картинки вернутся к исходным",
+                    arrow = false
+                ) {
+                    if (confirmReset) { viewModel.resetAppearance(); confirmReset = false } else confirmReset = true
+                }
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            // «Язык» оставлен заглушкой: реальный переключатель требует вынести весь текст в string-ресурсы.
             SettingsCard { SettingsItem("Язык", "Скоро") }
         }
         SettingsCategory.NETWORK -> {
@@ -365,7 +386,7 @@ private fun formatLastSynced(ms: Long): String {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            Text(value, color = ZenithPrimaryMuted)
+            Text(value, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

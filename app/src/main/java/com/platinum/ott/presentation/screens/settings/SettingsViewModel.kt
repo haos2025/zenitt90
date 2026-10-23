@@ -106,6 +106,24 @@ class SettingsViewModel @Inject constructor(
     fun setDarkTheme(enabled: Boolean) { themeManager.setDarkTheme(enabled) }
 
     // Оверлей плеера (TV и телефон): тот же источник — InterfacePreferences.
+    // --- Внешний вид (план 11) ---
+    val appearance: StateFlow<com.platinum.ott.ui.theme.AppearanceSettings> = interfacePreferences.appearance
+    fun cycleSizeStep() {
+        val next = (appearance.value.sizeStep + 1) % com.platinum.ott.ui.theme.SIZE_STEP_TITLES.size
+        interfacePreferences.setSizeStep(next)
+    }
+    fun setSizeStep(step: Int) = interfacePreferences.setSizeStep(step)
+    fun setAccent(accent: com.platinum.ott.ui.theme.AccentColor) = interfacePreferences.setAccent(accent)
+    fun cycleAccent() {
+        val all = com.platinum.ott.ui.theme.AccentColor.entries
+        setAccent(all[(all.indexOf(appearance.value.accent) + 1) % all.size])
+    }
+    fun cycleImageScale() {
+        val all = com.platinum.ott.ui.theme.ImageScaleMode.entries
+        interfacePreferences.setImageScale(all[(all.indexOf(appearance.value.imageScale) + 1) % all.size])
+    }
+    fun resetAppearance() = interfacePreferences.resetAppearance()
+
     private val _playerOverlay = MutableStateFlow(interfacePreferences.playerOverlaySettings())
     val playerOverlay: StateFlow<PlayerOverlaySettings> = _playerOverlay
 

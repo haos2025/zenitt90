@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
     // поле в super.onCreate() ДО того, как выполнится остальной код
     // onCreate() ниже (стандартная гарантия @AndroidEntryPoint).
     @Inject lateinit var themeManager: ThemeManager
+    @Inject lateinit var interfacePreferences: com.platinum.ott.core.InterfacePreferences
 
     // На Android 13+ (TIRAMISU) POST_NOTIFICATIONS — runtime-разрешение,
     // без явного запроса уведомления о новых сериях не показывались бы
@@ -116,7 +117,9 @@ class MainActivity : ComponentActivity() {
             // ThemeManager (core/di/ThemeManager.kt), SettingsViewModel пишет и
             // читает тот же инстанс, мост-дублирование через ServiceLocator убран.
             // Светлую тему убрали — приложение только тёмное (см. Color.kt).
-            ZenithTheme(isTv = isTv) {
+            val appearance by interfacePreferences.appearance.collectAsState()
+            androidx.compose.runtime.CompositionLocalProvider(com.platinum.ott.ui.theme.LocalAppearance provides appearance) {
+            ZenithTheme(isTv = isTv, accent = appearance.accent) {
                 // ИСПРАВЛЕНО: ZenithTvTheme() существовала в Theme.kt, но
                 // никогда и нигде не вызывалась во всём проекте — TV-экраны
                 // (androidx.tv.material3.MaterialTheme.colorScheme.xxx)
@@ -127,7 +130,7 @@ class MainActivity : ComponentActivity() {
                 // CircularProgressIndicator) — уже получают тему от внешнего
                 // ZenithTheme{}, им отдельная обёртка не нужна.
                 if (isTv) {
-                    ZenithTvTheme {
+                    ZenithTvTheme(accent = appearance.accent) {
                         ZenithNavHost(
                             startDestination = startDestination,
                             isTV = isTv,
@@ -141,6 +144,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize().background(ZenithBackground)
                     )
                 }
+            }
             }
         }
     }

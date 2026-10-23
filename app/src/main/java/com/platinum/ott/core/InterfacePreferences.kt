@@ -1,6 +1,13 @@
 package com.platinum.ott.core
 
 import android.content.Context
+import com.platinum.ott.ui.theme.AccentColor
+import com.platinum.ott.ui.theme.AppearanceSettings
+import com.platinum.ott.ui.theme.DEFAULT_SIZE_STEP
+import com.platinum.ott.ui.theme.ImageScaleMode
+import com.platinum.ott.ui.theme.SIZE_STEP_MULTIPLIERS
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Раньше ZenithTheme брал только isSystemInDarkTheme() по умолчанию —
@@ -14,6 +21,27 @@ class InterfacePreferences(context: Context) {
     var isDarkTheme: Boolean
         get() = prefs.getBoolean("dark_theme", true)
         set(value) = prefs.edit().putBoolean("dark_theme", value).apply()
+
+    // --- Внешний вид (план 11) ---
+    // Синглтон: MainActivity и SettingsViewModel видят один и тот же поток, тема меняется сразу.
+    private val _appearance = MutableStateFlow(readAppearance())
+    val appearance: StateFlow<AppearanceSettings> = _appearance
+
+    private fun readAppearance() = AppearanceSettings(
+        sizeStep = prefs.getInt("appearance_size_step", DEFAULT_SIZE_STEP).coerceIn(0, SIZE_STEP_MULTIPLIERS.lastIndex),
+        accent = AccentColor.fromId(prefs.getString("appearance_accent", null)),
+        imageScale = ImageScaleMode.fromId(prefs.getString("appearance_image_scale", null))
+    )
+
+    fun setSizeStep(step: Int) { prefs.edit().putInt("appearance_size_step", step).apply(); _appearance.value = readAppearance() }
+    fun setAccent(accent: AccentColor) { prefs.edit().putString("appearance_accent", accent.id).apply(); _appearance.value = readAppearance() }
+    fun setImageScale(mode: ImageScaleMode) { prefs.edit().putString("appearance_image_scale", mode.id).apply(); _appearance.value = readAppearance() }
+
+    /** Сбрасывает только «Внешний вид»; настройки плеера и прочее не трогает. */
+    fun resetAppearance() {
+        prefs.edit().remove("appearance_size_step").remove("appearance_accent").remove("appearance_image_scale").apply()
+        _appearance.value = readAppearance()
+    }
 
     // --- Оверлей плеера (см. PlayerOverlaySettings) ---
 

@@ -97,7 +97,7 @@ private fun CacheCategoryRow(label: String, valueText: String, enabled: Boolean,
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, color = ZenithOnSurface)
-            Text(valueText, color = ZenithPrimaryMuted, style = MaterialTheme.typography.bodySmall)
+            Text(valueText, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.width(ZenithDimens.paddingSM))
         OutlinedButton(onClick = onClear, enabled = enabled) { Text("Очистить") }

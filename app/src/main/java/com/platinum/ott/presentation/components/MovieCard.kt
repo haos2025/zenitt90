@@ -40,6 +40,8 @@ import com.platinum.ott.ui.theme.ZenithDurationShort
 import com.platinum.ott.ui.theme.ZenithEasingStandard
 import com.platinum.ott.core.platform.isTV
 import com.platinum.ott.ui.theme.ZenithShapeSmall
+import com.platinum.ott.ui.theme.ImageScaleMode
+import com.platinum.ott.ui.theme.LocalAppearance
 
 /**
  * Для записей истории/избранного есть только contentId (Movie нет): настоящий постер бывает лишь
@@ -93,10 +95,15 @@ fun MovieCard(
     val cardWidth = if (wide) cardHeight * (16f / 9f) else ZenithDimens.cardWidth
     val cardAspect = cardWidth.value / cardHeight.value
     var imageAspect by remember(poster) { mutableStateOf<Float?>(null) }
-    val effectiveScale = if (autoScale) {
-        val a = imageAspect
-        if (a == null || abs(a / cardAspect - 1f) < 0.4f) ContentScale.Crop else ContentScale.Fit
-    } else contentScale
+    val imageMode = LocalAppearance.current.imageScale
+    val effectiveScale = when (imageMode) {
+        ImageScaleMode.FILL -> ContentScale.Crop
+        ImageScaleMode.FIT -> ContentScale.Fit
+        ImageScaleMode.AUTO -> if (autoScale) {
+            val a = imageAspect
+            if (a == null || abs(a / cardAspect - 1f) < 0.4f) ContentScale.Crop else ContentScale.Fit
+        } else contentScale
+    }
     val context = LocalContext.current
     val density = LocalDensity.current
     val isTv = remember { isTV(context) }
@@ -143,7 +150,7 @@ fun MovieCard(
                 contentDescription = title,
                 contentScale = effectiveScale,
                 // Логотипы (Fit) — с полями, чтобы не упирались в края и не были огромными.
-                modifier = if (effectiveScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).let { if (logoPadding) it.padding(horizontal = 28.dp, vertical = 44.dp) else it } else Modifier.fillMaxSize(),
+                modifier = if (effectiveScale == ContentScale.Fit) Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.06f)).let { if (logoPadding && imageMode == ImageScaleMode.AUTO) it.padding(horizontal = 28.dp, vertical = 44.dp) else it } else Modifier.fillMaxSize(),
                 placeholder = ColorPainter(MaterialTheme.colorScheme.surface),
                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
                 onError = { posterFailed = true },
