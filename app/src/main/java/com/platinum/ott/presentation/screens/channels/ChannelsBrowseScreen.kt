@@ -43,6 +43,9 @@ import androidx.tv.material3.*
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.data.repository.ChannelUiItem
 import com.platinum.ott.ui.theme.ZenithFocusContainerActive
+import com.platinum.ott.ui.theme.CardSection
+import com.platinum.ott.ui.theme.CardStyle
+import com.platinum.ott.ui.theme.LocalAppearance
 import com.platinum.ott.ui.theme.ZenithShapeSmall
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -212,28 +215,43 @@ fun ChannelsBrowseScreen(
                         )
                     }
                 } else {
-                    // Плитки (решение владельца для ТВ): сетка вместо списка.
-                    // Ширина плитки — минимум 150 dp, число колонок считается само.
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(150.dp),
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
-                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
-                    ) {
-                        // В режиме «Править» ключ только по id: порядок стабилен (по номеру), и фокус
-                        // не должен «прыгать», когда канал подписывается/отписывается.
-                        gridItemsIndexed(visibleChannels, key = { i, c -> if (editMode) c.id else "${i}_${c.id}" }) { index, ch ->
-                            ChannelTileTv(
-                                item = ch,
-                                isFavorite = !editMode && ch.id in favorites,
-                                editMode = editMode,
-                                epgVersion = epgVersion,
-                                viewModel = viewModel,
-                                onClick = { if (editMode) actionsTarget = ch else onPlayChannel(ch.id) },
-                                onLongClick = { if (editMode) actionsTarget = ch else toggleFavorite(ch.id) },
-                                onFocused = { focusedId = ch.id },
-                                modifier = if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier
-                            )
+                    // Форма — настройка «Внешний вид → Карточки: Каналы»: плитка (как было), широкая плитка или список.
+                    val appearance = LocalAppearance.current
+                    val chStyle = appearance.styleOf(CardSection.CHANNELS, true)
+                    @Composable
+                    fun TileFor(index: Int, ch: ChannelUiItem) {
+                        ChannelTileTv(
+                            item = ch,
+                            style = chStyle,
+                            isFavorite = !editMode && ch.id in favorites,
+                            editMode = editMode,
+                            epgVersion = epgVersion,
+                            viewModel = viewModel,
+                            onClick = { if (editMode) actionsTarget = ch else onPlayChannel(ch.id) },
+                            onLongClick = { if (editMode) actionsTarget = ch else toggleFavorite(ch.id) },
+                            onFocused = { focusedId = ch.id },
+                            modifier = if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier
+                        )
+                    }
+                    // В режиме «Править» ключ только по id: порядок стабилен (по номеру), и фокус
+                    // не должен «прыгать», когда канал подписывается/отписывается.
+                    if (chStyle == CardStyle.LIST) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
+                        ) {
+                            itemsIndexed(visibleChannels, key = { i, c -> if (editMode) c.id else "${i}_${c.id}" }) { index, ch -> TileFor(index, ch) }
+                        }
+                    } else {
+                        // Минимальная ширина ячейки растёт вместе с «Размером элементов».
+                        val minCell = (if (chStyle == CardStyle.WIDE) 280.dp else 150.dp) * appearance.sizeMultiplier
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minCell),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
+                            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+                        ) {
+                            gridItemsIndexed(visibleChannels, key = { i, c -> if (editMode) c.id else "${i}_${c.id}" }) { index, ch -> TileFor(index, ch) }
                         }
                     }
                 }
@@ -296,6 +314,7 @@ fun ChannelsBrowseScreen(
 @Composable
 private fun ChannelTileTv(
     item: ChannelUiItem,
+    style: CardStyle,
     isFavorite: Boolean,
     editMode: Boolean,
     epgVersion: Int,
@@ -325,6 +344,38 @@ private fun ChannelTileTv(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
+        if (style != CardStyle.POSTER) {
+            // Широкая плитка / строка списка: логотип слева, справа название и «сейчас в эфире».
+            Row(
+                Modifier.fillMaxWidth().padding(ZenithDimens.paddingS).alpha(if (editMode && !item.isVisible) 0.45f else 1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (style == CardStyle.LIST) {
+                    Text("${item.channelNumber}", style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface.copy(alpha = 0.5f), modifier = Modifier.width(44.dp))
+                }
+                Box(Modifier.width(88.dp).height(56.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
+                    if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
+                    else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(Modifier.width(ZenithDimens.paddingSM))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (editMode && !item.isVisible) Text("  скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                        else if (isFavorite) Text("  ★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    }
+                    val program = now
+                    if (program != null) {
+                        Text(program.first, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        ProgressLine(program.second)
+                    } else {
+                        Text("—", style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.3f), maxLines = 1)
+                    }
+                }
+            }
+            return@Surface
+        }
         // В режиме «Править» скрытые каналы приглушены.
         Column(Modifier.padding(ZenithDimens.paddingS).alpha(if (editMode && !item.isVisible) 0.45f else 1f)) {
             // Верх плитки: логотип на светлой подложке (тёмные логотипы читаются), номер и звезда по углам.

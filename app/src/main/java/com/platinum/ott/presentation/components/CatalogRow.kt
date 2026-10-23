@@ -50,6 +50,8 @@ fun CatalogRow(
     // @Composable-контекст, "invocations can only happen from..." на CI) —
     // читаем здесь, в теле composable-функции, а не внутри remember.
     val cardWidth = ZenithDimens.cardWidth
+    // Форма карточек в рядах — настройка «Внешний вид» (Список в рядах не имеет смысла и считается постером).
+    val wideStyle = com.platinum.ott.ui.theme.LocalAppearance.current.styleOf(com.platinum.ott.ui.theme.CardSection.MOVIES) == com.platinum.ott.ui.theme.CardStyle.WIDE
     val posterWidthPx = remember(density, cardWidth) { with(density) { cardWidth.roundToPx() } }
 
     Column(modifier = modifier) {
@@ -85,10 +87,10 @@ fun CatalogRow(
                     rating = movie.rating.takeIf { it > 0.0 },
                     contentScale = if (isPlaylistRow) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
                     // Ряд плейлиста — серии/фильмы (широкие кадры): вписываем на всю ширину, без полей.
-                    logoPadding = !isPlaylistRow,
+                    logoPadding = !isPlaylistRow && !wideStyle,
                     // Ряд плейлиста — горизонтальные карточки 16:9, способ вписывания — по реальной картинке.
-                    wide = isPlaylistRow,
-                    autoScale = isPlaylistRow
+                    wide = isPlaylistRow || wideStyle,
+                    autoScale = isPlaylistRow || wideStyle
                 )
             }
         }

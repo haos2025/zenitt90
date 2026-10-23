@@ -30,6 +30,7 @@ import com.platinum.ott.presentation.screens.settings.SettingsUiState
 import com.platinum.ott.presentation.screens.settings.SettingsViewModel
 import com.platinum.ott.presentation.settings.SettingsCategory
 import com.platinum.ott.ui.theme.ZenithError
+import com.platinum.ott.ui.theme.titleFor
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import com.platinum.ott.ui.theme.ZenithShapeMedium
@@ -204,6 +205,13 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
                     Button(onClick = { viewModel.cycleImageScale() }) { Text(appearance.imageScale.title) }
                 }
                 CardDivider()
+                com.platinum.ott.ui.theme.CardSection.entries.forEach { sec ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Карточки: ${sec.title}", color = ZenithOnSurface, modifier = Modifier.weight(1f))
+                        Button(onClick = { viewModel.cycleCardStyle(sec, isTv = false) }) { Text(appearance.styleOf(sec, isTv = false).titleFor(sec)) }
+                    }
+                    CardDivider()
+                }
                 TextButton(onClick = { confirmReset = true }) { Text("Сбросить внешний вид") }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))

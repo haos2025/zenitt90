@@ -29,6 +29,9 @@ import com.platinum.ott.core.platform.ZenithDimens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.PosterListRow
+import com.platinum.ott.ui.theme.CardSection
 import com.platinum.ott.presentation.screens.favorites.FolderDot
 import com.platinum.ott.presentation.screens.favorites.FolderManagerDialog
 import com.platinum.ott.presentation.screens.favorites.MoveToFolderDialog
@@ -93,29 +96,46 @@ Scaffold(bottomBar = { PhoneBottomBar(navController) }) { padding ->
                 }
             }
 
-        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
+        fun posterOf(fav: com.platinum.ott.data.local.entity.FavoriteEntity) = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: ""
+        fun open(fav: com.platinum.ott.data.local.entity.FavoriteEntity) = navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}")
+        CardCollection(
+            items = filtered,
+            key = { it.contentId },
+            section = CardSection.FAVORITES,
+            isTv = false,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(ZenithDimens.paddingSM),
+            horizontalGap = ZenithDimens.paddingS,
+            verticalGap = ZenithDimens.paddingSM,
+            listItem = { fav, index ->
+                var showMenu by remember(fav.contentId) { mutableStateOf(false) }
+                PosterListRow(
+                    title = fav.title,
+                    poster = posterOf(fav),
+                    subtitle = if (fav.contentType == "SERIES") "Сериал" else "Фильм",
+                    onClick = { open(fav) },
+                    trailing = {
+                        Box {
+                            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Действия", tint = ZenithOnSurface) }
+                            FavoriteMenu(showMenu, { showMenu = false }, fav, index, filtered, viewModel) { moveTargetContentId = fav.contentId }
+                        }
+                    }
+                )
+            },
+            cardItem = { fav, index, wide ->
                 Box {
-                    MovieCard(title = fav.title, poster = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: "", year = 0, onClick = { navController.navigate(if (fav.contentType == "SERIES") "series/${fav.contentId}" else "detail/${fav.contentId}") }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
-                    // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md,
-                    // п.3) заменяет прежнюю отдельную иконку "Переместить в
-                    // папку" — три действия в одном месте: переместить в
-                    // папку, переключить аниме, убрать из избранного.
+                    MovieCard(title = fav.title, poster = posterOf(fav), year = 0, onClick = { open(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId), wide = wide)
+                    // Единое меню на карточке (PROMPT_FAVORITES_REDESIGN.md, п.3): переместить в папку,
+                    // переключить аниме, убрать из избранного.
                     var showMenu by remember(fav.contentId) { mutableStateOf(false) }
                     IconButton(
                         onClick = { showMenu = true },
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingS).clip(CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
                     ) { Icon(Icons.Default.MoreVert, "Действия", tint = ZenithOnSurface) }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
-                        if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
-                        DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
-                        DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
-                        DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
-                    }
+                    FavoriteMenu(showMenu, { showMenu = false }, fav, index, filtered, viewModel) { moveTargetContentId = fav.contentId }
                 }
             }
-        }
+        )
     }
 }
 
@@ -136,4 +156,23 @@ moveTargetContentId?.let { contentId ->
         onDismiss = { moveTargetContentId = null }
     )
 }
+}
+
+@Composable
+private fun FavoriteMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    fav: com.platinum.ott.data.local.entity.FavoriteEntity,
+    index: Int,
+    filtered: List<com.platinum.ott.data.local.entity.FavoriteEntity>,
+    viewModel: com.platinum.ott.presentation.screens.favorites.FavoritesViewModel,
+    onMoveToFolder: () -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { onDismiss(); viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
+        if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { onDismiss(); viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
+        DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { onDismiss(); onMoveToFolder() })
+        DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { onDismiss(); viewModel.setAnime(fav.contentId, !fav.isAnime) })
+        DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { onDismiss(); viewModel.removeFavorite(fav.contentId) })
+    }
 }

@@ -32,6 +32,10 @@ import androidx.tv.material3.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.presentation.components.NavSidebar
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.components.contentScaleForId
+import com.platinum.ott.ui.theme.CardSection
 
 // PROMPT_NAVIGATION_SIDEBAR.md — постоянный сайдбар вместо возврата только
 // на Home. onBackPressed раньше принимался параметром, но нигде в теле не
@@ -67,8 +71,28 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                 // серый Text, без отдельного компонента.
                 Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = ZenithOnSurfaceVariant)
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                    items(history, key = { it.contentId }) { entry ->
+                CardCollection(
+                    items = history,
+                    key = { it.contentId },
+                    section = CardSection.HISTORY,
+                    isTv = true,
+                    cardItem = { entry, _, wide ->
+                        val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            MovieCard(
+                                title = entry.title, poster = entry.poster ?: "", year = 0,
+                                onClick = { onMovieClick(entry.contentId) },
+                                progress = if (entry.completed) 1f else p,
+                                contentScale = contentScaleForId(entry.contentId),
+                                wide = wide
+                            )
+                            // Удаление — отдельная фокусируемая кнопка под карточкой (долгое нажатие на пульте ненадёжно).
+                            IconButton(onClick = { viewModel.delete(entry) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Удалить «${entry.title}» из истории")
+                            }
+                        }
+                    },
+                    listItem = { entry, _ ->
                         val progress = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
                         // Кнопка удаления — отдельный фокусируемый элемент рядом с
                         // Surface, не внутри его onClick. Тот же принцип, что уже
@@ -120,7 +144,7 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                         }
                         }
                     }
-                }
+                )
             }
         }
     }

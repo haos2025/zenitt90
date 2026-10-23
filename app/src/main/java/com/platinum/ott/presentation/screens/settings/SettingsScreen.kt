@@ -217,6 +217,12 @@ private fun CategoryPage(
                 SettingsDivider()
                 CycleSetting("Картинки в карточках", appearance.imageScale.title) { viewModel.cycleImageScale() }
                 SettingsDivider()
+                com.platinum.ott.ui.theme.CardSection.entries.forEach { sec ->
+                    CycleSetting("Карточки: ${sec.title}", appearance.styleOf(sec).titleFor(sec)) { viewModel.cycleCardStyle(sec) }
+                    SettingsDivider()
+                }
+                CycleSetting("Раскладка (избранное, история, сериалы)", appearance.tvLayout.title) { viewModel.cycleTvLayout() }
+                SettingsDivider()
                 NavRow(
                     if (confirmReset) "Нажмите ещё раз — сбросить" else "Сбросить внешний вид",
                     "Размер, акцент и картинки вернутся к исходным",

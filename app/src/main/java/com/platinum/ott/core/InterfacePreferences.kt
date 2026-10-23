@@ -3,6 +3,9 @@ package com.platinum.ott.core
 import android.content.Context
 import com.platinum.ott.ui.theme.AccentColor
 import com.platinum.ott.ui.theme.AppearanceSettings
+import com.platinum.ott.ui.theme.CardSection
+import com.platinum.ott.ui.theme.CardStyle
+import com.platinum.ott.ui.theme.TvLayout
 import com.platinum.ott.ui.theme.DEFAULT_SIZE_STEP
 import com.platinum.ott.ui.theme.ImageScaleMode
 import com.platinum.ott.ui.theme.SIZE_STEP_MULTIPLIERS
@@ -30,16 +33,26 @@ class InterfacePreferences(context: Context) {
     private fun readAppearance() = AppearanceSettings(
         sizeStep = prefs.getInt("appearance_size_step", DEFAULT_SIZE_STEP).coerceIn(0, SIZE_STEP_MULTIPLIERS.lastIndex),
         accent = AccentColor.fromId(prefs.getString("appearance_accent", null)),
-        imageScale = ImageScaleMode.fromId(prefs.getString("appearance_image_scale", null))
+        imageScale = ImageScaleMode.fromId(prefs.getString("appearance_image_scale", null)),
+        cardStyles = CardSection.entries.mapNotNull { sec ->
+            CardStyle.fromId(prefs.getString("appearance_card_${sec.id}", null))?.let { sec to it }
+        }.toMap(),
+        tvLayout = TvLayout.fromId(prefs.getString("appearance_tv_layout", null))
     )
 
     fun setSizeStep(step: Int) { prefs.edit().putInt("appearance_size_step", step).apply(); _appearance.value = readAppearance() }
     fun setAccent(accent: AccentColor) { prefs.edit().putString("appearance_accent", accent.id).apply(); _appearance.value = readAppearance() }
     fun setImageScale(mode: ImageScaleMode) { prefs.edit().putString("appearance_image_scale", mode.id).apply(); _appearance.value = readAppearance() }
 
+    fun setCardStyle(section: CardSection, style: CardStyle) { prefs.edit().putString("appearance_card_${section.id}", style.id).apply(); _appearance.value = readAppearance() }
+    fun setTvLayout(layout: TvLayout) { prefs.edit().putString("appearance_tv_layout", layout.id).apply(); _appearance.value = readAppearance() }
+
     /** Сбрасывает только «Внешний вид»; настройки плеера и прочее не трогает. */
     fun resetAppearance() {
-        prefs.edit().remove("appearance_size_step").remove("appearance_accent").remove("appearance_image_scale").apply()
+        prefs.edit().apply {
+            remove("appearance_size_step"); remove("appearance_accent"); remove("appearance_image_scale"); remove("appearance_tv_layout")
+            CardSection.entries.forEach { remove("appearance_card_${it.id}") }
+        }.apply()
         _appearance.value = readAppearance()
     }
 

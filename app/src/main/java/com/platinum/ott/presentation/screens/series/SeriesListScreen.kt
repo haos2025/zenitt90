@@ -24,6 +24,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.PosterListRow
+import com.platinum.ott.ui.theme.CardSection
 import com.platinum.ott.data.repository.SeriesSummary
 import com.platinum.ott.ui.theme.ZenithFocusContainerActive
 import com.platinum.ott.ui.theme.ZenithShapeSmall
@@ -49,9 +52,16 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
                     // баг, у backend-контента нет понятия "сериал".
                     Text("Сериалов не найдено. Раздел заполняется из Xtream (get_series) и M3U (по названиям вида S01E02).", color = ZenithOnSurfaceVariant)
                 } else {
-                    LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                        items(state.series, key = { it.seriesId }) { s -> SeriesCard(s, onClick = { onSeriesClick(s.seriesId) }) }
-                    }
+                    CardCollection(
+                        items = state.series,
+                        key = { it.seriesId },
+                        section = CardSection.MOVIES,
+                        isTv = true,
+                        listItem = { s, _ ->
+                            PosterListRow(title = s.title, poster = s.poster, subtitle = "${s.episodeCount} эп.", thumbWidth = 96.dp, onClick = { onSeriesClick(s.seriesId) })
+                        },
+                        cardItem = { s, _, wide -> SeriesCard(s, wide = wide, onClick = { onSeriesClick(s.seriesId) }) }
+                    )
                 }
             }
         }
@@ -60,9 +70,10 @@ fun SeriesListScreen(onBackPressed: () -> Unit, onSeriesClick: (String) -> Unit,
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun SeriesCard(series: SeriesSummary, onClick: () -> Unit) {
-    val cardWidth = ZenithDimens.cardWidth
-    val cardHeight = ZenithDimens.cardHeight
+private fun SeriesCard(series: SeriesSummary, wide: Boolean = false, onClick: () -> Unit) {
+    // Широкая карточка — те же размеры, что у MovieCard(wide = true).
+    val cardHeight = if (wide) ZenithDimens.cardHeight * 0.7f else ZenithDimens.cardHeight
+    val cardWidth = if (wide) cardHeight * (16f / 9f) else ZenithDimens.cardWidth
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { cardWidth.roundToPx() }

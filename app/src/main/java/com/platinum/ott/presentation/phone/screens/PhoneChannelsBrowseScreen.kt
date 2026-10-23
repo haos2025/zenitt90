@@ -11,6 +11,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import com.platinum.ott.ui.theme.CardSection
+import com.platinum.ott.ui.theme.CardStyle
+import com.platinum.ott.ui.theme.LocalAppearance
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -255,10 +261,15 @@ fun PhoneChannelsBrowseScreen(
                     modifier = Modifier.padding(ZenithDimens.paddingXL)
                 )
             }
-            else -> LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = ZenithDimens.paddingL)) {
-                itemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { _, ch ->
+            else -> {
+                // Форма — настройка «Внешний вид → Карточки: Каналы»: список (как было), плитка или широкая плитка.
+                val appearance = LocalAppearance.current
+                val chStyle = appearance.styleOf(CardSection.CHANNELS, false)
+                @Composable
+                fun RowFor(ch: ChannelUiItem) {
                     ChannelRow(
                         item = ch,
+                        style = chStyle,
                         isFavorite = ch.id in favorites,
                         epgVersion = epgVersion,
                         viewModel = viewModel,
@@ -266,6 +277,22 @@ fun PhoneChannelsBrowseScreen(
                         onToggleFavorite = { toggleFavorite(ch.id) },
                         onOpenProgram = onOpenEpgGrid
                     )
+                }
+                if (chStyle == CardStyle.LIST) {
+                    LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = ZenithDimens.paddingL)) {
+                        itemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { _, ch -> RowFor(ch) }
+                    }
+                } else {
+                    val minCell = (if (chStyle == CardStyle.WIDE) 240.dp else 104.dp) * appearance.sizeMultiplier
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minCell),
+                        modifier = Modifier.padding(padding).fillMaxSize(),
+                        contentPadding = PaddingValues(start = ZenithDimens.paddingS, end = ZenithDimens.paddingS, bottom = ZenithDimens.paddingL),
+                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
+                        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+                    ) {
+                        gridItemsIndexed(visibleChannels, key = { i, c -> "${i}_${c.id}" }) { _, ch -> RowFor(ch) }
+                    }
                 }
             }
         }
@@ -299,6 +326,7 @@ fun PhoneChannelsBrowseScreen(
 @Composable
 private fun ChannelRow(
     item: ChannelUiItem,
+    style: CardStyle,
     isFavorite: Boolean,
     epgVersion: Int,
     viewModel: ChannelsViewModel,
@@ -317,7 +345,48 @@ private fun ChannelRow(
     }
     var menu by remember { mutableStateOf(false) }
     Box {
-        Row(
+        if (style != CardStyle.LIST) {
+            // Плитка (логотип сверху) или широкая плитка (логотип слева) — карточка с фоном.
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+            val tileModifier = Modifier.fillMaxWidth().clip(shape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+                .padding(ZenithDimens.paddingS)
+            val program = now
+            if (style == CardStyle.WIDE) {
+                Row(tileModifier, verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(72.dp).height(46.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
+                        if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
+                        else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    }
+                    Spacer(Modifier.width(ZenithDimens.paddingS))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.canonicalName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (program != null) {
+                            Text(program.first, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(progress = { program.second }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape))
+                        }
+                    }
+                    if (isFavorite) Icon(Icons.Filled.Star, "В избранном", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = ZenithDimens.paddingXS).size(18.dp))
+                }
+            } else {
+                Column(tileModifier) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(1.6f).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
+                        if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+                        else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        if (isFavorite) Icon(Icons.Filled.Star, "В избранном", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(16.dp))
+                    }
+                    Spacer(Modifier.height(ZenithDimens.paddingXS))
+                    Text(item.canonicalName, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (program != null) {
+                        Text(program.first, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(progress = { program.second }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape))
+                    }
+                }
+            }
+        } else Row(
             Modifier.fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
                 .padding(horizontal = ZenithDimens.paddingM, vertical = 10.dp),

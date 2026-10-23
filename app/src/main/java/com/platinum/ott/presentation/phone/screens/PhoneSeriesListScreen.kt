@@ -15,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.PosterListRow
+import com.platinum.ott.ui.theme.CardSection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -40,14 +43,20 @@ fun PhoneSeriesListScreen(navController: NavHostController, viewModel: SeriesLis
                     if (state.series.isEmpty()) {
                         Text("Сериалов не найдено. Раздел заполняется из Xtream и M3U-названий вида S01E02.", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
                     } else {
-                        LazyVerticalGrid(columns = GridCells.Adaptive(140.dp), contentPadding = PaddingValues(ZenithDimens.paddingSM), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                            items(state.series, key = { it.seriesId }) { s ->
-                                MovieCard(
-                                    movie = Movie(id = s.seriesId, year = 0, title = s.title, poster = s.poster, genre = s.genre),
-                                    onClick = { navController.navigate("series/${s.seriesId}") }
-                                )
+                        CardCollection(
+                            items = state.series,
+                            key = { it.seriesId },
+                            section = CardSection.MOVIES,
+                            isTv = false,
+                            contentPadding = PaddingValues(ZenithDimens.paddingSM),
+                            horizontalGap = ZenithDimens.paddingSM,
+                            listItem = { s, _ ->
+                                PosterListRow(title = s.title, poster = s.poster, subtitle = "${s.episodeCount} эп.", onClick = { navController.navigate("series/${s.seriesId}") })
+                            },
+                            cardItem = { s, _, wide ->
+                                MovieCard(title = s.title, poster = s.poster, year = 0, onClick = { navController.navigate("series/${s.seriesId}") }, wide = wide)
                             }
-                        }
+                        )
                     }
                 }
             }

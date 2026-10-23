@@ -35,6 +35,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.MovieCard
+import com.platinum.ott.presentation.components.contentScaleForId
+import com.platinum.ott.ui.theme.CardSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,8 +72,32 @@ Scaffold(
             Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
         }
     } else {
-        LazyColumn(Modifier.padding(padding).background(MaterialTheme.colorScheme.background), contentPadding = PaddingValues(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-            items(history, key = { it.contentId }) { entry ->
+        CardCollection(
+            items = history,
+            key = { it.contentId },
+            section = CardSection.HISTORY,
+            isTv = false,
+            modifier = Modifier.padding(padding).background(MaterialTheme.colorScheme.background),
+            contentPadding = PaddingValues(ZenithDimens.paddingSM),
+            horizontalGap = ZenithDimens.paddingS,
+            cardItem = { entry, _, wide ->
+                val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
+                Box {
+                    MovieCard(
+                        title = entry.title, poster = entry.poster ?: "", year = 0,
+                        onClick = { navController.navigate("detail/${entry.contentId}") },
+                        progress = if (entry.completed) 1f else p,
+                        contentScale = contentScaleForId(entry.contentId),
+                        wide = wide
+                    )
+                    // В карточках свайпа нет — удаляем кнопкой в углу.
+                    IconButton(
+                        onClick = { viewModel.delete(entry) },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingXS).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
+                    ) { Icon(Icons.Default.Delete, "Удалить «${entry.title}» из истории", tint = ZenithOnSurface) }
+                }
+            },
+            listItem = { entry, _ ->
                 val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
                 // Удаление одной записи — свайп (SwipeToDismissBox из
                 // Material3), как и предполагалось для телефона; долгое
@@ -129,7 +157,7 @@ Scaffold(
                     } } }
                 }
             }
-        }
+        )
     }
 }
 

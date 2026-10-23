@@ -24,6 +24,10 @@ import androidx.tv.material3.*
 import com.platinum.ott.data.local.entity.FavoriteEntity
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.components.NavSidebar
+import com.platinum.ott.presentation.components.CardCollection
+import com.platinum.ott.presentation.components.PosterListRow
+import com.platinum.ott.ui.theme.CardSection
+import androidx.compose.material3.IconButton
 
 // Папки: раньше бэкенд (FavoritesUseCase.createFolder/deleteFolder/moveToFolder,
 // FavoritesViewModel.folders) был готов, но UI нигде их не показывал и не
@@ -96,11 +100,32 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                     }
                 }
 
-            LazyVerticalGrid(columns = GridCells.Fixed(5), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM), verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
-                itemsIndexed(filtered, key = { _, f -> f.contentId }) { index, fav ->
+            fun posterOf(fav: FavoriteEntity) = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: ""
+            CardCollection(
+                items = filtered,
+                key = { it.contentId },
+                section = CardSection.FAVORITES,
+                isTv = true,
+                listItem = { fav, index ->
+                    var showMenu by remember(fav.contentId) { mutableStateOf(false) }
+                    PosterListRow(
+                        title = fav.title,
+                        poster = posterOf(fav),
+                        subtitle = if (fav.contentType == "SERIES") "Сериал" else "Фильм",
+                        thumbWidth = 96.dp,
+                        onClick = { onItemClick(fav) },
+                        trailing = {
+                            Box {
+                                IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Действия", tint = ZenithOnSurface) }
+                                FavoriteActionsMenu(showMenu, { showMenu = false }, fav, index, filtered, viewModel) { moveTargetContentId = fav.contentId }
+                            }
+                        }
+                    )
+                },
+                cardItem = { fav, index, wide ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
-                            MovieCard(title = fav.title, poster = fav.poster?.takeIf { it.isNotBlank() } ?: posterFallbacks[fav.contentId] ?: "", year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId))
+                            MovieCard(title = fav.title, poster = posterOf(fav), year = 0, onClick = { onItemClick(fav) }, contentScale = com.platinum.ott.presentation.components.contentScaleForId(fav.contentId), wide = wide)
                         }
                         // Действия — отдельная кнопка ПОД постером (раньше «⋮» лежала на углу карточки,
                         // и пультом на неё нельзя было навести фокус).
@@ -126,17 +151,11 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
                                     Text("Действия", style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface)
                                 }
                             }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
-                                if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { showMenu = false; viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
-                                DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { showMenu = false; moveTargetContentId = fav.contentId })
-                                DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { showMenu = false; viewModel.setAnime(fav.contentId, !fav.isAnime) })
-                                DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { showMenu = false; viewModel.removeFavorite(fav.contentId) })
-                            }
+                            FavoriteActionsMenu(showMenu, { showMenu = false }, fav, index, filtered, viewModel) { moveTargetContentId = fav.contentId }
                         }
                     }
                 }
-            }
+            )
         }
     }
 
@@ -156,5 +175,25 @@ fun FavoritesScreen(navController: NavHostController, onItemClick: (FavoriteEnti
             onSelect = { folderId -> viewModel.moveToFolder(contentId, folderId); moveTargetContentId = null },
             onDismiss = { moveTargetContentId = null }
         )
+    }
+}
+
+// Меню действий над избранным — общее для карточки и строки списка.
+@Composable
+private fun FavoriteActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    fav: FavoriteEntity,
+    index: Int,
+    filtered: List<FavoriteEntity>,
+    viewModel: FavoritesViewModel,
+    onMoveToFolder: () -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (index > 0) DropdownMenuItem(text = { Text("Сдвинуть раньше") }, onClick = { onDismiss(); viewModel.moveFavorite(fav.contentId, filtered[index - 1].contentId) })
+        if (index < filtered.lastIndex) DropdownMenuItem(text = { Text("Сдвинуть позже") }, onClick = { onDismiss(); viewModel.moveFavorite(fav.contentId, filtered[index + 1].contentId) })
+        DropdownMenuItem(text = { Text("Переместить в папку") }, onClick = { onDismiss(); onMoveToFolder() })
+        DropdownMenuItem(text = { Text(if (fav.isAnime) "Аниме: выкл" else "Аниме: вкл") }, onClick = { onDismiss(); viewModel.setAnime(fav.contentId, !fav.isAnime) })
+        DropdownMenuItem(text = { Text("Убрать из избранного") }, onClick = { onDismiss(); viewModel.removeFavorite(fav.contentId) })
     }
 }
