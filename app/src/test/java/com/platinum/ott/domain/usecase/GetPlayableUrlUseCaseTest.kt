@@ -33,7 +33,13 @@ class GetPlayableUrlUseCaseTest {
         playlistRepository = mockk(relaxed = true)
         pluginManager = mockk(relaxed = true)
         getMovie = mockk(relaxed = true)
-        useCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovie)
+        // DAO каналов/источников нужны только веткам live и catch-up — этим тестам хватает заглушек.
+        useCase = GetPlayableUrlUseCase(
+            scriptProvider, api, playlistRepository, pluginManager, getMovie,
+            channelDao = mockk(relaxed = true),
+            channelStreamDao = mockk(relaxed = true),
+            playlistSourceDao = mockk(relaxed = true)
+        )
 
         // По умолчанию — ни один плагин не включён, гонка вырождается в
         // "только backend". Отдельные тесты переопределяют это явно.
