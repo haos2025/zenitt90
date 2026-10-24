@@ -14,7 +14,7 @@ data class PlayerOverlaySettings(
     val keepControlsWhenPaused: Boolean = true,
     val showBuffered: Boolean = true,
     /** Как стрелки пульта ведут себя в прямом эфире (только ТВ). */
-    val liveArrowMode: LiveArrowMode = LiveArrowMode.LEFT_RIGHT_ZAP,
+    val liveArrowMode: LiveArrowMode = LiveArrowMode.CLASSIC,
     /** true — «Назад» в окне оверлея закрывает окно И оверлей одним нажатием; false — по шагам. */
     val backClosesAll: Boolean = true
 )

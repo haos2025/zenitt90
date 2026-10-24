@@ -672,10 +672,29 @@ class PlayerViewModel @Inject constructor(
     fun zapToNextChannel() = zap(forward = true)
     fun zapToPreviousChannel() = zap(forward = false)
 
+    // Переключение стрелками/CH+/CH− идёт только внутри категории, выбранной на экране «Каналы»
+    // (там же она и запоминается: «Все каналы», «★ Избранные» или группа). Номером канала (zapToChannelNumber)
+    // по-прежнему можно перейти на любой.
+    private fun selectedCategoryFilter(): (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean {
+        val app = getApplication<Application>()
+        val prefsName = if (com.platinum.ott.core.platform.isTV(app)) "tv_channels" else "phone_channels"
+        val prefs = app.getSharedPreferences(prefsName, android.content.Context.MODE_PRIVATE)
+        val raw = prefs.getString("last_category", "__all__") ?: "__all__"
+        val favs = prefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet()
+        val filter: (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean = { ch ->
+            when (raw) {
+                "__all__" -> true
+                "__fav__" -> ch.id in favs
+                else -> (ch.category?.trim()?.ifBlank { null } ?: "Без категории") == raw
+            }
+        }
+        return filter
+    }
+
     private fun zap(forward: Boolean) {
         if (!currentMovieId.startsWith("ch_")) return
         viewModelScope.launch {
-            val channel = channelRepository.getAdjacentSubscribed(currentMovieId, forward) ?: return@launch
+            val channel = channelRepository.getAdjacentSubscribed(currentMovieId, forward, selectedCategoryFilter()) ?: return@launch
             if (channel.id != currentMovieId) loadMovie(channel.id)
             showZapBanner(channel)
         }

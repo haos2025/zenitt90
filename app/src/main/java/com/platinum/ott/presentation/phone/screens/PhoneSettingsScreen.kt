@@ -271,8 +271,7 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
             ) { navController.navigate("sources") }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             NavCard("Телепрограмма (EPG)", "Статус и обновление") { navController.navigate("epg_settings") }
-        }
-        SettingsCategory.PLUGINS -> {
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             NavCard("Плагины", "Каталог и управление плагинами") { navController.navigate("plugins") }
         }
         SettingsCategory.DEVICES -> {

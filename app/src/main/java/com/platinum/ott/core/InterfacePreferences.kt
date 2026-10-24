@@ -87,7 +87,7 @@ class InterfacePreferences(context: Context) {
 
     var liveArrowMode: LiveArrowMode
         get() = runCatching { LiveArrowMode.valueOf(prefs.getString("player_live_arrow_mode", null) ?: "") }
-            .getOrDefault(LiveArrowMode.LEFT_RIGHT_ZAP)
+            .getOrDefault(LiveArrowMode.CLASSIC)
         set(value) = prefs.edit().putString("player_live_arrow_mode", value.name).apply()
 
     var backClosesAll: Boolean

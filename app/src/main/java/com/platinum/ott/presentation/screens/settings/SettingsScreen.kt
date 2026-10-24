@@ -265,10 +265,9 @@ private fun CategoryPage(
                 )
                 SettingsDivider()
                 NavRow("Телепрограмма (EPG)", "Статус и обновление", onClick = onEpgClick)
+                SettingsDivider()
+                NavRow("Плагины", "Каталог и управление плагинами", onClick = onPluginsClick)
             }
-        }
-        SettingsCategory.PLUGINS -> {
-            SettingsCard { NavRow("Управление плагинами", "Каталог и настройки", onClick = onPluginsClick) }
         }
         SettingsCategory.DEVICES -> {
             val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
