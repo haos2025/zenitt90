@@ -48,12 +48,15 @@ import kotlin.math.roundToInt
 @Composable
 fun PhonePlayerScreen(
     movieId: String,
-    navController: NavHostController,
+    navController: NavHostController?,
+    onExit: (() -> Unit)? = null,
     preferredVariantUrl: String? = null,
     catchupStartMillis: Long? = null,
     catchupEndMillis: Long? = null,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
+    // onExit — для ExternalPlayerActivity (нет NavController, «Назад» закрывает экран).
+    val exitPlayer: () -> Unit = { if (onExit != null) onExit() else navController?.popBackStack() }
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl, catchupStartMillis, catchupEndMillis) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
@@ -307,7 +310,7 @@ fun PhonePlayerScreen(
             is PlayerUiState.Error -> Column(Modifier.align(Alignment.Center)) {
                 Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
                 Row {
-                    Button(onClick = { navController.popBackStack() }) { Text("Назад") }
+                    Button(onClick = { exitPlayer() }) { Text("Назад") }
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     Button(onClick = { viewModel.loadMovie(movieId, catchupStartMillis = catchupStartMillis, catchupEndMillis = catchupEndMillis) }) { Text("Повторить") }
                 }
@@ -370,7 +373,7 @@ fun PhonePlayerScreen(
                     },
                     playbackSpeed = state.playbackSpeed,
                     onSelectSpeed = { viewModel.setPlaybackSpeed(it); lastInteraction = System.currentTimeMillis() },
-                    onBackPressed = { navController.popBackStack() },
+                    onBackPressed = { exitPlayer() },
                     // Живой канал: те же кнопки пред./след. работают как заппинг
                     // по подписанным каналам (список закольцован, см.
                     // PlayerViewModel.zap()); для VOD — серии, как раньше.

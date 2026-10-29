@@ -18,9 +18,13 @@ class WhisperContext private constructor(private var ptr: Long) {
     private val dispatcher = Executors.newSingleThreadExecutor { r -> Thread(r, "whisper-native") }
         .asCoroutineDispatcher()
 
-    suspend fun transcribe(pcm: FloatArray, language: String): List<WhisperNativeSegment> = withContext(dispatcher) {
+    suspend fun transcribe(
+        pcm: FloatArray,
+        language: String,
+        threads: Int = preferredThreadCount(),
+    ): List<WhisperNativeSegment> = withContext(dispatcher) {
         check(ptr != 0L) { "WhisperContext уже освобождён" }
-        WhisperLib.fullTranscribe(ptr, preferredThreadCount(), pcm, language)
+        WhisperLib.fullTranscribe(ptr, threads, pcm, language)
         val count = WhisperLib.getTextSegmentCount(ptr)
         (0 until count).map { i ->
             WhisperNativeSegment(
@@ -42,6 +46,9 @@ class WhisperContext private constructor(private var ptr: Long) {
     }
 
     companion object {
+        /** Строка с возможностями нативной сборки (NEON и т.п.) — для замеров скорости. */
+        fun systemInfo(): String = WhisperLib.getSystemInfo()
+
         fun createFromFile(modelPath: String): WhisperContext {
             val ptr = WhisperLib.initContext(modelPath)
             check(ptr != 0L) { "Не удалось загрузить модель Whisper из $modelPath" }

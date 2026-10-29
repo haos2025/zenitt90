@@ -30,6 +30,13 @@ project(zenith_whisper)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Нативный код всегда собираем с оптимизацией, в том числе в debug-варианте
+# приложения. Gradle для debug передаёт CMAKE_BUILD_TYPE=Debug, а это -O0:
+# whisper.cpp/ggml без оптимизации работает в разы медленнее и любые замеры
+# скорости на устройстве (WhisperBenchActivity) были бы бессмысленны.
+# Отладка Kotlin-кода это не затрагивает.
+set(CMAKE_BUILD_TYPE Release CACHE STRING "Нативный код всегда с оптимизацией" FORCE)
+
 include(FetchContent)
 
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

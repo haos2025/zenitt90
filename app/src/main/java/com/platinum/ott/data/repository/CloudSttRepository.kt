@@ -26,6 +26,8 @@ class CloudSttRepository(private val api: ZenithApiService) {
     sealed interface Outcome {
         data class Success(val result: SttTranscriptionDto) : Outcome
         data object NeedsLocalFallback : Outcome
+        /** 429 — слишком частые запросы (лимит backend/провайдера): стоит подождать и повторить. */
+        data object RateLimited : Outcome
         data class Error(val throwable: Throwable) : Outcome
     }
 
@@ -36,7 +38,11 @@ class CloudSttRepository(private val api: ZenithApiService) {
             val languagePart = language.toRequestBody("text/plain".toMediaTypeOrNull())
             Outcome.Success(api.transcribeAudio(audioPart, languagePart))
         } catch (e: HttpException) {
-            if (e.code() == 503) Outcome.NeedsLocalFallback else Outcome.Error(e)
+            when (e.code()) {
+                503 -> Outcome.NeedsLocalFallback
+                429 -> Outcome.RateLimited
+                else -> Outcome.Error(e)
+            }
         } catch (e: Exception) {
             Outcome.Error(e)
         }

@@ -115,4 +115,12 @@ Java_com_platinum_ott_core_subtitles_whisper_WhisperLib_getTextSegmentT1(
     return static_cast<jlong>(whisper_full_get_segment_t1(context, index));
 }
 
+// Строка с возможностями сборки (NEON, FMA и т.п.) — нужна для замера скорости
+// на устройстве: по ней видно, включены ли векторные инструкции.
+JNIEXPORT jstring JNICALL
+Java_com_platinum_ott_core_subtitles_whisper_WhisperLib_getSystemInfo(
+        JNIEnv *env, jobject /*thiz*/) {
+    return env->NewStringUTF(whisper_print_system_info());
+}
+
 } // extern "C"

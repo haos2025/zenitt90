@@ -94,8 +94,12 @@ class SubtitleOrchestrator(
         stop()
         _cues.value = emptyList()
         job = scope.launch {
-            _state.value = AutoSubtitleState.SearchingOpenSubtitles
-            val match = runCatching { openSubtitlesUseCase.execute(title, year) }.getOrNull()
+            // Без года (внешний плеер: только имя файла из ссылки) поиск по OpenSubtitles
+            // бессмыслен — сразу генерируем.
+            val match = if (year > 0) {
+                _state.value = AutoSubtitleState.SearchingOpenSubtitles
+                runCatching { openSubtitlesUseCase.execute(title, year) }.getOrNull()
+            } else null
             if (match != null) {
                 _state.value = AutoSubtitleState.UsingOpenSubtitles(match.language)
                 onOpenSubtitlesFound(match.downloadUrl, match.language, match.format)
@@ -121,14 +125,20 @@ class SubtitleOrchestrator(
     ) {
         var coveredUpToMs = 0L
         while (kotlinx.coroutines.currentCoroutineContext().isActive && coveredUpToMs < contentDurationMs) {
-            val target = currentPositionMsProvider() + WINDOW_AHEAD_MS
+            val position = currentPositionMsProvider().coerceAtLeast(0L)
+            // Открыли с позиции или перемотали вперёд — пропущенный кусок не обрабатываем
+            // (раньше первое окно тянулось от нуля до позиции+5 минут одним куском).
+            if (position > coveredUpToMs) coveredUpToMs = position
+            val target = position + WINDOW_AHEAD_MS
             if (coveredUpToMs >= target) {
                 delay(POLL_INTERVAL_MS)
                 continue
             }
 
             val windowStart = coveredUpToMs
-            val windowEnd = minOf(target, contentDurationMs)
+            // Окно не длиннее MAX_EXTRACT_MS: первые реплики появляются раньше,
+            // и на слабой приставке не декодируем сразу много минут.
+            val windowEnd = minOf(target, windowStart + MAX_EXTRACT_MS, contentDurationMs)
             val windowDuration = windowEnd - windowStart
             if (windowDuration <= 0) {
                 delay(POLL_INTERVAL_MS)
@@ -175,38 +185,43 @@ class SubtitleOrchestrator(
         var cloudExhausted = false
         val localFallbackSegments = mutableListOf<SpeechSegment>()
 
-        for (segment in segments) {
+        // Один запрос на ГРУППУ соседних фраз (до ~28 с), а не на каждую фразу:
+        // лимит backend 10 запросов/мин, у Groq 20/мин и минимум 10 с на запрос,
+        // поэтому «фраза = запрос» упирается в 429 и теряет большую часть речи.
+        for (group in groupSegments(segments)) {
             if (cloudExhausted) {
-                localFallbackSegments += segment
+                localFallbackSegments += group
                 continue
             }
 
             _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
-            val slice = sliceSegmentPcm(pcm, chunk, segment)
+            val span = SpeechSegment(group.first().startMs, group.last().endMs)
+            val slice = sliceSegmentPcm(pcm, chunk, span)
             if (slice == null) continue
 
             val wavFile = File.createTempFile("stt_segment", ".wav").apply { writeBytes(WavEncoder.encode(slice)) }
             val outcome = try {
-                cloudSttRepository.transcribe(wavFile, language)
+                transcribeWithRetry(wavFile, language)
             } finally {
                 wavFile.delete()
             }
             when (outcome) {
-                is CloudSttRepository.Outcome.Success -> appendCloudCues(outcome.result, segment)
+                is CloudSttRepository.Outcome.Success -> appendCloudCues(outcome.result, span)
                 CloudSttRepository.Outcome.NeedsLocalFallback -> {
                     // "Локальный Whisper — когда офлайн или лимит облака
                     // исчерпан" (PROMPT_SUBTITLES.md) — backend уже перебрал
                     // всю цепочку облачных провайдеров и вернул 503,
                     // дальнейшие попытки в ЭТОМ чанке смысла не имеют.
                     cloudExhausted = true
-                    localFallbackSegments += segment
+                    localFallbackSegments += group
                 }
+                CloudSttRepository.Outcome.RateLimited,
                 is CloudSttRepository.Outcome.Error -> {
-                    // Обычная сетевая/серверная ошибка — пропускаем ТОЛЬКО
-                    // этот сегмент, не переключаем весь оставшийся пайплайн
-                    // на локальный путь (в отличие от NeedsLocalFallback).
+                    // Сетевая/серверная ошибка или лимит не отпустил после повторов —
+                    // пропускаем ТОЛЬКО эту группу, не переключаем весь пайплайн на локальный.
                 }
             }
+            delay(REQUEST_PACE_MS) // не частим: лимиты запросов в минуту у backend и провайдеров
         }
 
         if (localFallbackSegments.isNotEmpty()) {
@@ -215,6 +230,30 @@ class SubtitleOrchestrator(
                 .getOrNull()
                 ?.forEach { r -> addCue(SubtitleCue(r.startMs, r.endMs, r.text)) }
         }
+    }
+
+    /** При 429 ждём и повторяем (до MAX_RATE_LIMIT_RETRIES раз), остальные исходы — как есть. */
+    private suspend fun transcribeWithRetry(wavFile: File, language: String): CloudSttRepository.Outcome {
+        var attempt = 0
+        while (true) {
+            val outcome = cloudSttRepository.transcribe(wavFile, language)
+            if (outcome != CloudSttRepository.Outcome.RateLimited || attempt >= MAX_RATE_LIMIT_RETRIES) return outcome
+            attempt++
+            delay(RATE_LIMIT_BACKOFF_MS)
+        }
+    }
+
+    /** Склеивает соседние фразы в группы: пауза между ними ≤ MAX_GROUP_GAP_MS, длина группы ≤ MAX_GROUP_SPAN_MS. */
+    private fun groupSegments(segments: List<SpeechSegment>): List<List<SpeechSegment>> {
+        val groups = mutableListOf<MutableList<SpeechSegment>>()
+        for (seg in segments) {
+            val current = groups.lastOrNull()
+            if (current != null &&
+                seg.startMs - current.last().endMs <= MAX_GROUP_GAP_MS &&
+                seg.endMs - current.first().startMs <= MAX_GROUP_SPAN_MS
+            ) current += seg else groups += mutableListOf(seg)
+        }
+        return groups
     }
 
     private fun sliceSegmentPcm(pcm: ShortArray, chunk: ExtractedAudioChunk, segment: SpeechSegment): ShortArray? {
@@ -248,6 +287,12 @@ class SubtitleOrchestrator(
     private companion object {
         const val SAMPLE_RATE = 16_000
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
+        const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
+        const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
+        const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с
+        const val REQUEST_PACE_MS = 3_000L // ≤ 20 запросов в минуту
+        const val RATE_LIMIT_BACKOFF_MS = 10_000L
+        const val MAX_RATE_LIMIT_RETRIES = 3
         const val POLL_INTERVAL_MS = 15_000L // как часто проверяем, не пора ли расширить покрытое окно
     }
 }

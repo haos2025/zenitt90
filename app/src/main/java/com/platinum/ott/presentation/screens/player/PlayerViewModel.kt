@@ -41,6 +41,21 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+/** Префикс «id» для воспроизведения внешней ссылки (ExternalPlayerActivity) — не id из каталога. */
+const val EXTERNAL_PLAYER_ID_PREFIX = "ext_direct"
+
+/**
+ * Запрос на воспроизведение ссылки, пришедшей из другого приложения.
+ * Историю просмотра для таких ссылок не ведём (решение Shadow, план 05).
+ */
+data class DirectPlayRequest(
+    val url: String,
+    val title: String,
+    val headers: Map<String, String> = emptyMap(),
+    val startPositionMs: Long = 0L,
+    val subtitleUrl: String? = null,
+)
+
 enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
 
 // Ссылку на TrackGroup держим напрямую (а не индекс) — это обычный
@@ -479,7 +494,48 @@ class PlayerViewModel @Inject constructor(
         exoPlayer.seekTo(if (duration > 0) positionMs.coerceIn(0, duration) else positionMs.coerceAtLeast(0))
     }
 
+    private var pendingDirect: DirectPlayRequest? = null
+
+    /** Вызывается ДО loadMovie("ext_direct…") — кладёт запрос, который loadMovie затем запустит. */
+    fun prepareDirect(request: DirectPlayRequest) { pendingDirect = request }
+
+    private fun loadDirect(request: DirectPlayRequest) {
+        // Пустой id → saveHistoryNow() ничего не пишет; автосохранение не запускаем.
+        currentMovieId = ""
+        historyAutosaveJob?.cancel()
+        archiveMirrorAttempts = 0
+        genericRetryAttempts = 0
+        triedArchiveHosts.clear()
+        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
+        currentTitle = request.title
+        currentYear = 0
+        currentPoster = null
+        currentSeriesId = null
+        subtitleOrchestrator.stop()
+        viewModelScope.launch {
+            _uiState.value = PlayerUiState.Loading
+            try {
+                val variant = StreamVariant("Ссылка", request.url, "Внешний", request.headers)
+                // Субтитры, пришедшие от вызывающего приложения (если есть), — в приоритете.
+                externalSubtitleUrl = request.subtitleUrl
+                externalSubtitleLanguage = "ru"
+                externalSubtitleMimeType = if (request.subtitleUrl?.substringBefore('?')?.endsWith(".vtt", ignoreCase = true) == true)
+                    MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, request.subtitleUrl == null && !subtitlePrefs.getShowByDefault())
+                    .build()
+                playVariant(variant, request.startPositionMs)
+                _uiState.value = PlayerUiState.Ready(listOf(variant), variant, currentTitle)
+            } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
+        }
+    }
+
     fun loadMovie(movieId: String, preferredVariantUrl: String? = null, catchupStartMillis: Long? = null, catchupEndMillis: Long? = null) {
+        if (movieId.startsWith(EXTERNAL_PLAYER_ID_PREFIX)) {
+            val request = pendingDirect
+            if (request == null) _uiState.value = PlayerUiState.Error("Нет ссылки для воспроизведения") else loadDirect(request)
+            return
+        }
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
         // Новый фильм — попытки восстановления с предыдущего не должны
