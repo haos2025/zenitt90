@@ -189,8 +189,12 @@ class SubtitleOrchestrator(
         // лимит backend 10 запросов/мин, у Groq 20/мин и минимум 10 с на запрос,
         // поэтому «фраза = запрос» упирается в 429 и теряет большую часть речи.
         for (group in groupSegments(segments)) {
+            // Локальный Whisper всегда кодирует окно 30 с, поэтому время почти не зависит от длины
+            // фрагмента (замер: 5 с и 30 с — одинаково ~4 с на tiny). Отдаём ему СКЛЕЕННУЮ группу
+            // целиком, а не каждую фразу отдельно.
+            val groupSpan = SpeechSegment(group.first().startMs, group.last().endMs)
             if (cloudExhausted) {
-                localFallbackSegments += group
+                localFallbackSegments += groupSpan
                 continue
             }
 
@@ -213,7 +217,7 @@ class SubtitleOrchestrator(
                     // всю цепочку облачных провайдеров и вернул 503,
                     // дальнейшие попытки в ЭТОМ чанке смысла не имеют.
                     cloudExhausted = true
-                    localFallbackSegments += group
+                    localFallbackSegments += groupSpan
                 }
                 CloudSttRepository.Outcome.RateLimited,
                 is CloudSttRepository.Outcome.Error -> {
