@@ -37,6 +37,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Отладка Kotlin-кода это не затрагивает.
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Нативный код всегда с оптимизацией" FORCE)
 
+# 32-битная сборка (armeabi-v7a — именно её запускает Xiaomi TV Stick 4K, у него 32-битная
+# система). Без VFPv4 в системной информации Whisper нет ARM_FMA, а преобразование half-float
+# идёт программно: на Стике замер дал ×0.26 против ×7 на телефоне. Официальный пример
+# whisper.cpp для Android собирает для v7a отдельную библиотеку именно с этим флагом.
+# Cortex-A35/A53/A7 и новее поддерживают VFPv4. Проверка после сборки: в строке
+# «Whisper: …» замера должно появиться ARM_FMA = 1.
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    add_compile_options(-mfpu=neon-vfpv4 -mfloat-abi=softfp)
+endif()
+
 include(FetchContent)
 
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

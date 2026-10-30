@@ -168,8 +168,11 @@ class SubtitleOrchestrator(
             }
             val segments = segmentsResult.getOrThrow()
 
-            transcribeChunk(chunk, segments, language, whisperVariant)
+            val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
             File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
+            // Облако недоступно, а локальный Whisper на этом устройстве бесполезен — дальше нет смысла
+            // тратить процессор на извлечение звука.
+            if (aborted) return
             coveredUpToMs = windowEnd
         }
     }
@@ -179,8 +182,8 @@ class SubtitleOrchestrator(
         segments: List<SpeechSegment>,
         language: String,
         whisperVariant: WhisperModelVariant,
-    ) {
-        if (segments.isEmpty()) return
+    ): Boolean {
+        if (segments.isEmpty()) return false
         val pcm = PcmAudioDecoder.decodeToMono16k(chunk.filePath)
         var cloudExhausted = false
         val localFallbackSegments = mutableListOf<SpeechSegment>()
@@ -229,11 +232,18 @@ class SubtitleOrchestrator(
         }
 
         if (localFallbackSegments.isNotEmpty()) {
+            if (!LOCAL_WHISPER_USABLE) {
+                _state.value = AutoSubtitleState.Error(
+                    "Облачное распознавание недоступно, а локальное на этом устройстве слишком медленное"
+                )
+                return true
+            }
             _state.value = AutoSubtitleState.GeneratingAi(AiSource.LOCAL)
             localWhisperTranscriber.transcribeSegments(chunk, localFallbackSegments, variant = whisperVariant, language = language)
                 .getOrNull()
                 ?.forEach { r -> addCue(SubtitleCue(r.startMs, r.endMs, r.text)) }
         }
+        return false
     }
 
     /** При 429 ждём и повторяем (до MAX_RATE_LIMIT_RETRIES раз), остальные исходы — как есть. */
@@ -290,6 +300,10 @@ class SubtitleOrchestrator(
 
     private companion object {
         const val SAMPLE_RATE = 16_000
+        // Замер на Xiaomi TV Stick 4K (32-битный процесс, armeabi-v7a): tiny на куске 30 с — 113 с (×0.26),
+        // base — 270 с. Для субтитров это бесполезно. На 64-битном телефоне (arm64) тот же замер: ×7 и ×3.
+        // Поэтому локальный Whisper разрешён только в 64-битном процессе.
+        val LOCAL_WHISPER_USABLE: Boolean = android.os.Process.is64Bit()
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
