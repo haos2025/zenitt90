@@ -962,10 +962,17 @@ class PlayerViewModel @Inject constructor(
     // эту функцию для каналов преждевременно, до появления отдельного
     // пути для live.
     fun enableAutoSubtitles() {
-        if (currentTitle.isBlank()) return
-        val current = _uiState.value as? PlayerUiState.Ready ?: return
+        // Раньше все три выхода были молчаливыми: нажатие «Автосубтитры» ничего не делало
+        // и не объясняло почему. Теперь причина показывается коротким сообщением.
+        fun refuse(reason: String) {
+            android.util.Log.w("ZenithSubs", "enableAutoSubtitles refused: $reason")
+            android.widget.Toast.makeText(getApplication<Application>(), reason, android.widget.Toast.LENGTH_LONG).show()
+        }
+        if (currentTitle.isBlank()) { refuse("Автосубтитры: нет названия видео"); return }
+        val current = _uiState.value as? PlayerUiState.Ready ?: run { refuse("Автосубтитры: видео ещё не готово"); return }
         val durationMs = exoPlayer.duration
-        if (durationMs <= 0) return // C.TIME_UNSET или ещё не готово — рано запускать оркестратор
+        if (durationMs <= 0) { refuse("Автосубтитры: плеер ещё не знает длительность видео"); return } // C.TIME_UNSET или ещё не готово
+        android.util.Log.d("ZenithSubs", "enableAutoSubtitles start: title=$currentTitle year=$currentYear duration=$durationMs")
         // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/точность"
         // читается прямо здесь (SharedPreferences, тот же паттерн, что
         // остальные *Preferences-классы проекта), не хранится отдельным

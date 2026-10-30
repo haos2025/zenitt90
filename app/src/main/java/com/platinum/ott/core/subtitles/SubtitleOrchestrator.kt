@@ -1,5 +1,6 @@
 package com.platinum.ott.core.subtitles
 
+import android.util.Log
 import com.platinum.ott.core.subtitles.whisper.LocalWhisperTranscriber
 import com.platinum.ott.core.subtitles.whisper.WhisperModelVariant
 import com.platinum.ott.data.remote.dto.SttTranscriptionDto
@@ -150,10 +151,15 @@ class SubtitleOrchestrator(
             // было .getOrElse { ...; continue }, пришлось развернуть в
             // явную проверку Result, чтобы continue относился напрямую к
             // this while, а не к лямбде.
+            // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
+            // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
+            _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+            Log.d(TAG, "extract window $windowStart..$windowEnd ms")
             val chunkResult = audioExtractor.extract(
                 AudioExtractionRequest(streamUrl, headers, windowStart, windowDuration)
             )
             if (chunkResult.isFailure) {
+                Log.w(TAG, "extract failed", chunkResult.exceptionOrNull())
                 _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${chunkResult.exceptionOrNull()?.message}")
                 coveredUpToMs = windowEnd // не зацикливаемся вечно на одном и том же неудачном окне
                 continue
@@ -162,11 +168,14 @@ class SubtitleOrchestrator(
 
             val segmentsResult = vadSegmenter.detectSpeechSegments(chunk)
             if (segmentsResult.isFailure) {
+                Log.w(TAG, "VAD failed", segmentsResult.exceptionOrNull())
+                _state.value = AutoSubtitleState.Error("Не удалось найти речь: ${segmentsResult.exceptionOrNull()?.message}")
                 File(chunk.filePath).delete()
                 coveredUpToMs = windowEnd
                 continue
             }
             val segments = segmentsResult.getOrThrow()
+            Log.d(TAG, "speech segments in window: ${segments.size}")
 
             val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
             File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
@@ -299,6 +308,7 @@ class SubtitleOrchestrator(
     }
 
     private companion object {
+        const val TAG = "ZenithSubs"
         const val SAMPLE_RATE = 16_000
         // Замер на Xiaomi TV Stick 4K (32-битный процесс, armeabi-v7a): tiny на куске 30 с — 113 с (×0.26),
         // base — 270 с. Для субтитров это бесполезно. На 64-битном телефоне (arm64) тот же замер: ×7 и ×3.
