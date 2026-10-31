@@ -8,12 +8,14 @@ import com.platinum.ott.data.repository.CloudSttRepository
 import com.platinum.ott.domain.model.SubtitleFormat
 import com.platinum.ott.domain.usecase.SearchOpenSubtitlesUseCase
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -194,7 +196,10 @@ class SubtitleOrchestrator(
         whisperVariant: WhisperModelVariant,
     ): Boolean {
         if (segments.isEmpty()) return false
-        val pcm = PcmAudioDecoder.decodeToMono16k(chunk.filePath)
+        // Оркестратор крутится в viewModelScope (главный поток). Декодирование 2 минут AAC в PCM —
+        // секунды чистой работы процессора: на главном потоке это замораживало интерфейс и приводило
+        // к ANR («приложение не отвечает»). Выносим в Default.
+        val pcm = withContext(Dispatchers.Default) { PcmAudioDecoder.decodeToMono16k(chunk.filePath) }
         var cloudExhausted = false
         val localFallbackSegments = mutableListOf<SpeechSegment>()
 
@@ -216,7 +221,10 @@ class SubtitleOrchestrator(
             val slice = sliceSegmentPcm(pcm, chunk, span)
             if (slice == null) continue
 
-            val wavFile = File.createTempFile("stt_segment", ".wav").apply { writeBytes(WavEncoder.encode(slice)) }
+            // Кодирование WAV и запись файла на диск — тоже не на главном потоке.
+            val wavFile = withContext(Dispatchers.IO) {
+                File.createTempFile("stt_segment", ".wav").apply { writeBytes(WavEncoder.encode(slice)) }
+            }
             val outcome = try {
                 transcribeWithRetry(wavFile, language)
             } finally {
