@@ -217,7 +217,7 @@ fun PlaybackMenuOverlay(
                                 focus = listFocus
                             ) { onToggleAutoSubtitles() }
                         }
-                        item { MenuRow("Выключены", null, !subtitlesEnabled) { onDisableSubtitles() } }
+                        item { MenuRow("Выключены", null, !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles() } }
                         // Равноправный пункт списка, не поле ввода снизу —
                         // единственный способ получить субтитры-ПЕРЕВОД на
                         // другой язык (встроенные дорожки — это язык

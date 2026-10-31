@@ -272,7 +272,7 @@ fun PhonePlayerController(
                     subLabel = autoSubtitleStatusLabel(autoSubtitleState),
                     isSelected = autoSubtitleState != AutoSubtitleState.Off
                 ) { onToggleAutoSubtitles() }
-                DialogRow("Выключены", !subtitlesEnabled) { onDisableSubtitles(); menuTab = null }
+                DialogRow("Выключены", !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles(); menuTab = null }
                 DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
                 if (showExternalField) {
                     Column(Modifier.fillMaxWidth().padding(start = ZenithDimens.paddingM, bottom = ZenithDimens.paddingS)) {

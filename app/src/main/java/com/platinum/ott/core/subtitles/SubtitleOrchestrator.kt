@@ -114,6 +114,7 @@ class SubtitleOrchestrator(
         job?.cancel()
         job = null
         _state.value = AutoSubtitleState.Off
+        _cues.value = emptyList()
     }
 
     private suspend fun runAiPipelineForVod(

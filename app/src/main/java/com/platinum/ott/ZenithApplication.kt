@@ -47,6 +47,7 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         // запросит — обычно HomeViewModel, т.к. Home стартовый экран), явный
         // init()-вызов здесь больше не нужен.
         setupCrashHandler()
+        reportLastCrash()
         // Раньше ни канал уведомлений не создавался, ни воркер не ставился
         // в очередь — SeriesUpdateWorker.enqueue() существовал, но был
         // мёртвым кодом, вызывавшимся из НИГДЕ.
@@ -99,6 +100,44 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
+    }
+
+    // Краш-логи лежат во внутренней памяти (filesDir/crash_logs) — без компьютера их не достать.
+    // При запуске копируем самый свежий ещё не показанный отчёт в буфер обмена, чтобы его можно
+    // было вставить в чат. Java-обработчик не видит native-падения и убийства по памяти — для них
+    // берём причину последнего завершения процесса (Android 11+).
+    // Номера причин ApplicationExitInfo: 2 SIGNALED, 3 LOW_MEMORY, 4 CRASH, 5 CRASH_NATIVE,
+    // 6 ANR, 7 INITIALIZATION_FAILURE.
+    private fun reportLastCrash() {
+        try {
+            val prefs = getSharedPreferences("crash_report", MODE_PRIVATE)
+            val lastReported = prefs.getLong("last_reported", 0L)
+            var newest = lastReported
+            val sb = StringBuilder()
+            val latest = File(filesDir, "crash_logs").listFiles()?.maxByOrNull { it.lastModified() }
+            if (latest != null && latest.lastModified() > lastReported) {
+                sb.append("JAVA CRASH ").append(latest.name).append('\n')
+                    .append(latest.readText().take(3500)).append('\n')
+                newest = maxOf(newest, latest.lastModified())
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val am = getSystemService(android.app.ActivityManager::class.java)
+                for (info in am.getHistoricalProcessExitReasons(packageName, 0, 3)) {
+                    if (info.timestamp > lastReported && info.reason in intArrayOf(2, 3, 4, 5, 6, 7)) {
+                        sb.append("EXIT reason=").append(info.reason).append(" status=").append(info.status)
+                            .append(" desc=").append(info.description).append(" at=").append(Date(info.timestamp)).append('\n')
+                        newest = maxOf(newest, info.timestamp)
+                    }
+                }
+            }
+            if (sb.isEmpty()) return
+            prefs.edit().putLong("last_reported", newest).apply()
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Zenith crash", sb.toString()))
+            android.os.Handler(mainLooper).post {
+                android.widget.Toast.makeText(this, "Отчёт об аварии скопирован в буфер обмена", android.widget.Toast.LENGTH_LONG).show()
+            }
+        } catch (_: Exception) {}
     }
 
     // Раньше файлов в crash_logs/ писалось сколько угодно, ничего никогда

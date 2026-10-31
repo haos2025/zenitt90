@@ -924,6 +924,8 @@ class PlayerViewModel @Inject constructor(
     // дорожку: ExoPlayer по умолчанию сам может включить подходящую по
     // системному языку, если явно не запретить тип трека.
     fun disableSubtitles() {
+        // «Выключены» выключает и автосубтитры (раньше они продолжали генерироваться и рисоваться).
+        subtitleOrchestrator.stop()
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
