@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -80,15 +81,15 @@ fun StyledSubtitleText(text: String, style: SubtitleStyle, baseSp: Float, modifi
 /** Слой субтитров у нижнего края; высота отступа — доля высоты экрана из настроек. */
 @Composable
 fun BoxScope.AutoSubtitleOverlay(text: String, style: SubtitleStyle, baseSp: Float) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        StyledSubtitleText(
-            text = text, style = style, baseSp = baseSp,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 32.dp)
-                .padding(bottom = maxHeight * (style.bottomPercent / 100f))
-        )
-    }
+    // Прямой потомок внешнего Box — та же схема, что была у прежней надписи (без отдельного слоя).
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    StyledSubtitleText(
+        text = text, style = style, baseSp = baseSp,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 32.dp)
+            .padding(bottom = (screenHeightDp * style.bottomPercent / 100f).dp)
+    )
 }
 
 /** Применяет то же оформление к встроенным и внешним дорожкам, которые рисует сам ExoPlayer. */

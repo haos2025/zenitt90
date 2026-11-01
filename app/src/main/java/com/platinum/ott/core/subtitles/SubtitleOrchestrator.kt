@@ -287,8 +287,9 @@ class SubtitleOrchestrator(
     private fun windowLengthMs(index: Int): Long = when (index) {
         0 -> FIRST_WINDOW_MS
         1 -> SECOND_WINDOW_MS
-        // На слабой приставке окно не длиннее минуты: ответ приходит чаще, пропусков меньше.
-        else -> if (LIGHT_PIPELINE) LIGHT_MAX_WINDOW_MS else MAX_EXTRACT_MS
+        // Окно не длиннее минуты везде: ответ приходит чаще, а на телефоне вдвое меньше памяти
+        // уходит на декодирование звука (система убивала приложение по нехватке памяти).
+        else -> LIGHT_MAX_WINDOW_MS
     }
 
     private suspend fun transcribeChunk(
