@@ -272,7 +272,7 @@ private fun autoSubtitleStatusLabel(state: AutoSubtitleState): String? = when (s
     AutoSubtitleState.SearchingOpenSubtitles -> "Ищем готовые субтитры…"
     is AutoSubtitleState.UsingOpenSubtitles -> "OpenSubtitles (${state.language})"
     is AutoSubtitleState.GeneratingAi -> when (state.source) {
-        AiSource.CLOUD -> "Распознаём (облако)…"
+        AiSource.CLOUD -> "Распознаём (облако)…" + (state.detail?.let { " · $it" } ?: "")
         AiSource.LOCAL -> "Распознаём (локально, может отставать)…"
     }
     is AutoSubtitleState.Error -> "Ошибка: ${state.message}"

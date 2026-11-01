@@ -14,6 +14,6 @@ sealed interface AutoSubtitleState {
     data object Off : AutoSubtitleState
     data object SearchingOpenSubtitles : AutoSubtitleState
     data class UsingOpenSubtitles(val language: String) : AutoSubtitleState
-    data class GeneratingAi(val source: AiSource) : AutoSubtitleState
+    data class GeneratingAi(val source: AiSource, val detail: String? = null) : AutoSubtitleState
     data class Error(val message: String) : AutoSubtitleState
 }

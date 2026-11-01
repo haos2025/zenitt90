@@ -173,7 +173,8 @@ class SubtitleOrchestrator(
 
                 // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
                 // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
-                _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+                progressLabel = "окно $windowIndex"
+                setProgress("звук")
                 val t0 = System.currentTimeMillis()
                 Log.d(TAG, "window #$windowIndex $windowStart..$windowEnd ms, prefetched=$usePrefetch")
                 // Не использованную предзагрузку (пользователь перемотал) отменяем; уже созданный
@@ -194,12 +195,16 @@ class SubtitleOrchestrator(
                     continue
                 }
                 val chunk = chunkResult.getOrThrow()
+                setProgress("звук готов за ${(System.currentTimeMillis() - t0) / 1000} с")
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
                 val nextStart = windowEnd
                 val nextTarget = currentPositionMsProvider().coerceAtLeast(0L) + WINDOW_AHEAD_MS
                 val nextDuration = minOf(nextTarget, nextStart + windowLengthMs(windowIndex), contentDurationMs) - nextStart
-                if (nextDuration >= MIN_PREFETCH_MS) {
+                // Предзагрузка только на слабых устройствах: второе извлечение звука параллельно с
+                // обработкой нагружает процессор, память и открывает второе соединение к источнику;
+                // на телефоне это приводило к зависаниям.
+                if (LIGHT_PIPELINE && nextDuration >= MIN_PREFETCH_MS) {
                     prefetchStartMs = nextStart
                     prefetchDurationMs = nextDuration
                     prefetch = async {
@@ -235,6 +240,7 @@ class SubtitleOrchestrator(
                 }
                 val segments = segmentsResult.getOrThrow()
                 Log.d(TAG, "window #$windowIndex speech segments: ${segments.size}, +${System.currentTimeMillis() - t0} ms")
+                setProgress("фраз речи: ${segments.size}")
 
                 val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
@@ -246,6 +252,7 @@ class SubtitleOrchestrator(
                     return@coroutineScope
                 }
                 coveredUpToMs = windowEnd
+                setProgress("готово")
             }
             prefetch?.cancel()
         }
@@ -256,7 +263,7 @@ class SubtitleOrchestrator(
      * Возвращает true, если дальше продолжать нет смысла (облако недоступно целиком).
      */
     private suspend fun transcribeWholeWindow(chunk: ExtractedAudioChunk, language: String, meta: String): Boolean {
-        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+        setProgress("запрос")
         return when (val outcome = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4", meta)) {
             is CloudSttRepository.Outcome.Success -> {
                 // Время реплик в ответе — от начала загруженного окна.
@@ -309,7 +316,8 @@ class SubtitleOrchestrator(
         // Один запрос на ГРУППУ соседних фраз (до ~28 с), а не на каждую фразу:
         // лимит backend 10 запросов/мин, у Groq 20/мин и минимум 10 с на запрос,
         // поэтому «фраза = запрос» упирается в 429 и теряет большую часть речи.
-        for (group in groupSegments(segments)) {
+        val groups = groupSegments(segments)
+        for ((groupIndex, group) in groups.withIndex()) {
             // Локальный Whisper всегда кодирует окно 30 с, поэтому время почти не зависит от длины
             // фрагмента (замер: 5 с и 30 с — одинаково ~4 с на tiny). Отдаём ему СКЛЕЕННУЮ группу
             // целиком, а не каждую фразу отдельно.
@@ -319,7 +327,7 @@ class SubtitleOrchestrator(
                 continue
             }
 
-            _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+            setProgress("запрос ${groupIndex + 1} из ${groups.size}")
             val span = SpeechSegment(group.first().startMs, group.last().endMs)
             val slice = sliceSegmentPcm(pcm, chunk, span)
             if (slice == null) continue
@@ -413,6 +421,12 @@ class SubtitleOrchestrator(
         result.segments.forEach { s ->
             if (s.text.isNotBlank()) addCue(SubtitleCue(segment.startMs + s.startMs, segment.startMs + s.endMs, s.text))
         }
+    }
+
+    // Подпись шага для строки статуса в меню: по ней видно, где именно остановилась обработка.
+    private var progressLabel = ""
+    private fun setProgress(step: String) {
+        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD, "$progressLabel: $step, реплик ${_cues.value.size}")
     }
 
     private fun addCue(cue: SubtitleCue) {
