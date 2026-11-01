@@ -290,14 +290,21 @@ class SubtitleOrchestrator(
         }
     }
 
-    /** Длина окна извлечения по порядковому номеру: сначала короткие, чтобы субтитры появились быстрее. */
-    private fun windowLengthMs(index: Int): Long = when (index) {
-        0 -> FIRST_WINDOW_MS
-        1 -> SECOND_WINDOW_MS
-        // Окно не длиннее минуты везде: ответ приходит чаще, а на телефоне вдвое меньше памяти
-        // уходит на декодирование звука (система убивала приложение по нехватке памяти).
-        else -> LIGHT_MAX_WINDOW_MS
-    }
+    /**
+     * Длина окна извлечения по порядковому номеру. Слабая приставка: короткие окна 15 → 30 → 60 с
+     * (с предзагрузкой). Телефон: первое окно 30 с, дальше крупные по 2 минуты — каждое извлечение
+     * звука читает источник (Lampa/TorrServer) с новой позиции и тормозит основной плеер, поэтому
+     * частые короткие окна вызывали подвисания каждые ~20 секунд.
+     */
+    private fun windowLengthMs(index: Int): Long =
+        if (LIGHT_PIPELINE) when (index) {
+            0 -> FIRST_WINDOW_MS
+            1 -> SECOND_WINDOW_MS
+            else -> LIGHT_MAX_WINDOW_MS
+        } else when (index) {
+            0 -> PHONE_FIRST_WINDOW_MS
+            else -> MAX_EXTRACT_MS
+        }
 
     private suspend fun transcribeChunk(
         chunk: ExtractedAudioChunk,
@@ -447,6 +454,7 @@ class SubtitleOrchestrator(
         const val FIRST_WINDOW_MS = 15_000L // первое окно совсем короткое — первые реплики быстрее
         const val SECOND_WINDOW_MS = 30_000L
         const val LIGHT_MAX_WINDOW_MS = 60_000L
+        const val PHONE_FIRST_WINDOW_MS = 30_000L
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
         const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с
