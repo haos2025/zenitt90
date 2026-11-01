@@ -211,7 +211,10 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val stop = transcribeWholeWindow(chunk, language)
+                    val extractMs = System.currentTimeMillis() - t0
+                    val leadMs = windowStart - currentPositionMsProvider()
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;lead_ms=$leadMs"
+                    val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
                     if (stop) {
@@ -252,9 +255,9 @@ class SubtitleOrchestrator(
      * Облегчённый путь: всё окно (AAC в .m4a) одним запросом, без VAD и без PCM на устройстве.
      * Возвращает true, если дальше продолжать нет смысла (облако недоступно целиком).
      */
-    private suspend fun transcribeWholeWindow(chunk: ExtractedAudioChunk, language: String): Boolean {
+    private suspend fun transcribeWholeWindow(chunk: ExtractedAudioChunk, language: String, meta: String): Boolean {
         _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
-        return when (val outcome = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4")) {
+        return when (val outcome = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4", meta)) {
             is CloudSttRepository.Outcome.Success -> {
                 // Время реплик в ответе — от начала загруженного окна.
                 for (s in outcome.result.segments) {
@@ -284,7 +287,8 @@ class SubtitleOrchestrator(
     private fun windowLengthMs(index: Int): Long = when (index) {
         0 -> FIRST_WINDOW_MS
         1 -> SECOND_WINDOW_MS
-        else -> MAX_EXTRACT_MS
+        // На слабой приставке окно не длиннее минуты: ответ приходит чаще, пропусков меньше.
+        else -> if (LIGHT_PIPELINE) LIGHT_MAX_WINDOW_MS else MAX_EXTRACT_MS
     }
 
     private suspend fun transcribeChunk(
@@ -363,10 +367,10 @@ class SubtitleOrchestrator(
     }
 
     /** При 429 ждём и повторяем (до MAX_RATE_LIMIT_RETRIES раз), остальные исходы — как есть. */
-    private suspend fun transcribeWithRetry(wavFile: File, language: String, mimeType: String = "audio/wav"): CloudSttRepository.Outcome {
+    private suspend fun transcribeWithRetry(wavFile: File, language: String, mimeType: String = "audio/wav", meta: String? = null): CloudSttRepository.Outcome {
         var attempt = 0
         while (true) {
-            val outcome = cloudSttRepository.transcribe(wavFile, language, mimeType)
+            val outcome = cloudSttRepository.transcribe(wavFile, language, mimeType, meta)
             if (outcome != CloudSttRepository.Outcome.RateLimited || attempt >= MAX_RATE_LIMIT_RETRIES) return outcome
             attempt++
             delay(RATE_LIMIT_BACKOFF_MS)
@@ -427,6 +431,7 @@ class SubtitleOrchestrator(
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
         const val FIRST_WINDOW_MS = 30_000L // первое окно короткое — первые реплики быстрее
         const val SECOND_WINDOW_MS = 60_000L
+        const val LIGHT_MAX_WINDOW_MS = 60_000L
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
         const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с

@@ -33,6 +33,9 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.PlayerProgressStrip
 import com.platinum.ott.presentation.screens.player.PlayerUiState
+import com.platinum.ott.presentation.screens.player.AutoSubtitleOverlay
+import com.platinum.ott.presentation.screens.player.applySubtitleStyle
+import com.platinum.ott.presentation.screens.player.rememberSubtitleStyle
 import com.platinum.ott.presentation.screens.player.PlayerViewModel
 import com.platinum.ott.ui.theme.ZenithShapeMedium
 import com.platinum.ott.ui.theme.ZenithShapeSmall
@@ -63,6 +66,7 @@ fun PhonePlayerScreen(
     // PROMPT_SUBTITLES.md, подзадача 8.
     val autoSubtitleState by viewModel.autoSubtitleState.collectAsStateWithLifecycle()
     val autoSubtitleCues by viewModel.autoSubtitleCues.collectAsStateWithLifecycle()
+    val subtitleStyle by rememberSubtitleStyle()
 
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableStateOf(0L) }
@@ -262,7 +266,7 @@ fun PhonePlayerScreen(
                 android.view.LayoutInflater.from(ctx)
                     .inflate(com.platinum.ott.R.layout.player_view_texture, null) as PlayerView
             },
-            update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true },
+            update = { it.player = viewModel.exoPlayer; it.keepScreenOn = true; applySubtitleStyle(it, subtitleStyle) },
             modifier = Modifier.fillMaxSize()
         )
         gestureIndicator?.let { ind ->
@@ -284,25 +288,13 @@ fun PhonePlayerScreen(
         // ExoPlayer/SubtitleView, т.к. список растёт прогрессивно, готового
         // файла нет. Пока используется OpenSubtitles, autoSubtitleCues
         // всегда пуст — двойного рендера с родной дорожкой не будет.
-        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs) {
-            autoSubtitleCues.firstOrNull { currentPositionMs in it.startMs..it.endMs }?.text
+        // Сдвиг по времени из настроек: положительный — субтитры позже.
+        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs, subtitleStyle.offsetMs) {
+            val shifted = currentPositionMs - subtitleStyle.offsetMs
+            autoSubtitleCues.firstOrNull { shifted in it.startMs..it.endMs }?.text
         }
         if (activeAutoSubtitleText != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = ZenithDimens.paddingL, vertical = 100.dp)
-                    .clip(ZenithShapeSmall)
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
-            ) {
-                Text(
-                    text = activeAutoSubtitleText,
-                    color = ZenithOnSurface,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
+            AutoSubtitleOverlay(activeAutoSubtitleText, subtitleStyle, baseSp = 18f)
         }
 
         when (val state = uiState) {

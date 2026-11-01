@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.screens.player
 
 import com.platinum.ott.ui.theme.ZenithOnSurface
+import com.platinum.ott.core.SUBTITLE_SETTINGS
+import com.platinum.ott.core.SubtitleStyleStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -95,6 +97,8 @@ fun PlaybackMenuOverlay(
     modifier: Modifier = Modifier
 ) {
     val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+    val styleContext = androidx.compose.ui.platform.LocalContext.current
+    val subtitleStyle by rememberSubtitleStyle()
     // Вариант 2 (решение владельца): фокус сразу на списке (на выбранной
     // строке), вкладки НЕ фокусируются — Влево/Вправо переключают вкладки,
     // Вверх/Вниз ходят по строкам, OK выбирает и закрывает меню.
@@ -234,6 +238,20 @@ fun PlaybackMenuOverlay(
                         }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
                         if (subtitleTracks.isEmpty()) item { EmptyHint("В потоке нет встроенных субтитров") }
+                        // Оформление «как в YouTube»: OK на строке переключает значение по кругу.
+                        // Образец — сразу под заголовком, меняется на глазах.
+                        item { EmptyHint("Оформление субтитров") }
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                                StyledSubtitleText("Так будут выглядеть субтитры", subtitleStyle, 14f)
+                            }
+                        }
+                        items(SUBTITLE_SETTINGS) { setting ->
+                            MenuRow(setting.title, setting.valueLabel(subtitleStyle), false) {
+                                SubtitleStyleStore.update(styleContext, setting.next)
+                            }
+                        }
+                        item { MenuRow("Сбросить оформление", null, false) { SubtitleStyleStore.reset(styleContext) } }
                     }
                     PlaybackMenuTab.SPEED -> itemsIndexed(speedOptions) { i, s ->
                         MenuRow((if (s == 1f) "Обычная" else "${s}x"), null, s == playbackSpeed, focus = if (i == focusIdx) listFocus else null) { onSelectSpeed(s) }

@@ -76,6 +76,7 @@ fun PlayerScreen(
     // PROMPT_SUBTITLES.md, подзадача 8.
     val autoSubtitleState by viewModel.autoSubtitleState.collectAsStateWithLifecycle()
     val autoSubtitleCues by viewModel.autoSubtitleCues.collectAsStateWithLifecycle()
+    val subtitleStyle by rememberSubtitleStyle()
 
     var currentPositionMs by remember { mutableStateOf(0L) }
     var bufferedPositionMs by remember { mutableStateOf(0L) }
@@ -452,6 +453,7 @@ fun PlayerScreen(
             update = {
                 it.player = viewModel.exoPlayer
                 it.keepScreenOn = true
+                applySubtitleStyle(it, subtitleStyle)
                 // Системный View не должен забирать фокус пульта у корня Compose.
                 it.isFocusable = false
                 it.isFocusableInTouchMode = false
@@ -563,25 +565,13 @@ fun PlayerScreen(
         // Пока используется OpenSubtitles (autoSubtitleCues пуст всегда в
         // этом случае — оркестратор туда ничего не пишет), это условие
         // просто не сработает — двойного рендера с родной дорожкой не будет.
-        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs) {
-            autoSubtitleCues.firstOrNull { currentPositionMs in it.startMs..it.endMs }?.text
+        // Сдвиг по времени из настроек: положительный — субтитры позже.
+        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs, subtitleStyle.offsetMs) {
+            val shifted = currentPositionMs - subtitleStyle.offsetMs
+            autoSubtitleCues.firstOrNull { shifted in it.startMs..it.endMs }?.text
         }
         if (activeAutoSubtitleText != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = ZenithDimens.paddingXL, vertical = 120.dp)
-                    .clip(ZenithShapeSmall)
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
-            ) {
-                Text(
-                    text = activeAutoSubtitleText,
-                    color = ZenithOnSurface,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
+            AutoSubtitleOverlay(activeAutoSubtitleText, subtitleStyle, baseSp = 24f)
         }
 
         // Нет поддерживаемой аудиодорожки — объясняем, почему тишина.

@@ -33,20 +33,50 @@ class CloudSttRepository(private val api: ZenithApiService) {
 
     // mimeType: WAV для коротких фрагментов (обычный путь) или audio/mp4 для целого окна .m4a
     // (облегчённый путь для слабых устройств, где нет поиска речи на устройстве).
-    suspend fun transcribe(wavFile: File, language: String, mimeType: String = "audio/wav"): Outcome = withContext(Dispatchers.IO) {
+    // meta — короткая строка для логов сервера (см. SubtitleOrchestrator).
+    // Если основной сервер не справился (503, 429, сеть, любая ошибка) и задан запасной адрес
+    // [BACKUP_TRANSCRIBE_URL], запрос один раз повторяется там.
+    suspend fun transcribe(
+        wavFile: File,
+        language: String,
+        mimeType: String = "audio/wav",
+        meta: String? = null
+    ): Outcome = withContext(Dispatchers.IO) {
+        val primary = send(wavFile, language, mimeType, meta, backup = false)
+        if (primary is Outcome.Success || BACKUP_TRANSCRIBE_URL.isBlank()) return@withContext primary
+        val secondary = send(wavFile, language, mimeType, meta, backup = true)
+        // Если и запасной не ответил — возвращаем исход основного: он точнее описывает причину.
+        if (secondary is Outcome.Success) secondary else primary
+    }
+
+    private suspend fun send(wavFile: File, language: String, mimeType: String, meta: String?, backup: Boolean): Outcome =
         try {
             val requestBody = wavFile.asRequestBody(mimeType.toMediaTypeOrNull())
             val audioPart = MultipartBody.Part.createFormData("audio", wavFile.name, requestBody)
             val languagePart = language.toRequestBody("text/plain".toMediaTypeOrNull())
-            Outcome.Success(api.transcribeAudio(audioPart, languagePart))
+            val metaPart = meta?.toRequestBody("text/plain".toMediaTypeOrNull())
+            Outcome.Success(
+                if (backup) api.transcribeAudioAt(BACKUP_TRANSCRIBE_URL, audioPart, languagePart, metaPart)
+                else api.transcribeAudio(audioPart, languagePart, metaPart)
+            )
         } catch (e: HttpException) {
             when (e.code()) {
                 503 -> Outcome.NeedsLocalFallback
                 429 -> Outcome.RateLimited
                 else -> Outcome.Error(e)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Outcome.Error(e)
         }
+
+    companion object {
+        /**
+         * Адрес запасного канала — Cloudflare Worker, полностью, вместе с путём, например
+         * "https://zenith-stt.ИМЯ.workers.dev/subtitles/transcribe". Пусто = запасной канал выключен.
+         * Адрес не секретный (ключи хранятся в секретах Worker).
+         */
+        const val BACKUP_TRANSCRIBE_URL = ""
     }
 }

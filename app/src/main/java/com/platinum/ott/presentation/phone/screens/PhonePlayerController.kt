@@ -266,6 +266,8 @@ fun PhonePlayerController(
         PlaybackMenuTab.SUBTITLES -> {
             var externalUrl by remember { mutableStateOf("") }
             var showExternalField by remember { mutableStateOf(false) }
+            var showStyleDialog by remember { mutableStateOf(false) }
+            if (showStyleDialog) com.platinum.ott.presentation.screens.player.SubtitleStyleDialog(onDismiss = { showStyleDialog = false })
             PlaybackOptionDialog("Субтитры", onDismiss = { menuTab = null }) {
                 DialogRow(
                     label = "Автосубтитры",
@@ -273,6 +275,7 @@ fun PhonePlayerController(
                     isSelected = autoSubtitleState != AutoSubtitleState.Off
                 ) { onToggleAutoSubtitles() }
                 DialogRow("Выключены", !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles(); menuTab = null }
+                DialogRow("Оформление субтитров", false, "размер, цвет, фон, положение, сдвиг") { showStyleDialog = true }
                 DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
                 if (showExternalField) {
                     Column(Modifier.fillMaxWidth().padding(start = ZenithDimens.paddingM, bottom = ZenithDimens.paddingS)) {

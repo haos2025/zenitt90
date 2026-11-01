@@ -52,6 +52,18 @@ interface ZenithApiService {
     @POST("subtitles/transcribe")
     suspend fun transcribeAudio(
         @Part audio: MultipartBody.Part,
-        @Part("language") language: RequestBody?
+        @Part("language") language: RequestBody?,
+        // Диагностика для логов сервера: время окна, скорость извлечения, отставание.
+        @Part("meta") meta: RequestBody? = null
+    ): SttTranscriptionDto
+
+    // То же самое, но по полному адресу — запасной канал (Cloudflare Worker).
+    @Multipart
+    @POST
+    suspend fun transcribeAudioAt(
+        @Url url: String,
+        @Part audio: MultipartBody.Part,
+        @Part("language") language: RequestBody?,
+        @Part("meta") meta: RequestBody? = null
     ): SttTranscriptionDto
 }
