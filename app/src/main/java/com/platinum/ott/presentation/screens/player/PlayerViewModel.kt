@@ -407,6 +407,12 @@ class PlayerViewModel @Inject constructor(
                     for (i in 0 until group.length) {
                         if (!group.isTrackSupported(i)) continue
                         val format = group.getTrackFormat(i)
+                        // Безымянные дорожки субтитров (ни названия, ни языка) и «закрытые титры» CEA-608/708
+                        // потоки часто объявляют пустыми — в списке они только сбивают с толку.
+                        if (group.type == C.TRACK_TYPE_TEXT &&
+                            ((format.label == null && format.language == null) ||
+                                format.sampleMimeType == "application/cea-608" || format.sampleMimeType == "application/cea-708")
+                        ) continue
                         val label = format.label ?: format.language?.uppercase() ?: "Дорожка ${i + 1}"
                         val option = TrackOption(group.mediaTrackGroup, i, label, group.isTrackSelected(i))
                         when (group.type) {

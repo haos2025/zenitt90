@@ -444,8 +444,8 @@ class SubtitleOrchestrator(
         val LIGHT_PIPELINE: Boolean = !android.os.Process.is64Bit()
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
-        const val FIRST_WINDOW_MS = 30_000L // первое окно короткое — первые реплики быстрее
-        const val SECOND_WINDOW_MS = 60_000L
+        const val FIRST_WINDOW_MS = 15_000L // первое окно совсем короткое — первые реплики быстрее
+        const val SECOND_WINDOW_MS = 30_000L
         const val LIGHT_MAX_WINDOW_MS = 60_000L
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
