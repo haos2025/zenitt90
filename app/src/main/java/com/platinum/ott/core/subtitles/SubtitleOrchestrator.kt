@@ -8,8 +8,11 @@ import com.platinum.ott.data.repository.CloudSttRepository
 import com.platinum.ott.domain.model.SubtitleFormat
 import com.platinum.ott.domain.usecase.SearchOpenSubtitlesUseCase
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -127,66 +130,161 @@ class SubtitleOrchestrator(
         language: String,
         whisperVariant: WhisperModelVariant,
     ) {
-        var coveredUpToMs = 0L
-        while (kotlinx.coroutines.currentCoroutineContext().isActive && coveredUpToMs < contentDurationMs) {
-            val position = currentPositionMsProvider().coerceAtLeast(0L)
-            // Открыли с позиции или перемотали вперёд — пропущенный кусок не обрабатываем
-            // (раньше первое окно тянулось от нуля до позиции+5 минут одним куском).
-            if (position > coveredUpToMs) coveredUpToMs = position
-            val target = position + WINDOW_AHEAD_MS
-            if (coveredUpToMs >= target) {
-                delay(POLL_INTERVAL_MS)
-                continue
-            }
+        coroutineScope {
+            var coveredUpToMs = 0L
+            var windowIndex = 0
+            // Предзагрузка: пока текущее окно распознаётся (в основном ожидание ответов сети),
+            // следующее уже извлекается из потока. Раньше шаги шли строго друг за другом:
+            // окно 2 минут занимало ~100 с (≈70 с звук + ≈27 с запросы) и пайплайн едва
+            // обгонял просмотр, из-за чего в первые минуты были пропуски в субтитрах.
+            var prefetch: Deferred<Result<ExtractedAudioChunk>>? = null
+            var prefetchStartMs = -1L
+            var prefetchDurationMs = 0L
 
-            val windowStart = coveredUpToMs
-            // Окно не длиннее MAX_EXTRACT_MS: первые реплики появляются раньше,
-            // и на слабой приставке не декодируем сразу много минут.
-            val windowEnd = minOf(target, windowStart + MAX_EXTRACT_MS, contentDurationMs)
-            val windowDuration = windowEnd - windowStart
-            if (windowDuration <= 0) {
-                delay(POLL_INTERVAL_MS)
-                continue
-            }
+            while (isActive && coveredUpToMs < contentDurationMs) {
+                val position = currentPositionMsProvider().coerceAtLeast(0L)
+                // Открыли с позиции или перемотали вперёд — пропущенный кусок не обрабатываем
+                // (раньше первое окно тянулось от нуля до позиции+5 минут одним куском).
+                if (position > coveredUpToMs) coveredUpToMs = position
+                val target = position + WINDOW_AHEAD_MS
+                if (coveredUpToMs >= target) {
+                    delay(POLL_INTERVAL_MS)
+                    continue
+                }
 
-            // Kotlin 2.1.20 (проект ещё не на 2.2) не разрешает non-local
-            // continue внутри инлайн-лямбды (getOrElse{}) — раньше здесь
-            // было .getOrElse { ...; continue }, пришлось развернуть в
-            // явную проверку Result, чтобы continue относился напрямую к
-            // this while, а не к лямбде.
-            // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
-            // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
-            _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
-            Log.d(TAG, "extract window $windowStart..$windowEnd ms")
-            val chunkResult = audioExtractor.extract(
-                AudioExtractionRequest(streamUrl, headers, windowStart, windowDuration)
-            )
-            if (chunkResult.isFailure) {
-                Log.w(TAG, "extract failed", chunkResult.exceptionOrNull())
-                _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${chunkResult.exceptionOrNull()?.message}")
-                coveredUpToMs = windowEnd // не зацикливаемся вечно на одном и том же неудачном окне
-                continue
-            }
-            val chunk = chunkResult.getOrThrow()
+                val windowStart = coveredUpToMs
+                val pending = prefetch
+                prefetch = null
+                val usePrefetch = pending != null && prefetchStartMs == windowStart
+                // Окна растут: 30 с → 60 с → 120 с. Первое короткое — первые реплики появляются
+                // быстрее, на слабой приставке не декодируем сразу много минут.
+                val windowDuration = if (usePrefetch) {
+                    prefetchDurationMs
+                } else {
+                    minOf(target, windowStart + windowLengthMs(windowIndex), contentDurationMs) - windowStart
+                }
+                if (windowDuration <= 0) {
+                    pending?.cancel()
+                    delay(POLL_INTERVAL_MS)
+                    continue
+                }
+                val windowEnd = windowStart + windowDuration
+                windowIndex++
 
-            val segmentsResult = vadSegmenter.detectSpeechSegments(chunk)
-            if (segmentsResult.isFailure) {
-                Log.w(TAG, "VAD failed", segmentsResult.exceptionOrNull())
-                _state.value = AutoSubtitleState.Error("Не удалось найти речь: ${segmentsResult.exceptionOrNull()?.message}")
-                File(chunk.filePath).delete()
+                // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
+                // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
+                _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+                val t0 = System.currentTimeMillis()
+                Log.d(TAG, "window #$windowIndex $windowStart..$windowEnd ms, prefetched=$usePrefetch")
+                // Не использованную предзагрузку (пользователь перемотал) отменяем; уже созданный
+                // ею временный файл остаётся в кэше приложения (до пары МБ, чистится системой).
+                val chunkResult = if (usePrefetch && pending != null) {
+                    pending.await()
+                } else {
+                    pending?.cancel()
+                    audioExtractor.extract(AudioExtractionRequest(streamUrl, headers, windowStart, windowDuration))
+                }
+                Log.d(TAG, "window #$windowIndex audio ready after ${System.currentTimeMillis() - t0} ms")
+                // Kotlin 2.1.20 (проект ещё не на 2.2) не разрешает non-local
+                // continue внутри инлайн-лямбды (getOrElse{}) — поэтому явная проверка Result.
+                if (chunkResult.isFailure) {
+                    Log.w(TAG, "extract failed", chunkResult.exceptionOrNull())
+                    _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${chunkResult.exceptionOrNull()?.message}")
+                    coveredUpToMs = windowEnd // не зацикливаемся вечно на одном и том же неудачном окне
+                    continue
+                }
+                val chunk = chunkResult.getOrThrow()
+
+                // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
+                val nextStart = windowEnd
+                val nextTarget = currentPositionMsProvider().coerceAtLeast(0L) + WINDOW_AHEAD_MS
+                val nextDuration = minOf(nextTarget, nextStart + windowLengthMs(windowIndex), contentDurationMs) - nextStart
+                if (nextDuration >= MIN_PREFETCH_MS) {
+                    prefetchStartMs = nextStart
+                    prefetchDurationMs = nextDuration
+                    prefetch = async {
+                        audioExtractor.extract(AudioExtractionRequest(streamUrl, headers, nextStart, nextDuration))
+                    }
+                }
+
+                // Слабое 32-битное устройство (Xiaomi TV Stick): ни поиска речи (нейросеть на CPU),
+                // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
+                // реплики и время размечает сам Whisper на сервере.
+                if (LIGHT_PIPELINE) {
+                    val stop = transcribeWholeWindow(chunk, language)
+                    File(chunk.filePath).delete()
+                    Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
+                    if (stop) {
+                        prefetch?.cancel()
+                        return@coroutineScope
+                    }
+                    coveredUpToMs = windowEnd
+                    continue
+                }
+
+                val segmentsResult = vadSegmenter.detectSpeechSegments(chunk)
+                if (segmentsResult.isFailure) {
+                    Log.w(TAG, "VAD failed", segmentsResult.exceptionOrNull())
+                    _state.value = AutoSubtitleState.Error("Не удалось найти речь: ${segmentsResult.exceptionOrNull()?.message}")
+                    File(chunk.filePath).delete()
+                    coveredUpToMs = windowEnd
+                    continue
+                }
+                val segments = segmentsResult.getOrThrow()
+                Log.d(TAG, "window #$windowIndex speech segments: ${segments.size}, +${System.currentTimeMillis() - t0} ms")
+
+                val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
+                File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
+                Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
+                // Облако недоступно, а локальный Whisper на этом устройстве бесполезен — дальше нет смысла
+                // тратить процессор на извлечение звука.
+                if (aborted) {
+                    prefetch?.cancel()
+                    return@coroutineScope
+                }
                 coveredUpToMs = windowEnd
-                continue
             }
-            val segments = segmentsResult.getOrThrow()
-            Log.d(TAG, "speech segments in window: ${segments.size}")
-
-            val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
-            File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
-            // Облако недоступно, а локальный Whisper на этом устройстве бесполезен — дальше нет смысла
-            // тратить процессор на извлечение звука.
-            if (aborted) return
-            coveredUpToMs = windowEnd
+            prefetch?.cancel()
         }
+    }
+
+    /**
+     * Облегчённый путь: всё окно (AAC в .m4a) одним запросом, без VAD и без PCM на устройстве.
+     * Возвращает true, если дальше продолжать нет смысла (облако недоступно целиком).
+     */
+    private suspend fun transcribeWholeWindow(chunk: ExtractedAudioChunk, language: String): Boolean {
+        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD)
+        return when (val outcome = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4")) {
+            is CloudSttRepository.Outcome.Success -> {
+                // Время реплик в ответе — от начала загруженного окна.
+                for (s in outcome.result.segments) {
+                    if (s.text.isNotBlank()) {
+                        addCue(SubtitleCue(chunk.startPositionMs + s.startMs, chunk.startPositionMs + s.endMs, s.text))
+                    }
+                }
+                false
+            }
+            CloudSttRepository.Outcome.NeedsLocalFallback -> {
+                _state.value = AutoSubtitleState.Error("Облачное распознавание недоступно (ответ сервера 503)")
+                true
+            }
+            CloudSttRepository.Outcome.RateLimited -> {
+                _state.value = AutoSubtitleState.Error("Слишком частые запросы, окно пропущено")
+                false
+            }
+            is CloudSttRepository.Outcome.Error -> {
+                Log.w(TAG, "whole-window upload failed", outcome.throwable)
+                _state.value = AutoSubtitleState.Error("Сеть: ${outcome.throwable.message}")
+                false
+            }
+        }
+    }
+
+    /** Длина окна извлечения по порядковому номеру: сначала короткие, чтобы субтитры появились быстрее. */
+    private fun windowLengthMs(index: Int): Long = when (index) {
+        0 -> FIRST_WINDOW_MS
+        1 -> SECOND_WINDOW_MS
+        else -> MAX_EXTRACT_MS
     }
 
     private suspend fun transcribeChunk(
@@ -265,10 +363,10 @@ class SubtitleOrchestrator(
     }
 
     /** При 429 ждём и повторяем (до MAX_RATE_LIMIT_RETRIES раз), остальные исходы — как есть. */
-    private suspend fun transcribeWithRetry(wavFile: File, language: String): CloudSttRepository.Outcome {
+    private suspend fun transcribeWithRetry(wavFile: File, language: String, mimeType: String = "audio/wav"): CloudSttRepository.Outcome {
         var attempt = 0
         while (true) {
-            val outcome = cloudSttRepository.transcribe(wavFile, language)
+            val outcome = cloudSttRepository.transcribe(wavFile, language, mimeType)
             if (outcome != CloudSttRepository.Outcome.RateLimited || attempt >= MAX_RATE_LIMIT_RETRIES) return outcome
             attempt++
             delay(RATE_LIMIT_BACKOFF_MS)
@@ -323,8 +421,13 @@ class SubtitleOrchestrator(
         // base — 270 с. Для субтитров это бесполезно. На 64-битном телефоне (arm64) тот же замер: ×7 и ×3.
         // Поэтому локальный Whisper разрешён только в 64-битном процессе.
         val LOCAL_WHISPER_USABLE: Boolean = android.os.Process.is64Bit()
+        // 32-битный процесс = слабое устройство (замеры на Xiaomi TV Stick 4K): всё тяжёлое — на сервер.
+        val LIGHT_PIPELINE: Boolean = !android.os.Process.is64Bit()
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
+        const val FIRST_WINDOW_MS = 30_000L // первое окно короткое — первые реплики быстрее
+        const val SECOND_WINDOW_MS = 60_000L
+        const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
         const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с
         const val REQUEST_PACE_MS = 3_000L // ≤ 20 запросов в минуту

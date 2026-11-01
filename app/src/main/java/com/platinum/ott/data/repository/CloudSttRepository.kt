@@ -31,9 +31,11 @@ class CloudSttRepository(private val api: ZenithApiService) {
         data class Error(val throwable: Throwable) : Outcome
     }
 
-    suspend fun transcribe(wavFile: File, language: String): Outcome = withContext(Dispatchers.IO) {
+    // mimeType: WAV для коротких фрагментов (обычный путь) или audio/mp4 для целого окна .m4a
+    // (облегчённый путь для слабых устройств, где нет поиска речи на устройстве).
+    suspend fun transcribe(wavFile: File, language: String, mimeType: String = "audio/wav"): Outcome = withContext(Dispatchers.IO) {
         try {
-            val requestBody = wavFile.asRequestBody("audio/wav".toMediaTypeOrNull())
+            val requestBody = wavFile.asRequestBody(mimeType.toMediaTypeOrNull())
             val audioPart = MultipartBody.Part.createFormData("audio", wavFile.name, requestBody)
             val languagePart = language.toRequestBody("text/plain".toMediaTypeOrNull())
             Outcome.Success(api.transcribeAudio(audioPart, languagePart))
