@@ -196,6 +196,11 @@ class SubtitleOrchestrator(
                 }
                 val chunk = chunkResult.getOrThrow()
                 setProgress("звук готов за ${(System.currentTimeMillis() - t0) / 1000} с")
+                // Диагностика для логов Render (поле meta): сколько заняло извлечение звука, насколько
+                // окно опережает просмотр и откуда поток. Без токенов и путей — только тип и хост.
+                val extractMs = System.currentTimeMillis() - t0
+                val leadMs = windowStart - currentPositionMsProvider()
+                val srcTag = sourceTag(streamUrl)
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
                 val nextStart = windowEnd
@@ -216,9 +221,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val extractMs = System.currentTimeMillis() - t0
-                    val leadMs = windowStart - currentPositionMsProvider()
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;lead_ms=$leadMs"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;lead_ms=$leadMs;src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -242,7 +245,9 @@ class SubtitleOrchestrator(
                 Log.d(TAG, "window #$windowIndex speech segments: ${segments.size}, +${System.currentTimeMillis() - t0} ms")
                 setProgress("фраз речи: ${segments.size}")
 
-                val aborted = transcribeChunk(chunk, segments, language, whisperVariant)
+                val vadMs = System.currentTimeMillis() - t0 - extractMs
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;vad_ms=$vadMs;lead_ms=$leadMs;src=$srcTag"
+                val aborted = transcribeChunk(chunk, segments, language, whisperVariant, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
                 // Облако недоступно, а локальный Whisper на этом устройстве бесполезен — дальше нет смысла
@@ -311,6 +316,7 @@ class SubtitleOrchestrator(
         segments: List<SpeechSegment>,
         language: String,
         whisperVariant: WhisperModelVariant,
+        metaBase: String,
     ): Boolean {
         if (segments.isEmpty()) return false
         // Оркестратор крутится в viewModelScope (главный поток). Декодирование 2 минут AAC в PCM —
@@ -344,7 +350,7 @@ class SubtitleOrchestrator(
                 File.createTempFile("stt_segment", ".wav").apply { writeBytes(WavEncoder.encode(slice)) }
             }
             val outcome = try {
-                transcribeWithRetry(wavFile, language)
+                transcribeWithRetry(wavFile, language, meta = "$metaBase;g=${groupIndex + 1}/${groups.size}")
             } finally {
                 wavFile.delete()
             }
@@ -391,6 +397,32 @@ class SubtitleOrchestrator(
             attempt++
             delay(RATE_LIMIT_BACKOFF_MS)
         }
+    }
+
+    /**
+     * Короткая метка источника для диагностики в логах сервера: схема, тип потока, публичный/локальный
+     * адрес и (только для публичных) хост. Путь, параметры и токены в метку не попадают; символы —
+     * только буквы, цифры и «_», чтобы серверный фильтр поля meta ничего не вырезал.
+     */
+    private fun sourceTag(url: String): String {
+        val uri = runCatching { java.net.URI(url) }.getOrNull()
+        val scheme = uri?.scheme?.lowercase() ?: "x"
+        val host = uri?.host?.lowercase().orEmpty()
+        val path = uri?.path?.lowercase().orEmpty()
+        val kind = when {
+            path.contains("m3u8") -> "hls"
+            path.endsWith(".mpd") -> "dash"
+            path.endsWith(".mp4") -> "mp4"
+            path.endsWith(".mkv") -> "mkv"
+            path.endsWith(".ts") -> "ts"
+            else -> "other"
+        }
+        val local = host.isEmpty() || host == "localhost" || host.startsWith("127.") ||
+            host.startsWith("10.") || host.startsWith("192.168.") ||
+            Regex("^172\\.(1[6-9]|2\\d|3[01])\\.").containsMatchIn(host)
+        val where = if (local) "local" else "pub"
+        val hostPart = if (local) "" else "_" + host.replace(Regex("[^a-z0-9]"), "_").take(40)
+        return "${scheme}_${kind}_$where$hostPart"
     }
 
     /** Склеивает соседние фразы в группы: пауза между ними ≤ MAX_GROUP_GAP_MS, длина группы ≤ MAX_GROUP_SPAN_MS. */
