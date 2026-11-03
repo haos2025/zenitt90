@@ -155,13 +155,10 @@ private fun CategoryPage(
         SettingsCategory.PLAYBACK -> {
             val quality by viewModel.quality.collectAsStateWithLifecycle()
             val subsByDefault by viewModel.subsByDefault.collectAsStateWithLifecycle()
-            val preferAccuracy by viewModel.preferAccuracy.collectAsStateWithLifecycle()
             SettingsCard {
                 CycleSetting("Качество по умолчанию", quality) { viewModel.cycleQuality() }
                 SettingsDivider()
                 CycleSetting("Субтитры по умолчанию", if (subsByDefault) "Вкл" else "Выкл") { viewModel.setSubsByDefault(!subsByDefault) }
-                // Влияет только на локальный Whisper-фолбэк автосубтитров — облачный путь настройку не читает.
-                CycleSetting("Автосубтитры (офлайн)", if (preferAccuracy) "Точность" else "Скорость") { viewModel.setPreferAccuracy(!preferAccuracy) }
             }
         }
         SettingsCategory.PLAYER -> {

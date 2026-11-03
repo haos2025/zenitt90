@@ -33,20 +33,11 @@ android {
 
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
-        // PROMPT_SUBTITLES.md, подзадача 5 — локальный Whisper (whisper.cpp
-        // через NDK/JNI). Только arm64-v8a/armeabi-v7a — x86/x86_64 не
-        // нужны, целевые устройства проекта TV-приставки и телефоны на ARM
-        // (тестовое устройство — Xiaomi TV Stick 4K, README.md).
+        // Только arm64-v8a/armeabi-v7a — x86/x86_64 не нужны (ТВ-приставки и телефоны на ARM;
+        // тестовое устройство — Xiaomi TV Stick 4K). Относится к нативным библиотекам зависимостей
+        // (ONNX Runtime для Silero VAD и т.п.): собственного нативного кода в проекте больше нет.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        }
-        externalNativeBuild {
-            cmake {
-                // whisper.cpp сам форсирует C++17 в своём CMakeLists.txt —
-                // ANDROID_STL=c++_shared обязателен, статический c++_static
-                // конфликтует при линковке нескольких .so с рантаймом STL.
-                arguments += listOf("-DANDROID_STL=c++_shared")
-            }
         }
     }
 
@@ -108,20 +99,6 @@ android {
         abortOnError = false
         checkReleaseBuilds = true
         disable += setOf("MissingTranslation", "ExtraTranslation")
-    }
-
-    // PROMPT_SUBTITLES.md, подзадача 5 — первое использование NDK/CMake в
-    // проекте (до этого весь код был чистый Kotlin/JVM). version — CMake,
-    // который умеет FetchContent пинить по git-тегу без ручной установки
-    // зависимостей; 3.22.1 бандлится с современным Android SDK cmake-пакетом
-    // на GitHub Actions раннерах (ubuntu-latest + actions/setup-android или
-    // предустановленный SDK) — НЕ проверено на реальном раннере этого
-    // проекта, если версия там другая, потребуется поправить здесь же.
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 }
 

@@ -274,6 +274,17 @@ fun PhonePlayerController(
                     subLabel = autoSubtitleStatusLabel(autoSubtitleState),
                     isSelected = autoSubtitleState != AutoSubtitleState.Off
                 ) { onToggleAutoSubtitles() }
+                if (android.os.Process.is64Bit()) {
+                    var lightTest by remember { mutableStateOf(com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline) }
+                    DialogRow(
+                        label = "Режим как на ТВ (тест)",
+                        isSelected = lightTest,
+                        subLabel = "применится при следующем включении автосубтитров"
+                    ) {
+                        lightTest = !lightTest
+                        com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline = lightTest
+                    }
+                }
                 DialogRow("Выключены", !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles(); menuTab = null }
                 DialogRow("Оформление субтитров", false, "размер, цвет, фон, положение, сдвиг") { showStyleDialog = true }
                 DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
@@ -549,7 +560,6 @@ private fun autoSubtitleStatusLabel(state: AutoSubtitleState): String? = when (s
     is AutoSubtitleState.UsingOpenSubtitles -> "OpenSubtitles (${state.language})"
     is AutoSubtitleState.GeneratingAi -> when (state.source) {
         AiSource.CLOUD -> "Распознаём (облако)…" + (state.detail?.let { " · $it" } ?: "")
-        AiSource.LOCAL -> "Распознаём (локально, может отставать)…"
     }
     is AutoSubtitleState.Error -> "Ошибка: ${state.message}"
 }

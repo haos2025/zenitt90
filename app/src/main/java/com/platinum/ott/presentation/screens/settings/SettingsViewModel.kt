@@ -56,10 +56,6 @@ class SettingsViewModel @Inject constructor(
     val subsByDefault: StateFlow<Boolean> = _subsByDefault
     fun setSubsByDefault(enabled: Boolean) { subtitlePrefs.setShowByDefault(enabled); _subsByDefault.value = enabled }
 
-    private val _preferAccuracy = MutableStateFlow(subtitlePrefs.getPreferLocalAccuracy())
-    val preferAccuracy: StateFlow<Boolean> = _preferAccuracy
-    fun setPreferAccuracy(enabled: Boolean) { subtitlePrefs.setPreferLocalAccuracy(enabled); _preferAccuracy.value = enabled }
-
     private val _newEpisodes = MutableStateFlow(notificationPreferences.isNewEpisodesEnabled())
     val newEpisodes: StateFlow<Boolean> = _newEpisodes
     fun setNewEpisodes(enabled: Boolean) { notificationPreferences.setNewEpisodesEnabled(enabled); _newEpisodes.value = enabled }

@@ -31,6 +31,21 @@ class CloudSttRepository(private val api: ZenithApiService) {
         data class Error(val throwable: Throwable) : Outcome
     }
 
+    /** Будит сервер (Render free засыпает при простое). Любой исход игнорируется. */
+    suspend fun warmUp() {
+        withContext(Dispatchers.IO) {
+            try {
+                val r = api.warmUp()
+                r.body()?.close()
+                r.errorBody()?.close()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // не важно: цель только разбудить сервер
+            }
+        }
+    }
+
     // mimeType: WAV для коротких фрагментов (обычный путь) или audio/mp4 для целого окна .m4a
     // (облегчённый путь для слабых устройств, где нет поиска речи на устройстве).
     // meta — короткая строка для логов сервера (см. SubtitleOrchestrator).

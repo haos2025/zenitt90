@@ -147,7 +147,7 @@ class PlayerViewModel @Inject constructor(
     private val channelRepository = sessionGraph.channelRepository
     private val epgProgramRepository = sessionGraph.epgProgramRepository
     // PROMPT_SUBTITLES.md, подзадача 6 — оркестратор сам решает
-    // OpenSubtitles/облако/локальный Whisper по приоритету; PlayerViewModel
+    // OpenSubtitles/облако по приоритету; PlayerViewModel
     // только даёт ему контекст (URL/заголовки/позицию) и слушает состояние.
     // Прямой searchOpenSubtitlesUseCase (был здесь в подзадаче 1) больше не
     // нужен — оркестратор владеет им сам.
@@ -962,7 +962,7 @@ class PlayerViewModel @Inject constructor(
 
     // PROMPT_SUBTITLES.md, подзадача 6 — ручной переключатель "Субтитры"
     // (сама UI-кнопка — подзадача 8) вызывает это при включении. Вся логика
-    // приоритета (OpenSubtitles → облако → локальный Whisper) — в
+    // приоритета (OpenSubtitles → облако) — в
     // SubtitleOrchestrator; здесь только даём ему контекст текущего
     // воспроизведения. Для живых каналов (seriesId==null не помогает
     // отличить) это пока не сработает осмысленно — оркестратор сам это
@@ -981,17 +981,6 @@ class PlayerViewModel @Inject constructor(
         val durationMs = exoPlayer.duration
         if (durationMs <= 0) { refuse("Автосубтитры: плеер ещё не знает длительность видео"); return } // C.TIME_UNSET или ещё не готово
         android.util.Log.d("ZenithSubs", "enableAutoSubtitles start: title=$currentTitle year=$currentYear duration=$durationMs")
-        // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/точность"
-        // читается прямо здесь (SharedPreferences, тот же паттерн, что
-        // остальные *Preferences-классы проекта), не хранится отдельным
-        // полем ViewModel — выбор в Settings мог измениться между сессиями
-        // плеера, читать его на каждое включение надёжнее, чем кэшировать.
-        val preferAccuracy = com.platinum.ott.core.SubtitlePreferences(getApplication()).getPreferLocalAccuracy()
-        val whisperVariant = if (preferAccuracy) {
-            com.platinum.ott.core.subtitles.whisper.WhisperModelVariant.BASE
-        } else {
-            com.platinum.ott.core.subtitles.whisper.WhisperModelVariant.TINY
-        }
         subtitleOrchestrator.start(
             scope = viewModelScope,
             title = currentTitle,
@@ -1000,7 +989,6 @@ class PlayerViewModel @Inject constructor(
             headers = current.currentVariant.headers,
             contentDurationMs = durationMs,
             currentPositionMsProvider = { exoPlayer.currentPosition },
-            whisperVariant = whisperVariant,
             onOpenSubtitlesFound = { url, language, format -> loadExternalSubtitle(url, language, format) },
         )
     }

@@ -8,8 +8,8 @@ import com.platinum.ott.core.plugin.PluginManager
 import com.platinum.ott.core.plugin.PluginRepository
 import com.platinum.ott.core.subtitles.SileroVadSegmenter
 import com.platinum.ott.core.subtitles.StreamAudioExtractor
+import com.platinum.ott.core.subtitles.SubtitleCueCache
 import com.platinum.ott.core.subtitles.SubtitleOrchestrator
-import com.platinum.ott.core.subtitles.whisper.LocalWhisperTranscriber
 import com.platinum.ott.data.local.ZenithDatabase
 import com.platinum.ott.data.remote.RetrofitFactory
 import com.platinum.ott.data.remote.tmdb.TmdbApiService
@@ -99,7 +99,7 @@ class SessionGraph @Inject constructor(
     lateinit var searchOpenSubtitlesUseCase: SearchOpenSubtitlesUseCase; private set
     // PROMPT_SUBTITLES.md, подзадача 6 — зависит от api (см. initAuth()),
     // поэтому lateinit, не lazy, как audioExtractor/vadSegmenter/
-    // localWhisperTranscriber ниже (те не зависят от auth вообще).
+    // vadSegmenter ниже (те не зависят от auth вообще).
     lateinit var cloudSttRepository: CloudSttRepository; private set
     lateinit var subtitleOrchestrator: SubtitleOrchestrator; private set
 
@@ -112,9 +112,6 @@ class SessionGraph @Inject constructor(
     // PROMPT_SUBTITLES.md, подзадача 4 — тот же принцип, что и
     // audioExtractor выше: не зависит от auth, живёт на весь процесс.
     val vadSegmenter: SileroVadSegmenter by lazy { SileroVadSegmenter(appContext) }
-    // PROMPT_SUBTITLES.md, подзадача 5 — тот же принцип, что и остальные
-    // компоненты автосубтитров выше: не зависит от auth, живёт на весь процесс.
-    val localWhisperTranscriber: LocalWhisperTranscriber by lazy { LocalWhisperTranscriber(appContext) }
 
     // Тот же смысл, что и appScope в ServiceLocator: единственный на
     // приложение scope для fire-and-forget задачи загрузки плагинов при
@@ -182,7 +179,7 @@ class SessionGraph @Inject constructor(
             vadSegmenter = vadSegmenter,
             openSubtitlesUseCase = searchOpenSubtitlesUseCase,
             cloudSttRepository = cloudSttRepository,
-            localWhisperTranscriber = localWhisperTranscriber,
+            cueCache = SubtitleCueCache(java.io.File(appContext.filesDir, "subtitle_cues")),
         )
     }
 

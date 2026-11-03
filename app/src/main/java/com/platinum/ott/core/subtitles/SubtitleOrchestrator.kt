@@ -1,8 +1,6 @@
 package com.platinum.ott.core.subtitles
 
 import android.util.Log
-import com.platinum.ott.core.subtitles.whisper.LocalWhisperTranscriber
-import com.platinum.ott.core.subtitles.whisper.WhisperModelVariant
 import com.platinum.ott.data.remote.dto.SttTranscriptionDto
 import com.platinum.ott.data.repository.CloudSttRepository
 import com.platinum.ott.domain.model.SubtitleFormat
@@ -27,9 +25,9 @@ import java.io.File
  * ровно как в самом промте:
  *
  *   VOD: OpenSubtitles (подзадача 1) → если не нашлось → облачный STT
- *   (подзадача 3) со скользящим окном 5 минут вперёд → если облако
- *   исчерпано (backend вернул 503, см. CloudSttRepository) → локальный
- *   Whisper (подзадача 5) для оставшихся сегментов ТОГО ЖЕ чанка.
+ *   (подзадача 3) со скользящим окном 5 минут вперёд. Локального Whisper
+ *   больше нет: если облако исчерпано (backend вернул 503, см.
+ *   CloudSttRepository), показываем ошибку и останавливаем пайплайн.
  *
  * Специально НЕ знает про ExoPlayer/PlayerViewModel/Compose — координирует
  * только источники субтитров, а найденный OpenSubtitles-матч отдаёт через
@@ -43,21 +41,15 @@ import java.io.File
  * VOD (принимает `contentDurationMs`); для живых каналов нужен отдельный
  * путь, которого здесь нет.
  *
- * КАЖДЫЙ 5-МИНУТНЫЙ ЧАНК ДЕКОДИРУЕТСЯ В PCM ДО ТРЁХ РАЗ (известная
- * неэффективность, не устранена в этой сессии): один раз внутри
- * SileroVadSegmenter (подзадача 4, инкапсулировано там), один раз здесь
- * (для нарезки WAV под облако) и ещё раз внутри LocalWhisperTranscriber
- * (подзадача 5, при локальном fallback). Объединение в один общий проход
- * потребовало бы менять публичные сигнатуры уже сданных подзадач — оставлено
- * как есть, стоит оптимизировать отдельным заходом, если профилирование на
- * реальном устройстве покажет, что это заметно.
+ * КАЖДЫЙ ЧАНК ДЕКОДИРУЕТСЯ В PCM ДВАЖДЫ (известная неэффективность): один
+ * раз внутри SileroVadSegmenter, один раз здесь (для нарезки WAV под облако).
  */
 class SubtitleOrchestrator(
     private val audioExtractor: StreamAudioExtractor,
     private val vadSegmenter: SileroVadSegmenter,
     private val openSubtitlesUseCase: SearchOpenSubtitlesUseCase,
     private val cloudSttRepository: CloudSttRepository,
-    private val localWhisperTranscriber: LocalWhisperTranscriber,
+    private val cueCache: SubtitleCueCache? = null,
 ) {
     private val _state = MutableStateFlow<AutoSubtitleState>(AutoSubtitleState.Off)
     val state: StateFlow<AutoSubtitleState> = _state
@@ -71,6 +63,12 @@ class SubtitleOrchestrator(
     val cues: StateFlow<List<SubtitleCue>> = _cues
 
     private var job: Job? = null
+
+    // Кэш распознанного (см. SubtitleCueCache): ключ текущего видео и уже покрытые куски [start, end).
+    private var cacheKey: String? = null
+    private var coveredRanges: List<LongRange> = emptyList()
+    // Окно распознано без сбоев — только такие окна считаются покрытыми.
+    private var windowOk = true
 
     /**
      * @param contentDurationMs полная длительность VOD-контента — окно не
@@ -90,16 +88,15 @@ class SubtitleOrchestrator(
         contentDurationMs: Long,
         currentPositionMsProvider: () -> Long,
         language: String = "ru",
-        // PROMPT_SUBTITLES.md, подзадача 9 — "ползунок скорость/точность",
-        // влияет только на локальный Whisper-фолбэк (облачный путь модель
-        // выбирает сам backend). TINY по умолчанию — тот же дефолт, что и
-        // в SubtitlePreferences.getPreferLocalAccuracy() (false → TINY).
-        whisperVariant: WhisperModelVariant = WhisperModelVariant.TINY,
         onOpenSubtitlesFound: (url: String, language: String, format: SubtitleFormat) -> Unit,
     ) {
         stop()
         _cues.value = emptyList()
+        cacheKey = null
+        coveredRanges = emptyList()
         job = scope.launch {
+            // Будим сервер заранее: пока ищем OpenSubtitles и извлекаем звук первого окна, он просыпается.
+            launch { cloudSttRepository.warmUp() }
             // Без года (внешний плеер: только имя файла из ссылки) поиск по OpenSubtitles
             // бессмыслен — сразу генерируем.
             val match = if (year > 0) {
@@ -111,7 +108,19 @@ class SubtitleOrchestrator(
                 onOpenSubtitlesFound(match.downloadUrl, match.language, match.format)
                 return@launch
             }
-            runAiPipelineForVod(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language, whisperVariant)
+            // Уже распознанное для этого видео (прошлый просмотр) показываем сразу.
+            val key = cueCache?.key(title, year, contentDurationMs, language)
+            cacheKey = key
+            if (key != null) {
+                val cached = withContext(Dispatchers.IO) { cueCache?.load(key) }
+                if (cached != null && cached.cues.isNotEmpty()) {
+                    _cues.value = cached.cues.sortedBy { it.startMs }
+                    coveredRanges = cached.covered
+                    progressLabel = "кэш"
+                    setProgress("загружено")
+                }
+            }
+            runAiPipelineForVod(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language)
         }
     }
 
@@ -120,6 +129,40 @@ class SubtitleOrchestrator(
         job = null
         _state.value = AutoSubtitleState.Off
         _cues.value = emptyList()
+        cacheKey = null
+        coveredRanges = emptyList()
+    }
+
+    /** Куски, уже распознанные раньше: перепрыгиваем их, а новое окно обрезаем перед следующим из них. */
+    private fun skipCovered(pos: Long): Long {
+        var p = pos
+        while (true) {
+            val r = coveredRanges.firstOrNull { p >= it.first && p <= it.last } ?: return p
+            p = r.last + 1
+        }
+    }
+
+    private fun capToCovered(start: Long, duration: Long): Long {
+        val nextStart = coveredRanges.filter { it.first > start }.minOfOrNull { it.first } ?: return duration
+        return minOf(duration, nextStart - start)
+    }
+
+    /** Помечает [start, end) покрытым и сохраняет реплики в кэш (если окно прошло без сбоев). */
+    private suspend fun recordCovered(start: Long, end: Long) {
+        if (!windowOk || end <= start) return
+        val merged = mutableListOf<LongRange>()
+        for (r in (coveredRanges + (start until end)).sortedBy { it.first }) {
+            val last = merged.lastOrNull()
+            if (last != null && r.first <= last.last + 1_000) {
+                merged[merged.lastIndex] = last.first..maxOf(last.last, r.last)
+            } else {
+                merged += r
+            }
+        }
+        coveredRanges = merged
+        val key = cacheKey ?: return
+        val snapshot = SubtitleCueCache.Entry(_cues.value, merged)
+        withContext(Dispatchers.IO) { cueCache?.save(key, snapshot) }
     }
 
     private suspend fun runAiPipelineForVod(
@@ -128,7 +171,6 @@ class SubtitleOrchestrator(
         contentDurationMs: Long,
         currentPositionMsProvider: () -> Long,
         language: String,
-        whisperVariant: WhisperModelVariant,
     ) {
         coroutineScope {
             var coveredUpToMs = 0L
@@ -146,8 +188,30 @@ class SubtitleOrchestrator(
                 // Открыли с позиции или перемотали вперёд — пропущенный кусок не обрабатываем
                 // (раньше первое окно тянулось от нуля до позиции+5 минут одним куском).
                 if (position > coveredUpToMs) coveredUpToMs = position
+                // Предзагрузка, которая уже идёт с позиции около текущей, не выбрасываем: если
+                // извлечение первого окна заняло дольше его длины, воспроизведение успело уйти вперёд,
+                // и раньше такая предзагрузка отменялась из-за расхождения в секунды (вся работа зря).
+                // Берём её, пока она ещё покрывает хотя бы MIN_PREFETCH_MS будущего звука.
+                if (prefetch != null && prefetchStartMs <= coveredUpToMs &&
+                    prefetchStartMs + prefetchDurationMs >= coveredUpToMs + MIN_PREFETCH_MS
+                ) {
+                    coveredUpToMs = prefetchStartMs
+                }
+                // Кусок уже распознан раньше (кэш) — перепрыгиваем.
+                val skipped = skipCovered(coveredUpToMs)
+                if (skipped != coveredUpToMs) {
+                    coveredUpToMs = skipped
+                    continue
+                }
                 val target = position + WINDOW_AHEAD_MS
-                if (coveredUpToMs >= target) {
+                // Когда запас вперёд уже у потолка (5 минут), раньше брали окна по 1–5 с и слали по
+                // запросу каждые ~2 с (≈26 в минуту: впритык к лимиту, треть мелких кусков Whisper
+                // «выдумывал» и фильтр их отбрасывал). Теперь ждём, пока набежит хотя бы
+                // MIN_REFILL_MS, и берём нормальное окно. Хвост видео (конец) берём как есть.
+                val reachable = minOf(target, contentDurationMs)
+                val needed = reachable - coveredUpToMs
+                val atTail = reachable >= contentDurationMs
+                if (needed <= 0 || (needed < MIN_REFILL_MS && !atTail)) {
                     delay(POLL_INTERVAL_MS)
                     continue
                 }
@@ -161,7 +225,7 @@ class SubtitleOrchestrator(
                 val windowDuration = if (usePrefetch) {
                     prefetchDurationMs
                 } else {
-                    minOf(target, windowStart + windowLengthMs(windowIndex), contentDurationMs) - windowStart
+                    capToCovered(windowStart, minOf(target, windowStart + windowLengthMs(windowIndex), contentDurationMs) - windowStart)
                 }
                 if (windowDuration <= 0) {
                     pending?.cancel()
@@ -174,6 +238,7 @@ class SubtitleOrchestrator(
                 // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
                 // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
                 progressLabel = "окно $windowIndex"
+                windowOk = true
                 setProgress("звук")
                 val t0 = System.currentTimeMillis()
                 Log.d(TAG, "window #$windowIndex $windowStart..$windowEnd ms, prefetched=$usePrefetch")
@@ -203,13 +268,22 @@ class SubtitleOrchestrator(
                 val srcTag = sourceTag(streamUrl)
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
-                val nextStart = windowEnd
-                val nextTarget = currentPositionMsProvider().coerceAtLeast(0L) + WINDOW_AHEAD_MS
-                val nextDuration = minOf(nextTarget, nextStart + windowLengthMs(windowIndex), contentDurationMs) - nextStart
+                // Если звук окна извлекался дольше, чем оно длится, воспроизведение уже ушло вперёд:
+                // следующее окно начинаем с текущей позиции, а не с конца только что взятого.
+                val nowPosition = currentPositionMsProvider().coerceAtLeast(0L)
+                val nextStart = maxOf(windowEnd, nowPosition)
+                val nextTarget = nowPosition + WINDOW_AHEAD_MS
+                val nextDuration = capToCovered(
+                    nextStart,
+                    minOf(nextTarget, nextStart + windowLengthMs(windowIndex), contentDurationMs) - nextStart,
+                )
+                val nextIsTail = nextStart + nextDuration >= contentDurationMs
                 // Предзагрузка только на слабых устройствах: второе извлечение звука параллельно с
                 // обработкой нагружает процессор, память и открывает второе соединение к источнику;
                 // на телефоне это приводило к зависаниям.
-                if (LIGHT_PIPELINE && nextDuration >= MIN_PREFETCH_MS) {
+                if (LIGHT_PIPELINE && nextDuration >= MIN_PREFETCH_MS &&
+                    (nextDuration >= MIN_REFILL_MS || nextIsTail)
+                ) {
                     prefetchStartMs = nextStart
                     prefetchDurationMs = nextDuration
                     prefetch = async {
@@ -229,6 +303,7 @@ class SubtitleOrchestrator(
                         prefetch?.cancel()
                         return@coroutineScope
                     }
+                    recordCovered(windowStart, windowEnd)
                     coveredUpToMs = windowEnd
                     continue
                 }
@@ -247,19 +322,22 @@ class SubtitleOrchestrator(
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
                 val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;vad_ms=$vadMs;lead_ms=$leadMs;src=$srcTag"
-                val aborted = transcribeChunk(chunk, segments, language, whisperVariant, metaBase)
+                val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
-                // Облако недоступно, а локальный Whisper на этом устройстве бесполезен — дальше нет смысла
+                // Облако недоступно целиком — дальше нет смысла
                 // тратить процессор на извлечение звука.
                 if (aborted) {
                     prefetch?.cancel()
                     return@coroutineScope
                 }
+                recordCovered(windowStart, windowEnd)
                 coveredUpToMs = windowEnd
                 setProgress("готово")
             }
             prefetch?.cancel()
+            // Дошли до конца видео (в том числе целиком из кэша): состояние не должно остаться «Выкл».
+            if (isActive && _state.value !is AutoSubtitleState.Error) setProgress("готово")
         }
     }
 
@@ -284,10 +362,12 @@ class SubtitleOrchestrator(
                 true
             }
             CloudSttRepository.Outcome.RateLimited -> {
+                windowOk = false
                 _state.value = AutoSubtitleState.Error("Слишком частые запросы, окно пропущено")
                 false
             }
             is CloudSttRepository.Outcome.Error -> {
+                windowOk = false
                 Log.w(TAG, "whole-window upload failed", outcome.throwable)
                 _state.value = AutoSubtitleState.Error("Сеть: ${outcome.throwable.message}")
                 false
@@ -315,7 +395,6 @@ class SubtitleOrchestrator(
         chunk: ExtractedAudioChunk,
         segments: List<SpeechSegment>,
         language: String,
-        whisperVariant: WhisperModelVariant,
         metaBase: String,
     ): Boolean {
         if (segments.isEmpty()) return false
@@ -323,23 +402,12 @@ class SubtitleOrchestrator(
         // секунды чистой работы процессора: на главном потоке это замораживало интерфейс и приводило
         // к ANR («приложение не отвечает»). Выносим в Default.
         val pcm = withContext(Dispatchers.Default) { PcmAudioDecoder.decodeToMono16k(chunk.filePath) }
-        var cloudExhausted = false
-        val localFallbackSegments = mutableListOf<SpeechSegment>()
 
         // Один запрос на ГРУППУ соседних фраз (до ~28 с), а не на каждую фразу:
         // лимит backend 10 запросов/мин, у Groq 20/мин и минимум 10 с на запрос,
         // поэтому «фраза = запрос» упирается в 429 и теряет большую часть речи.
         val groups = groupSegments(segments)
         for ((groupIndex, group) in groups.withIndex()) {
-            // Локальный Whisper всегда кодирует окно 30 с, поэтому время почти не зависит от длины
-            // фрагмента (замер: 5 с и 30 с — одинаково ~4 с на tiny). Отдаём ему СКЛЕЕННУЮ группу
-            // целиком, а не каждую фразу отдельно.
-            val groupSpan = SpeechSegment(group.first().startMs, group.last().endMs)
-            if (cloudExhausted) {
-                localFallbackSegments += groupSpan
-                continue
-            }
-
             setProgress("запрос ${groupIndex + 1} из ${groups.size}")
             val span = SpeechSegment(group.first().startMs, group.last().endMs)
             val slice = sliceSegmentPcm(pcm, chunk, span)
@@ -357,15 +425,14 @@ class SubtitleOrchestrator(
             when (outcome) {
                 is CloudSttRepository.Outcome.Success -> appendCloudCues(outcome.result, span)
                 CloudSttRepository.Outcome.NeedsLocalFallback -> {
-                    // "Локальный Whisper — когда офлайн или лимит облака
-                    // исчерпан" (PROMPT_SUBTITLES.md) — backend уже перебрал
-                    // всю цепочку облачных провайдеров и вернул 503,
-                    // дальнейшие попытки в ЭТОМ чанке смысла не имеют.
-                    cloudExhausted = true
-                    localFallbackSegments += groupSpan
+                    // backend уже перебрал всю цепочку облачных провайдеров и вернул 503 —
+                    // дальнейшие попытки смысла не имеют.
+                    _state.value = AutoSubtitleState.Error("Облачное распознавание недоступно (ответ сервера 503)")
+                    return true
                 }
                 CloudSttRepository.Outcome.RateLimited,
                 is CloudSttRepository.Outcome.Error -> {
+                    windowOk = false
                     // Сетевая/серверная ошибка или лимит не отпустил после повторов —
                     // пропускаем ТОЛЬКО эту группу, не переключаем весь пайплайн на локальный.
                 }
@@ -373,18 +440,6 @@ class SubtitleOrchestrator(
             delay(REQUEST_PACE_MS) // не частим: лимиты запросов в минуту у backend и провайдеров
         }
 
-        if (localFallbackSegments.isNotEmpty()) {
-            if (!LOCAL_WHISPER_USABLE) {
-                _state.value = AutoSubtitleState.Error(
-                    "Облачное распознавание недоступно, а локальное на этом устройстве слишком медленное"
-                )
-                return true
-            }
-            _state.value = AutoSubtitleState.GeneratingAi(AiSource.LOCAL)
-            localWhisperTranscriber.transcribeSegments(chunk, localFallbackSegments, variant = whisperVariant, language = language)
-                .getOrNull()
-                ?.forEach { r -> addCue(SubtitleCue(r.startMs, r.endMs, r.text)) }
-        }
         return false
     }
 
@@ -451,8 +506,7 @@ class SubtitleOrchestrator(
         // (app/routers/subtitles.py) и ОТНОСИТЕЛЕН к загруженному WAV
         // (т.е. к самому сегменту, не ко всему чанку) — сдвиг на
         // segment.startMs (уже абсолютная координата потока, см.
-        // SileroVadSegmenter) даёт итоговую абсолютную позицию, тот же
-        // приём, что и в LocalWhisperTranscriber для локального пути.
+        // SileroVadSegmenter) даёт итоговую абсолютную позицию.
         if (result.segments.isEmpty()) {
             if (result.text.isNotBlank()) addCue(SubtitleCue(segment.startMs, segment.endMs, result.text))
             return
@@ -475,12 +529,12 @@ class SubtitleOrchestrator(
     private companion object {
         const val TAG = "ZenithSubs"
         const val SAMPLE_RATE = 16_000
-        // Замер на Xiaomi TV Stick 4K (32-битный процесс, armeabi-v7a): tiny на куске 30 с — 113 с (×0.26),
-        // base — 270 с. Для субтитров это бесполезно. На 64-битном телефоне (arm64) тот же замер: ×7 и ×3.
-        // Поэтому локальный Whisper разрешён только в 64-битном процессе.
-        val LOCAL_WHISPER_USABLE: Boolean = android.os.Process.is64Bit()
         // 32-битный процесс = слабое устройство (замеры на Xiaomi TV Stick 4K): всё тяжёлое — на сервер.
-        val LIGHT_PIPELINE: Boolean = !android.os.Process.is64Bit()
+        // Тестовый переключатель (меню субтитров телефона): прогнать на телефоне тот же облегчённый путь,
+        // что и на приставке (окна 15→30→60 с, предзагрузка, без VAD/PCM, целиком одним файлом).
+        // Действует на следующий запуск автосубтитров; в память не сохраняется.
+        @Volatile var forceLightPipeline: Boolean = false
+        val LIGHT_PIPELINE: Boolean get() = forceLightPipeline || !android.os.Process.is64Bit()
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
         const val FIRST_WINDOW_MS = 15_000L // первое окно совсем короткое — первые реплики быстрее
@@ -488,6 +542,7 @@ class SubtitleOrchestrator(
         const val LIGHT_MAX_WINDOW_MS = 60_000L
         const val PHONE_FIRST_WINDOW_MS = 30_000L
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
+        const val MIN_REFILL_MS = 30_000L // у потолка запаса не берём окна короче (иначе запрос каждые ~2 с)
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
         const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с
         const val REQUEST_PACE_MS = 3_000L // ≤ 20 запросов в минуту

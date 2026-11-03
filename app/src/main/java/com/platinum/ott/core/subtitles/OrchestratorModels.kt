@@ -5,7 +5,7 @@ data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
 
 // Откуда пришёл текущий AI-сгенерированный текст — нужно для "явного
 // индикатора в UI" (подзадача 9, не реализована).
-enum class AiSource { CLOUD, LOCAL }
+enum class AiSource { CLOUD }
 
 // Заменяет узкую версию из подзадачи 1 (там было только
 // Idle/Searching/Found/NotFound для одного шага OpenSubtitles) — теперь

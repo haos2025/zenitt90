@@ -45,6 +45,11 @@ interface ZenithApiService {
         @Query("langs") langs: String = "ru,en"
     ): List<OpenSubtitlesMatchDto>
 
+    // Будит бесплатный сервер Render (он засыпает при простое): ответ не важен — это тот же эндпоинт
+    // без параметров (422), но экземпляр успевает проснуться, пока извлекается звук первого окна.
+    @GET("subtitles/opensubtitles")
+    suspend fun warmUp(): Response<ResponseBody>
+
     // PROMPT_SUBTITLES.md, подзадача 6 — облачный STT, реализован на
     // backend в подзадаче 3. Аудио — уже нарезанный VAD-сегмент речи в WAV
     // (не весь чанк целиком), см. SubtitleOrchestrator.kt/WavEncoder.kt.

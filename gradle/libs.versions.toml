@@ -18,9 +18,7 @@ okhttp = "4.12.0"
 gson = "2.11.0"
 room = "2.7.1"
 coroutines = "1.8.1"
-# PROMPT_SUBTITLES.md, подзадача 4 — Silero VAD запускается через ONNX
-# Runtime Mobile, не через отдельный NDK-модуль под сам whisper.cpp
-# (тот — отдельная подзадача 5, другой движок).
+# Silero VAD (автосубтитры) запускается через ONNX Runtime Mobile.
 onnxruntime = "1.27.0"
 coil = "2.7.0"
 securityCrypto = "1.1.0-alpha06"

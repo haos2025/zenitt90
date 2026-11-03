@@ -91,7 +91,6 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
         SettingsCategory.PLAYBACK -> {
             val quality by viewModel.quality.collectAsStateWithLifecycle()
             val subsByDefault by viewModel.subsByDefault.collectAsStateWithLifecycle()
-            val preferAccuracy by viewModel.preferAccuracy.collectAsStateWithLifecycle()
             SettingsCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Качество по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
@@ -101,15 +100,6 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Субтитры по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                     Switch(checked = subsByDefault, onCheckedChange = { viewModel.setSubsByDefault(it) })
-                }
-                CardDivider()
-                // Влияет только на локальный Whisper-фолбэк автосубтитров.
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Автосубтитры (офлайн)", color = ZenithOnSurface)
-                        Text(if (preferAccuracy) "Точность" else "Скорость", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = preferAccuracy, onCheckedChange = { viewModel.setPreferAccuracy(it) })
                 }
             }
         }
