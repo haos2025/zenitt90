@@ -69,6 +69,14 @@ class SubtitleOrchestrator(
     private var coveredRanges: List<LongRange> = emptyList()
     // Окно распознано без сбоев — только такие окна считаются покрытыми.
     private var windowOk = true
+    // Диагностика кэша для meta: nokey / miss / hit.
+    private var cacheStatus = "nokey"
+    // Сглаженное отношение «сколько реально шло извлечение звука окна / длина окна». Нужно, чтобы
+    // на медленном источнике начинать окно не с текущей позиции (оно будет готово, когда эта часть
+    // уже сыграна), а с запасом на время извлечения — тогда реплики приходят вовремя.
+    private var extractRatio = -1.0
+    // Сколько реально шло извлечение предзагруженного окна (с момента запуска, а не ожидания).
+    @Volatile private var prefetchTookMs = 0L
 
     /**
      * @param contentDurationMs полная длительность VOD-контента — окно не
@@ -94,6 +102,8 @@ class SubtitleOrchestrator(
         _cues.value = emptyList()
         cacheKey = null
         coveredRanges = emptyList()
+        cacheStatus = "nokey"
+        extractRatio = -1.0
         job = scope.launch {
             // Будим сервер заранее: пока ищем OpenSubtitles и извлекаем звук первого окна, он просыпается.
             launch { cloudSttRepository.warmUp() }
@@ -111,11 +121,13 @@ class SubtitleOrchestrator(
             // Уже распознанное для этого видео (прошлый просмотр) показываем сразу.
             val key = cueCache?.key(title, year, contentDurationMs, language)
             cacheKey = key
+            if (key != null) cacheStatus = "miss"
             if (key != null) {
                 val cached = withContext(Dispatchers.IO) { cueCache?.load(key) }
                 if (cached != null && cached.cues.isNotEmpty()) {
                     _cues.value = cached.cues.sortedBy { it.startMs }
                     coveredRanges = cached.covered
+                    cacheStatus = "hit"
                     progressLabel = "кэш"
                     setProgress("загружено")
                 }
@@ -131,6 +143,20 @@ class SubtitleOrchestrator(
         _cues.value = emptyList()
         cacheKey = null
         coveredRanges = emptyList()
+    }
+
+    /**
+     * Откуда начинать окно, чтобы оно было готово к моменту, когда просмотр до него дойдёт.
+     * Только облегчённый путь и только когда уже известна скорость извлечения. Если за время
+     * извлечения просмотр всё равно уйдёт заметно дальше [base] (отставание от плеера), берём
+     * позицию + ожидаемое время извлечения: пропускаем кусок, который всё равно окажется «в
+     * прошлом» к готовности. Пропуск разовый: после него окна идут подряд, пока скорость ≥ просмотра.
+     */
+    private fun liveStart(base: Long, position: Long, windowLen: Long): Long {
+        if (!LIGHT_PIPELINE || extractRatio < 0) return base
+        val est = minOf((extractRatio * windowLen).toLong(), MAX_SKIP_MS) + 2_000L
+        val live = position + est
+        return if (live - base >= SKIP_MIN_MS) live else base
     }
 
     /** Куски, уже распознанные раньше: перепрыгиваем их, а новое окно обрезаем перед следующим из них. */
@@ -192,10 +218,16 @@ class SubtitleOrchestrator(
                 // извлечение первого окна заняло дольше его длины, воспроизведение успело уйти вперёд,
                 // и раньше такая предзагрузка отменялась из-за расхождения в секунды (вся работа зря).
                 // Берём её, пока она ещё покрывает хотя бы MIN_PREFETCH_MS будущего звука.
-                if (prefetch != null && prefetchStartMs <= coveredUpToMs &&
-                    prefetchStartMs + prefetchDurationMs >= coveredUpToMs + MIN_PREFETCH_MS
-                ) {
-                    coveredUpToMs = prefetchStartMs
+                if (prefetch != null) {
+                    val pEnd = prefetchStartMs + prefetchDurationMs
+                    // Предзагрузка может начинаться чуть позже конца прошлого окна — это сознательный
+                    // пропуск вперёд для медленного источника (см. extractRatio), её тоже берём.
+                    val adoptable = if (prefetchStartMs >= coveredUpToMs) {
+                        prefetchStartMs - coveredUpToMs <= MAX_SKIP_MS + 5_000
+                    } else {
+                        pEnd >= coveredUpToMs + MIN_PREFETCH_MS
+                    }
+                    if (adoptable) coveredUpToMs = prefetchStartMs
                 }
                 // Кусок уже распознан раньше (кэш) — перепрыгиваем.
                 val skipped = skipCovered(coveredUpToMs)
@@ -216,10 +248,12 @@ class SubtitleOrchestrator(
                     continue
                 }
 
-                val windowStart = coveredUpToMs
+                val baseStart = coveredUpToMs
                 val pending = prefetch
                 prefetch = null
-                val usePrefetch = pending != null && prefetchStartMs == windowStart
+                val usePrefetch = pending != null && prefetchStartMs == baseStart
+                // Окно без предзагрузки на медленном источнике: начинаем с запасом на время извлечения.
+                val windowStart = if (usePrefetch) baseStart else skipCovered(liveStart(baseStart, position, windowLengthMs(windowIndex)))
                 // Окна растут: 30 с → 60 с → 120 с. Первое короткое — первые реплики появляются
                 // быстрее, на слабой приставке не декодируем сразу много минут.
                 val windowDuration = if (usePrefetch) {
@@ -266,12 +300,16 @@ class SubtitleOrchestrator(
                 val extractMs = System.currentTimeMillis() - t0
                 val leadMs = windowStart - currentPositionMsProvider()
                 val srcTag = sourceTag(streamUrl)
+                // Реальное время извлечения: для предзагруженного окна extractMs — лишь остаток ожидания.
+                val tookMs = if (usePrefetch && prefetchTookMs > 0) maxOf(prefetchTookMs, extractMs) else extractMs
+                val ratio = (tookMs.toDouble() / windowDuration).coerceIn(0.0, 3.0)
+                extractRatio = if (extractRatio < 0) ratio else 0.5 * extractRatio + 0.5 * ratio
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
                 // Если звук окна извлекался дольше, чем оно длится, воспроизведение уже ушло вперёд:
                 // следующее окно начинаем с текущей позиции, а не с конца только что взятого.
                 val nowPosition = currentPositionMsProvider().coerceAtLeast(0L)
-                val nextStart = maxOf(windowEnd, nowPosition)
+                val nextStart = skipCovered(liveStart(maxOf(windowEnd, nowPosition), nowPosition, windowLengthMs(windowIndex)))
                 val nextTarget = nowPosition + WINDOW_AHEAD_MS
                 val nextDuration = capToCovered(
                     nextStart,
@@ -287,7 +325,10 @@ class SubtitleOrchestrator(
                     prefetchStartMs = nextStart
                     prefetchDurationMs = nextDuration
                     prefetch = async {
-                        audioExtractor.extract(AudioExtractionRequest(streamUrl, headers, nextStart, nextDuration))
+                        val startedAt = System.currentTimeMillis()
+                        val r = audioExtractor.extract(AudioExtractionRequest(streamUrl, headers, nextStart, nextDuration))
+                        prefetchTookMs = System.currentTimeMillis() - startedAt
+                        r
                     }
                 }
 
@@ -295,7 +336,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;lead_ms=$leadMs;src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;cache=$cacheStatus;src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -321,7 +362,7 @@ class SubtitleOrchestrator(
                 setProgress("фраз речи: ${segments.size}")
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;vad_ms=$vadMs;lead_ms=$leadMs;src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;cache=$cacheStatus;src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
@@ -472,11 +513,17 @@ class SubtitleOrchestrator(
             path.endsWith(".ts") -> "ts"
             else -> "other"
         }
-        val local = host.isEmpty() || host == "localhost" || host.startsWith("127.") ||
-            host.startsWith("10.") || host.startsWith("192.168.") ||
+        val loop = host == "localhost" || host.startsWith("127.")
+        val lan = host.startsWith("10.") || host.startsWith("192.168.") ||
             Regex("^172\\.(1[6-9]|2\\d|3[01])\\.").containsMatchIn(host)
-        val where = if (local) "local" else "pub"
-        val hostPart = if (local) "" else "_" + host.replace(Regex("[^a-z0-9]"), "_").take(40)
+        // nohost — адрес не разобрался (необычные символы в ссылке): раньше это ошибочно называлось «local».
+        val where = when {
+            host.isEmpty() -> "nohost"
+            loop -> "loop"
+            lan -> "lan"
+            else -> "pub"
+        }
+        val hostPart = if (where == "pub") "_" + host.replace(Regex("[^a-z0-9]"), "_").take(40) else ""
         return "${scheme}_${kind}_$where$hostPart"
     }
 
@@ -543,6 +590,8 @@ class SubtitleOrchestrator(
         const val LIGHT_MAX_WINDOW_MS = 60_000L
         const val PHONE_FIRST_WINDOW_MS = 30_000L
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
+        const val SKIP_MIN_MS = 5_000L // пропуск вперёд короче этого не делаем
+        const val MAX_SKIP_MS = 90_000L // и не дальше этого (оценка времени извлечения ограничена)
         const val MIN_REFILL_MS = 30_000L // у потолка запаса не берём окна короче (иначе запрос каждые ~2 с)
         const val MAX_GROUP_GAP_MS = 2_000L // пауза между фразами в одной группе
         const val MAX_GROUP_SPAN_MS = 28_000L // Whisper работает окнами по 30 с
