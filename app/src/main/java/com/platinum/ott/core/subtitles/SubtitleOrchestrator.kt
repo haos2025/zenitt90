@@ -151,7 +151,7 @@ class SubtitleOrchestrator(
     private suspend fun recordCovered(start: Long, end: Long) {
         if (!windowOk || end <= start) return
         val merged = mutableListOf<LongRange>()
-        for (r in (coveredRanges + (start until end)).sortedBy { it.first }) {
+        for (r in (coveredRanges + listOf(start until end)).sortedBy { it.first }) {
             val last = merged.lastOrNull()
             if (last != null && r.first <= last.last + 1_000) {
                 merged[merged.lastIndex] = last.first..maxOf(last.last, r.last)
@@ -526,7 +526,8 @@ class SubtitleOrchestrator(
         _cues.value = (_cues.value + cue).sortedBy { it.startMs }
     }
 
-    private companion object {
+    // Публичный: переключатель forceLightPipeline используется из меню плеера на телефоне.
+    companion object {
         const val TAG = "ZenithSubs"
         const val SAMPLE_RATE = 16_000
         // 32-битный процесс = слабое устройство (замеры на Xiaomi TV Stick 4K): всё тяжёлое — на сервер.
