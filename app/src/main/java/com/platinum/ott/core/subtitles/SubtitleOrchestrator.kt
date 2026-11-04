@@ -159,6 +159,14 @@ class SubtitleOrchestrator(
         return if (live - base >= SKIP_MIN_MS) live else base
     }
 
+    /** Занятая память (МБ) для meta: куча Java и нативная. Нужна, чтобы понять, растёт ли она к моменту убийства процесса. */
+    private fun memTag(): String {
+        val rt = Runtime.getRuntime()
+        val heapMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+        val nativeMb = android.os.Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
+        return "mem=$heapMb;nat=$nativeMb"
+    }
+
     /** Куски, уже распознанные раньше: перепрыгиваем их, а новое окно обрезаем перед следующим из них. */
     private fun skipCovered(pos: Long): Long {
         var p = pos
@@ -336,7 +344,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;cache=$cacheStatus;src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;cache=$cacheStatus;${memTag()};src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -362,7 +370,7 @@ class SubtitleOrchestrator(
                 setProgress("фраз речи: ${segments.size}")
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;cache=$cacheStatus;src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;cache=$cacheStatus;${memTag()};src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
