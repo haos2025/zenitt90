@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -159,6 +160,9 @@ class SubtitleOrchestrator(
         return if (live - base >= SKIP_MIN_MS) live else base
     }
 
+    /** tv — облегчённый путь (приставка или тестовый режим), full — путь телефона с VAD. */
+    private fun modeTag(): String = if (LIGHT_PIPELINE) "tv" else "full"
+
     /** Занятая память (МБ) для meta: куча Java и нативная. Нужна, чтобы понять, растёт ли она к моменту убийства процесса. */
     private fun memTag(): String {
         val rt = Runtime.getRuntime()
@@ -196,7 +200,8 @@ class SubtitleOrchestrator(
         coveredRanges = merged
         val key = cacheKey ?: return
         val snapshot = SubtitleCueCache.Entry(_cues.value, merged)
-        withContext(Dispatchers.IO) { cueCache?.save(key, snapshot) }
+        // Сохранение доводим до конца, даже если автосубтитры как раз выключают.
+        withContext(NonCancellable + Dispatchers.IO) { cueCache?.save(key, snapshot) }
     }
 
     private suspend fun runAiPipelineForVod(
@@ -344,7 +349,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;cache=$cacheStatus;${memTag()};src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()};src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -370,7 +375,7 @@ class SubtitleOrchestrator(
                 setProgress("фраз речи: ${segments.size}")
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;cache=$cacheStatus;${memTag()};src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()};src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
@@ -486,7 +491,9 @@ class SubtitleOrchestrator(
                     // пропускаем ТОЛЬКО эту группу, не переключаем весь пайплайн на локальный.
                 }
             }
-            delay(REQUEST_PACE_MS) // не частим: лимиты запросов в минуту у backend и провайдеров
+            // Не частим: лимиты запросов в минуту у backend и провайдеров. После последней группы окна
+            // паузу не держим: иначе при выключении в эти 3 с окно не попадало в кэш покрытого.
+            if (groupIndex < groups.lastIndex) delay(REQUEST_PACE_MS)
         }
 
         return false
@@ -574,7 +581,9 @@ class SubtitleOrchestrator(
     // Подпись шага для строки статуса в меню: по ней видно, где именно остановилась обработка.
     private var progressLabel = ""
     private fun setProgress(step: String) {
-        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD, "$progressLabel: $step, реплик ${_cues.value.size}")
+        // На 64-битном устройстве с включённым «Режимом как на ТВ» это видно в статусе.
+        val mode = if (forceLightPipeline && android.os.Process.is64Bit()) "режим ТВ · " else ""
+        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD, "$mode$progressLabel: $step, реплик ${_cues.value.size}")
     }
 
     private fun addCue(cue: SubtitleCue) {

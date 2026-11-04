@@ -181,6 +181,8 @@ class SessionGraph @Inject constructor(
             cloudSttRepository = cloudSttRepository,
             cueCache = SubtitleCueCache(java.io.File(appContext.filesDir, "subtitle_cues")),
         )
+        // Тестовый «Режим как на ТВ» переживает перезапуск приложения.
+        SubtitleOrchestrator.forceLightPipeline = SubtitlePreferences(appContext).getForceLightPipeline()
     }
 
     fun reinitWithAuth() {

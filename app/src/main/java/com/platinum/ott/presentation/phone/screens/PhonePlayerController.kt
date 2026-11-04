@@ -275,14 +275,17 @@ fun PhonePlayerController(
                     isSelected = autoSubtitleState != AutoSubtitleState.Off
                 ) { onToggleAutoSubtitles() }
                 if (android.os.Process.is64Bit()) {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
                     var lightTest by remember { mutableStateOf(com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline) }
                     DialogRow(
                         label = "Режим как на ТВ (тест)",
                         isSelected = lightTest,
-                        subLabel = "применится при следующем включении автосубтитров"
+                        subLabel = if (lightTest) "Вкл: как на приставке (окна 15→30→60 с, без VAD). Действует со следующего окна"
+                        else "Выкл: обычный путь телефона. Включи, чтобы проверить поведение приставки"
                     ) {
                         lightTest = !lightTest
                         com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline = lightTest
+                        com.platinum.ott.core.SubtitlePreferences(ctx).setForceLightPipeline(lightTest)
                     }
                 }
                 DialogRow("Выключены", !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles(); menuTab = null }
