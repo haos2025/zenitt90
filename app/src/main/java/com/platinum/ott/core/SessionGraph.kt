@@ -180,6 +180,7 @@ class SessionGraph @Inject constructor(
             openSubtitlesUseCase = searchOpenSubtitlesUseCase,
             cloudSttRepository = cloudSttRepository,
             cueCache = SubtitleCueCache(java.io.File(appContext.filesDir, "subtitle_cues")),
+            sourceProfiles = com.platinum.ott.core.subtitles.SourceProfileStore(appContext),
         )
         // Тестовый «Режим как на ТВ» переживает перезапуск приложения.
         SubtitleOrchestrator.forceLightPipeline = SubtitlePreferences(appContext).getForceLightPipeline()

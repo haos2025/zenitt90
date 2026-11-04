@@ -51,6 +51,7 @@ class SubtitleOrchestrator(
     private val openSubtitlesUseCase: SearchOpenSubtitlesUseCase,
     private val cloudSttRepository: CloudSttRepository,
     private val cueCache: SubtitleCueCache? = null,
+    private val sourceProfiles: SourceProfileStore? = null,
 ) {
     private val _state = MutableStateFlow<AutoSubtitleState>(AutoSubtitleState.Off)
     val state: StateFlow<AutoSubtitleState> = _state
@@ -133,6 +134,8 @@ class SubtitleOrchestrator(
                     setProgress("загружено")
                 }
             }
+            // Скорость этого источника, запомненная в прошлых сессиях: не ждём «обучения» заново.
+            sourceProfiles?.ratioFor(sourceTag(streamUrl))?.let { extractRatio = it }
             runAiPipelineForVod(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language)
         }
     }
@@ -162,6 +165,9 @@ class SubtitleOrchestrator(
 
     /** tv — облегчённый путь (приставка или тестовый режим), full — путь телефона с VAD. */
     private fun modeTag(): String = if (LIGHT_PIPELINE) "tv" else "full"
+
+    /** Причина прошлого убийства процесса (один раз за запуск) для meta: «;ex=3_i400_r180_a95» или пусто. */
+    private fun exTag(): String = com.platinum.ott.core.DiagnosticsHub.takeExit()?.let { ";ex=$it" } ?: ""
 
     /** Занятая память (МБ) для meta: куча Java и нативная. Нужна, чтобы понять, растёт ли она к моменту убийства процесса. */
     private fun memTag(): String {
@@ -317,6 +323,7 @@ class SubtitleOrchestrator(
                 val tookMs = if (usePrefetch && prefetchTookMs > 0) maxOf(prefetchTookMs, extractMs) else extractMs
                 val ratio = (tookMs.toDouble() / windowDuration).coerceIn(0.0, 3.0)
                 extractRatio = if (extractRatio < 0) ratio else 0.5 * extractRatio + 0.5 * ratio
+                sourceProfiles?.record(srcTag, extractRatio)
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.
                 // Если звук окна извлекался дольше, чем оно длится, воспроизведение уже ушло вперёд:
@@ -349,7 +356,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()};src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()};src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -375,7 +382,7 @@ class SubtitleOrchestrator(
                 setProgress("фраз речи: ${segments.size}")
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()};src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()};src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")

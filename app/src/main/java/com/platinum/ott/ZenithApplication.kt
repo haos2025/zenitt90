@@ -125,10 +125,32 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
                 for (info in am.getHistoricalProcessExitReasons(packageName, 0, 3)) {
                     if (info.timestamp > lastReported && info.reason in intArrayOf(2, 3, 4, 5, 6, 7)) {
                         sb.append("EXIT reason=").append(info.reason).append(" status=").append(info.status)
-                            .append(" desc=").append(info.description).append(" at=").append(Date(info.timestamp)).append('\n')
+                            .append(" desc=").append(info.description).append(" at=").append(Date(info.timestamp))
+                            .append(" importance=").append(info.importance).append('(').append(
+                                when {
+                                    info.importance <= 100 -> "на экране"
+                                    info.importance <= 125 -> "foreground-сервис"
+                                    info.importance <= 200 -> "виден"
+                                    info.importance <= 300 -> "сервис"
+                                    info.importance < 1000 -> "фон/кэш"
+                                    else -> "уже не запущен"
+                                }
+                            ).append(')')
+                            .append(" pss_mb=").append(info.pss / 1024).append(" rss_mb=").append(info.rss / 1024)
+                            .append('\n')
                         newest = maxOf(newest, info.timestamp)
                     }
                 }
+                // Та же причина уходит в логи Render с первым запросом следующей сессии (поле ex),
+                // чтобы не копировать отчёт вручную. Отдельная отметка, чтобы не слать дважды.
+                val lastSent = prefs.getLong("last_sent", 0L)
+                am.getHistoricalProcessExitReasons(packageName, 0, 3)
+                    .firstOrNull { it.timestamp > lastSent && it.reason in intArrayOf(2, 3, 4, 5, 6, 7) }
+                    ?.let { info ->
+                        com.platinum.ott.core.DiagnosticsHub.pendingExit =
+                            "${info.reason}_i${info.importance}_r${info.rss / 1024}_a${(System.currentTimeMillis() - info.timestamp) / 60000}"
+                        prefs.edit().putLong("last_sent", info.timestamp).apply()
+                    }
             }
             if (sb.isEmpty()) return
             prefs.edit().putLong("last_reported", newest).apply()
