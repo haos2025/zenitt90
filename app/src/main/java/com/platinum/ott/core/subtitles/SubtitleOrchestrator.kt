@@ -77,6 +77,9 @@ class SubtitleOrchestrator(
     // на медленном источнике начинать окно не с текущей позиции (оно будет готово, когда эта часть
     // уже сыграна), а с запасом на время извлечения — тогда реплики приходят вовремя.
     private var extractRatio = -1.0
+    // Путь телефона: сглаженное время подготовки окна (извлечение звука + поиск речи) на секунду видео.
+    // По нему окно подбирается так, чтобы подготовка занимала ~TARGET_PREP_MS, а не десятки секунд.
+    private var prepRatio = -1.0
     // Сколько реально шло извлечение предзагруженного окна (с момента запуска, а не ожидания).
     @Volatile private var prefetchTookMs = 0L
 
@@ -106,6 +109,7 @@ class SubtitleOrchestrator(
         coveredRanges = emptyList()
         cacheStatus = "nokey"
         extractRatio = -1.0
+        prepRatio = -1.0
         job = scope.launch {
             // Будим сервер заранее: пока ищем OpenSubtitles и извлекаем звук первого окна, он просыпается.
             launch { cloudSttRepository.warmUp() }
@@ -382,6 +386,8 @@ class SubtitleOrchestrator(
                 setProgress("фраз речи: ${segments.size}")
 
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
+                val prep = ((extractMs + vadMs).toDouble() / windowDuration).coerceIn(0.02, 3.0)
+                prepRatio = if (prepRatio < 0) prep else 0.5 * prepRatio + 0.5 * prep
                 val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()};src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
@@ -449,8 +455,18 @@ class SubtitleOrchestrator(
             else -> LIGHT_MAX_WINDOW_MS
         } else when (index) {
             0 -> PHONE_FIRST_WINDOW_MS
-            else -> MAX_EXTRACT_MS
+            else -> adaptiveFullWindowMs()
         }
+
+    /**
+     * Окно пути телефона: пока скорость неизвестна — максимум (2 мин), потом столько, чтобы
+     * подготовка (звук + VAD) занимала ~TARGET_PREP_MS. На медленном источнике это короткое окно,
+     * на быстром всё те же 2 минуты. Не короче MIN_REFILL_MS, иначе вернутся частые подвисания.
+     */
+    private fun adaptiveFullWindowMs(): Long {
+        if (prepRatio < 0) return MAX_EXTRACT_MS
+        return (TARGET_PREP_MS / prepRatio).toLong().coerceIn(MIN_REFILL_MS, MAX_EXTRACT_MS)
+    }
 
     private suspend fun transcribeChunk(
         chunk: ExtractedAudioChunk,
@@ -613,6 +629,7 @@ class SubtitleOrchestrator(
         const val SECOND_WINDOW_MS = 30_000L
         const val LIGHT_MAX_WINDOW_MS = 60_000L
         const val PHONE_FIRST_WINDOW_MS = 30_000L
+        const val TARGET_PREP_MS = 20_000L // желаемое время подготовки окна на телефоне (звук + VAD)
         const val MIN_PREFETCH_MS = 5_000L // совсем короткий хвост заранее не извлекаем
         const val SKIP_MIN_MS = 5_000L // пропуск вперёд короче этого не делаем
         const val MAX_SKIP_MS = 90_000L // и не дальше этого (оценка времени извлечения ограничена)
