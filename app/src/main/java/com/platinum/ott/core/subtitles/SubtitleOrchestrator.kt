@@ -80,6 +80,9 @@ class SubtitleOrchestrator(
     // Путь телефона: сглаженное время подготовки окна (извлечение звука + поиск речи) на секунду видео.
     // По нему окно подбирается так, чтобы подготовка занимала ~TARGET_PREP_MS, а не десятки секунд.
     private var prepRatio = -1.0
+    // Диагностика ключа кэша для meta первых окон: th — короткий хэш названия, d — длительность/10 с.
+    // Если две сессии одного видео дали cache=miss, по этим полям видно, что именно различалось.
+    private var keyDiag = ""
     // Сколько реально шло извлечение предзагруженного окна (с момента запуска, а не ожидания).
     @Volatile private var prefetchTookMs = 0L
 
@@ -110,6 +113,7 @@ class SubtitleOrchestrator(
         cacheStatus = "nokey"
         extractRatio = -1.0
         prepRatio = -1.0
+        keyDiag = ";th=${(title.trim().lowercase().hashCode() and 0xFFFF).toString(16)};d=${contentDurationMs / 10_000}"
         job = scope.launch {
             // Будим сервер заранее: пока ищем OpenSubtitles и извлекаем звук первого окна, он просыпается.
             launch { cloudSttRepository.warmUp() }
@@ -360,7 +364,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()};src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -388,7 +392,7 @@ class SubtitleOrchestrator(
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
                 val prep = ((extractMs + vadMs).toDouble() / windowDuration).coerceIn(0.02, 3.0)
                 prepRatio = if (prepRatio < 0) prep else 0.5 * prepRatio + 0.5 * prep
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()};src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
@@ -604,25 +608,19 @@ class SubtitleOrchestrator(
     // Подпись шага для строки статуса в меню: по ней видно, где именно остановилась обработка.
     private var progressLabel = ""
     private fun setProgress(step: String) {
-        // На 64-битном устройстве с включённым «Режимом как на ТВ» это видно в статусе.
-        val mode = if (forceLightPipeline && android.os.Process.is64Bit()) "режим ТВ · " else ""
-        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD, "$mode$progressLabel: $step, реплик ${_cues.value.size}")
+        _state.value = AutoSubtitleState.GeneratingAi(AiSource.CLOUD, "$progressLabel: $step, реплик ${_cues.value.size}")
     }
 
     private fun addCue(cue: SubtitleCue) {
         _cues.value = (_cues.value + cue).sortedBy { it.startMs }
     }
 
-    // Публичный: переключатель forceLightPipeline используется из меню плеера на телефоне.
     companion object {
         const val TAG = "ZenithSubs"
         const val SAMPLE_RATE = 16_000
         // 32-битный процесс = слабое устройство (замеры на Xiaomi TV Stick 4K): всё тяжёлое — на сервер.
-        // Тестовый переключатель (меню субтитров телефона): прогнать на телефоне тот же облегчённый путь,
-        // что и на приставке (окна 15→30→60 с, предзагрузка, без VAD/PCM, целиком одним файлом).
-        // Действует на следующий запуск автосубтитров; в память не сохраняется.
-        @Volatile var forceLightPipeline: Boolean = false
-        val LIGHT_PIPELINE: Boolean get() = forceLightPipeline || !android.os.Process.is64Bit()
+        // Облегчённый путь: окна 15→30→60 с, предзагрузка, без VAD/PCM, целиком одним файлом.
+        val LIGHT_PIPELINE: Boolean get() = !android.os.Process.is64Bit()
         const val WINDOW_AHEAD_MS = 5 * 60 * 1000L // 5 минут вперёд, PROMPT_SUBTITLES.md, "Горизонт генерации"
         const val MAX_EXTRACT_MS = 2 * 60 * 1000L // за один заход извлекаем не больше 2 минут звука
         const val FIRST_WINDOW_MS = 15_000L // первое окно совсем короткое — первые реплики быстрее

@@ -423,7 +423,8 @@ class PlayerViewModel @Inject constructor(
                     }
                 }
                 _uiState.value = current.copy(
-                    audioTracks = audio,
+                    // Одна дорожка — выбирать не из чего: список пуст, меню покажет «Только одна дорожка».
+                    audioTracks = if (audio.size > 1) audio else emptyList(),
                     subtitleTracks = subtitles,
                     subtitlesEnabled = tracks.isTypeSelected(C.TRACK_TYPE_TEXT)
                 )

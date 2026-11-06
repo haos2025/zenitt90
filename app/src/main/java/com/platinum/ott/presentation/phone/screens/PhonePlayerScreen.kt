@@ -341,6 +341,7 @@ fun PhonePlayerScreen(
                     bufferedPositionMs = shownBufferedMs,
                     variants = state.variants,
                     currentVariant = state.currentVariant,
+                    currentResolution = com.platinum.ott.presentation.screens.player.resolutionLabel(viewModel.exoPlayer.videoSize),
                     audioTracks = state.audioTracks,
                     subtitleTracks = state.subtitleTracks,
                     subtitlesEnabled = state.subtitlesEnabled,

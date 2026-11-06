@@ -21,9 +21,4 @@ class SubtitlePreferences(context: Context) {
     // привычный дефолт Android, а не навязываем свой.
     fun getShowByDefault(): Boolean = prefs.getBoolean("show_by_default", false)
     fun setShowByDefault(enabled: Boolean) = prefs.edit().putBoolean("show_by_default", enabled).apply()
-
-    // Тестовый «Режим как на ТВ» (меню субтитров телефона): облегчённый путь автосубтитров
-    // как на приставке. Хранится, чтобы не включать заново после каждого запуска приложения.
-    fun getForceLightPipeline(): Boolean = prefs.getBoolean("force_light_pipeline", false)
-    fun setForceLightPipeline(enabled: Boolean) = prefs.edit().putBoolean("force_light_pipeline", enabled).apply()
 }

@@ -526,6 +526,7 @@ fun PlayerScreen(
                         onTabChange = { viewModel.setMenuTab(it) },
                         variants = state.variants,
                         currentVariant = state.currentVariant,
+                        currentResolution = resolutionLabel(viewModel.exoPlayer.videoSize),
                         onSelectVariant = { viewModel.selectQuality(it); closeMenuAfterPick() },
                         audioTracks = state.audioTracks,
                         onSelectAudio = { viewModel.selectAudioTrack(it); closeMenuAfterPick() },

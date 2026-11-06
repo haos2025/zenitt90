@@ -78,6 +78,8 @@ fun PlaybackMenuOverlay(
     onTabChange: (PlaybackMenuTab) -> Unit,
     variants: List<StreamVariant>,
     currentVariant: StreamVariant,
+    // Реальное разрешение играющего видео (из плеера); null, пока размер неизвестен.
+    currentResolution: String? = null,
     onSelectVariant: (StreamVariant) -> Unit,
     audioTracks: List<TrackOption>,
     onSelectAudio: (TrackOption) -> Unit,
@@ -195,6 +197,7 @@ fun PlaybackMenuOverlay(
                 MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SPEED) }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
+            if (tab == PlaybackMenuTab.QUALITY && currentResolution != null) EmptyHint("Сейчас играет: $currentResolution")
 
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(horizontal = ZenithDimens.paddingSM)) {
                 when (tab) {
@@ -237,7 +240,6 @@ fun PlaybackMenuOverlay(
                             ) { onRequestExternalSubtitleQr() }
                         }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
-                        if (subtitleTracks.isEmpty()) item { EmptyHint("В потоке нет встроенных субтитров") }
                         // Оформление «как в YouTube»: OK на строке переключает значение по кругу.
                         // Образец — сразу под заголовком, меняется на глазах.
                         item { EmptyHint("Оформление субтитров") }
@@ -345,3 +347,7 @@ private fun MenuRow(
         }
     }
 }
+
+/** Подпись реального разрешения играющего видео, например «1080p · 1920×1080»; null, если размер ещё неизвестен. */
+fun resolutionLabel(size: androidx.media3.common.VideoSize): String? =
+    if (size.width > 0 && size.height > 0) "${size.height}p · ${size.width}×${size.height}" else null

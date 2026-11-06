@@ -115,6 +115,8 @@ fun PhonePlayerController(
     bufferedPositionMs: Long = 0L,
     variants: List<StreamVariant>,
     currentVariant: StreamVariant?,
+    // Реальное разрешение того, что играет сейчас (из плеера), например «1080p · 1920×1080».
+    currentResolution: String? = null,
     audioTracks: List<TrackOption>,
     subtitleTracks: List<TrackOption>,
     subtitlesEnabled: Boolean,
@@ -274,20 +276,6 @@ fun PhonePlayerController(
                     subLabel = autoSubtitleStatusLabel(autoSubtitleState),
                     isSelected = autoSubtitleState != AutoSubtitleState.Off
                 ) { onToggleAutoSubtitles() }
-                if (android.os.Process.is64Bit()) {
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
-                    var lightTest by remember { mutableStateOf(com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline) }
-                    DialogRow(
-                        label = "Режим как на ТВ (тест)",
-                        isSelected = lightTest,
-                        subLabel = if (lightTest) "Вкл: как на приставке (окна 15→30→60 с, без VAD). Действует со следующего окна"
-                        else "Выкл: обычный путь телефона. Включи, чтобы проверить поведение приставки"
-                    ) {
-                        lightTest = !lightTest
-                        com.platinum.ott.core.subtitles.SubtitleOrchestrator.forceLightPipeline = lightTest
-                        com.platinum.ott.core.SubtitlePreferences(ctx).setForceLightPipeline(lightTest)
-                    }
-                }
                 DialogRow("Выключены", !subtitlesEnabled && autoSubtitleState == AutoSubtitleState.Off) { onDisableSubtitles(); menuTab = null }
                 DialogRow("Оформление субтитров", false, "размер, цвет, фон, положение, сдвиг") { showStyleDialog = true }
                 DialogRow("Свой файл по ссылке", showExternalField) { showExternalField = !showExternalField }
@@ -298,7 +286,6 @@ fun PhonePlayerController(
                     }
                 }
                 subtitleTracks.forEach { t -> DialogRow(t.label, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t); menuTab = null } }
-                if (subtitleTracks.isEmpty()) Text("В потоке нет встроенных субтитров", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(vertical = ZenithDimens.paddingS))
             }
         }
         else -> {}
@@ -316,6 +303,7 @@ fun PhonePlayerController(
             onDismiss = { moreSheetOpen = false; moreSheetCategory = null },
             variants = variants,
             currentVariant = currentVariant,
+            currentResolution = currentResolution,
             onSelectVariant = { onSelectVariant(it); moreSheetOpen = false; moreSheetCategory = null },
             audioTracks = audioTracks,
             onSelectAudio = { onSelectAudio(it); moreSheetOpen = false; moreSheetCategory = null },
@@ -334,6 +322,7 @@ private fun MoreSettingsSheet(
     onDismiss: () -> Unit,
     variants: List<StreamVariant>,
     currentVariant: StreamVariant?,
+    currentResolution: String?,
     onSelectVariant: (StreamVariant) -> Unit,
     audioTracks: List<TrackOption>,
     onSelectAudio: (TrackOption) -> Unit,
@@ -369,6 +358,7 @@ private fun MoreSettingsSheet(
                     audioTracks.forEach { t -> DialogRow(t.label, t.isSelected) { onSelectAudio(t) } }
                 }
                 PlaybackMenuTab.QUALITY -> {
+                    if (currentResolution != null) Text("Сейчас играет: $currentResolution", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS))
                     variants.forEach { v -> DialogRow(v.quality + " · " + v.source, v == currentVariant) { onSelectVariant(v) } }
                 }
                 PlaybackMenuTab.SPEED -> {
