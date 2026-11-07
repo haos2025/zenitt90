@@ -118,8 +118,8 @@ fun PosterListRow(
             onClick = onClick,
             modifier = Modifier.weight(1f).onFocusChanged { focused = it.hasFocus },
             shape = ZenithShapeMedium,
-            colors = CardDefaults.cardColors(containerColor = ZenithSurfaceVariant.copy(alpha = 0.5f)),
-            border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            colors = CardDefaults.cardColors(containerColor = if (focused) ZenithSurfaceVariant else ZenithSurfaceVariant.copy(alpha = 0.5f)),
+            border = if (focused) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null
         ) {
             Row(Modifier.padding(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(

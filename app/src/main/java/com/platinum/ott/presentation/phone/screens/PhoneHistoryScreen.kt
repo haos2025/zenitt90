@@ -47,6 +47,7 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
 var showClearAllConfirm by remember { mutableStateOf(false) }
+var pendingDelete by remember { mutableStateOf<com.platinum.ott.data.local.entity.WatchHistoryEntity?>(null) }
 
 Scaffold(
     topBar = {
@@ -92,24 +93,21 @@ Scaffold(
                     )
                     // В карточках свайпа нет — удаляем кнопкой в углу.
                     IconButton(
-                        onClick = { viewModel.delete(entry) },
+                        onClick = { pendingDelete = entry },
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingXS).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
                     ) { Icon(Icons.Default.Delete, "Удалить «${entry.title}» из истории", tint = ZenithOnSurface) }
                 }
             },
             listItem = { entry, _ ->
                 val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
-                // Удаление одной записи — свайп (SwipeToDismissBox из
-                // Material3), как и предполагалось для телефона; долгое
-                // нажатие с подтверждением сюда не добавляли — свайпа с
-                // подложкой-подсказкой уже достаточно, не дублируем два
-                // способа для одного действия.
+                // Удаление одной записи — свайп (SwipeToDismissBox из Material3). Сразу не удаляем:
+                // спрашиваем подтверждение, карточка при этом возвращается на место (false).
                 val dismissState = rememberSwipeToDismissBoxState(
                     confirmValueChange = { value ->
                         if (value == SwipeToDismissBoxValue.EndToStart || value == SwipeToDismissBoxValue.StartToEnd) {
-                            viewModel.delete(entry)
-                            true
-                        } else false
+                            pendingDelete = entry
+                        }
+                        false
                     }
                 )
                 SwipeToDismissBox(
@@ -150,7 +148,7 @@ Scaffold(
                         // Раньше здесь был только прогресс-бар без текста — на ТВ
                         // процент показывается, на телефоне не было вообще.
                         Text(
-                            if (entry.completed) "Просмотрено" else "Прогресс: ${(p * 100).toInt()}%",
+                            com.platinum.ott.presentation.screens.history.historySubtitle(entry),
                             color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
                         )
                         LinearProgressIndicator({ p })
@@ -159,6 +157,16 @@ Scaffold(
             }
         )
     }
+}
+
+pendingDelete?.let { entry ->
+    AlertDialog(
+        onDismissRequest = { pendingDelete = null },
+        title = { Text("Удалить из истории?") },
+        text = { Text("«${entry.title}» пропадёт из истории просмотров. Это нельзя отменить.") },
+        confirmButton = { TextButton(onClick = { viewModel.delete(entry); pendingDelete = null }) { Text("Удалить") } },
+        dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } }
+    )
 }
 
 if (showClearAllConfirm) {
