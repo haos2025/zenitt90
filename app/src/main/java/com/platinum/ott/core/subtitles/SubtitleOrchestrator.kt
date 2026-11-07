@@ -77,6 +77,9 @@ class SubtitleOrchestrator(
     // на медленном источнике начинать окно не с текущей позиции (оно будет готово, когда эта часть
     // уже сыграна), а с запасом на время извлечения — тогда реплики приходят вовремя.
     private var extractRatio = -1.0
+    // Сколько окон уже вошло в extractRatio. Первое окно с фиксированными накладными расходами (соединение,
+    // разбор потока) завышает оценку, поэтому по одному короткому замеру пропуск вперёд не делаем.
+    private var extractSamples = 0
     // Путь телефона: сглаженное время подготовки окна (извлечение звука + поиск речи) на секунду видео.
     // По нему окно подбирается так, чтобы подготовка занимала ~TARGET_PREP_MS, а не десятки секунд.
     private var prepRatio = -1.0
@@ -112,6 +115,7 @@ class SubtitleOrchestrator(
         coveredRanges = emptyList()
         cacheStatus = "nokey"
         extractRatio = -1.0
+        extractSamples = 0
         prepRatio = -1.0
         keyDiag = ";th=${(title.trim().lowercase().hashCode() and 0xFFFF).toString(16)};d=${contentDurationMs / 10_000}"
         job = scope.launch {
@@ -143,7 +147,7 @@ class SubtitleOrchestrator(
                 }
             }
             // Скорость этого источника, запомненная в прошлых сессиях: не ждём «обучения» заново.
-            sourceProfiles?.ratioFor(sourceTag(streamUrl))?.let { extractRatio = it }
+            sourceProfiles?.ratioFor(sourceTag(streamUrl))?.let { extractRatio = it; extractSamples = 2 }
             runAiPipelineForVod(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language)
         }
     }
@@ -166,6 +170,8 @@ class SubtitleOrchestrator(
      */
     private fun liveStart(base: Long, position: Long, windowLen: Long): Long {
         if (!LIGHT_PIPELINE || extractRatio < 0) return base
+        // Один замер (самое первое окно) верим, только если источник заведомо медленнее реального времени.
+        if (extractSamples < 2 && extractRatio < 1.0) return base
         val est = minOf((extractRatio * windowLen).toLong(), MAX_SKIP_MS) + 2_000L
         val live = position + est
         return if (live - base >= SKIP_MIN_MS) live else base
@@ -331,6 +337,7 @@ class SubtitleOrchestrator(
                 val tookMs = if (usePrefetch && prefetchTookMs > 0) maxOf(prefetchTookMs, extractMs) else extractMs
                 val ratio = (tookMs.toDouble() / windowDuration).coerceIn(0.0, 3.0)
                 extractRatio = if (extractRatio < 0) ratio else 0.5 * extractRatio + 0.5 * ratio
+                extractSamples++
                 sourceProfiles?.record(srcTag, extractRatio)
 
                 // Запускаем извлечение следующего окна параллельно с поиском речи и запросами.

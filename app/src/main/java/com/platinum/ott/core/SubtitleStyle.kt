@@ -40,7 +40,7 @@ private val COLORS = listOf(
     "Белый" to 0xFFFFFF, "Жёлтый" to 0xFFFF00, "Зелёный" to 0x00FF00, "Голубой" to 0x00FFFF,
     "Синий" to 0x0000FF, "Розовый" to 0xFF00FF, "Красный" to 0xFF0000, "Чёрный" to 0x000000
 )
-private val SIZES = listOf(50, 75, 100, 150, 200, 300)
+private val SIZES = listOf(50, 75, 100, 125, 150, 200, 300)
 private val TEXT_OPACITY = listOf(25, 50, 75, 100)
 private val BG_OPACITY = listOf(0, 25, 50, 75, 100)
 private val EDGES = listOf(

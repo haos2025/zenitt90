@@ -339,7 +339,7 @@ fun PlayerScreen(
                 }
 
                 val kind = playerKindOf(movieId, ready)
-                val actions = overlayActions(kind, ready.previousEpisodeId != null, ready.nextEpisodeId != null)
+                val actions = overlayActions(kind, ready.previousEpisodeId != null, ready.nextEpisodeId != null, ready.audioTracks.isNotEmpty())
                 val canSeek = !isChannel || ready.isCatchup
                 val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
 
@@ -483,6 +483,7 @@ fun PlayerScreen(
                     title = state.title,
                     hasNextEpisode = state.nextEpisodeId != null,
                     hasPreviousEpisode = state.previousEpisodeId != null,
+                    hasAudioChoice = state.audioTracks.isNotEmpty(),
                     liveInfo = liveInfo,
                     isSeekActive = isDpadSeekActive,
                     bufferedPositionMs = if (showBuffered) bufferedPositionMs else 0L,
@@ -567,13 +568,7 @@ fun PlayerScreen(
         // этом случае — оркестратор туда ничего не пишет), это условие
         // просто не сработает — двойного рендера с родной дорожкой не будет.
         // Сдвиг по времени из настроек: положительный — субтитры позже.
-        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs, subtitleStyle.offsetMs) {
-            val shifted = currentPositionMs - subtitleStyle.offsetMs
-            autoSubtitleCues.firstOrNull { shifted in it.startMs..it.endMs }?.text
-        }
-        if (activeAutoSubtitleText != null) {
-            AutoSubtitleOverlay(activeAutoSubtitleText, subtitleStyle, baseSp = 24f)
-        }
+        AutoSubtitleLayer(autoSubtitleCues, viewModel.exoPlayer, baseSp = 24f)
 
         // Нет поддерживаемой аудиодорожки — объясняем, почему тишина.
         if (audioIssue != null && uiState is PlayerUiState.Ready) {

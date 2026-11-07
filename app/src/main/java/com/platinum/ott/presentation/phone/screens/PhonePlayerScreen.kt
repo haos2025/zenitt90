@@ -33,7 +33,7 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
 import com.platinum.ott.presentation.components.PlayerProgressStrip
 import com.platinum.ott.presentation.screens.player.PlayerUiState
-import com.platinum.ott.presentation.screens.player.AutoSubtitleOverlay
+import com.platinum.ott.presentation.screens.player.AutoSubtitleLayer
 import com.platinum.ott.presentation.screens.player.applySubtitleStyle
 import com.platinum.ott.presentation.screens.player.rememberSubtitleStyle
 import com.platinum.ott.presentation.screens.player.PlayerViewModel
@@ -289,13 +289,7 @@ fun PhonePlayerScreen(
         // файла нет. Пока используется OpenSubtitles, autoSubtitleCues
         // всегда пуст — двойного рендера с родной дорожкой не будет.
         // Сдвиг по времени из настроек: положительный — субтитры позже.
-        val activeAutoSubtitleText = remember(autoSubtitleCues, currentPositionMs, subtitleStyle.offsetMs) {
-            val shifted = currentPositionMs - subtitleStyle.offsetMs
-            autoSubtitleCues.firstOrNull { shifted in it.startMs..it.endMs }?.text
-        }
-        if (activeAutoSubtitleText != null) {
-            AutoSubtitleOverlay(activeAutoSubtitleText, subtitleStyle, baseSp = 18f)
-        }
+        AutoSubtitleLayer(autoSubtitleCues, viewModel.exoPlayer, baseSp = 18f)
 
         when (val state = uiState) {
             is PlayerUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))

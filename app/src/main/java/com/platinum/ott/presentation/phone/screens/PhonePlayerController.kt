@@ -349,7 +349,7 @@ private fun MoreSettingsSheet(
             }
             when (category) {
                 null -> {
-                    DialogRow("Аудиодорожка") { onSelectCategory(PlaybackMenuTab.AUDIO) }
+                    if (audioTracks.isNotEmpty()) DialogRow("Аудиодорожка") { onSelectCategory(PlaybackMenuTab.AUDIO) }
                     DialogRow("Качество") { onSelectCategory(PlaybackMenuTab.QUALITY) }
                     DialogRow("Скорость") { onSelectCategory(PlaybackMenuTab.SPEED) }
                 }

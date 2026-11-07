@@ -104,7 +104,8 @@ fun PlaybackMenuOverlay(
     // Вариант 2 (решение владельца): фокус сразу на списке (на выбранной
     // строке), вкладки НЕ фокусируются — Влево/Вправо переключают вкладки,
     // Вверх/Вниз ходят по строкам, OK выбирает и закрывает меню.
-    val tabs = PlaybackMenuTab.values().toList()
+    // Одна аудиодорожка — выбирать не из чего: вкладка «Аудио» скрыта.
+    val tabs = PlaybackMenuTab.values().toList().filter { it != PlaybackMenuTab.AUDIO || audioTracks.isNotEmpty() }
     val listFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     // Индекс строки, на которую ставим фокус при открытии вкладки.
@@ -192,7 +193,7 @@ fun PlaybackMenuOverlay(
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 MenuTabButton("Качество", tab == PlaybackMenuTab.QUALITY, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.QUALITY) }
-                MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.AUDIO) }
+                if (audioTracks.isNotEmpty()) MenuTabButton("Аудио", tab == PlaybackMenuTab.AUDIO, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.AUDIO) }
                 MenuTabButton("Субт.", tab == PlaybackMenuTab.SUBTITLES, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SUBTITLES) }
                 MenuTabButton("Скор.", tab == PlaybackMenuTab.SPEED, Modifier.weight(1f)) { onTabChange(PlaybackMenuTab.SPEED) }
             }

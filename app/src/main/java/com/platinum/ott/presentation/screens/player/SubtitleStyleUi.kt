@@ -92,6 +92,30 @@ fun BoxScope.AutoSubtitleOverlay(text: String, style: SubtitleStyle, baseSp: Flo
     )
 }
 
+/**
+ * Автосубтитры целиком в одном слое: свой опрос позиции плеера (4 раза в секунду, только пока есть реплики)
+ * и своё чтение оформления. Раньше текст зависел от общей позиции экрана (обновлялась раз в 0,5 с, а смена
+ * любой настройки перерисовывала весь плеер): при изменении внешнего вида реплики появлялись с задержкой
+ * или пропускались. Теперь перерисовывается только этот слой.
+ */
+@Composable
+fun BoxScope.AutoSubtitleLayer(cues: List<com.platinum.ott.core.subtitles.SubtitleCue>, player: androidx.media3.common.Player, baseSp: Float) {
+    val style by rememberSubtitleStyle()
+    var positionMs by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0L) }
+    androidx.compose.runtime.LaunchedEffect(cues.isNotEmpty()) {
+        while (cues.isNotEmpty()) {
+            positionMs = player.currentPosition.coerceAtLeast(0L)
+            kotlinx.coroutines.delay(250)
+        }
+    }
+    // Сдвиг по времени из настроек: положительный — субтитры позже.
+    val text = remember(cues, positionMs, style.offsetMs) {
+        val shifted = positionMs - style.offsetMs
+        cues.firstOrNull { shifted in it.startMs..it.endMs }?.text
+    }
+    if (text != null) AutoSubtitleOverlay(text, style, baseSp)
+}
+
 /** Применяет то же оформление к встроенным и внешним дорожкам, которые рисует сам ExoPlayer. */
 @androidx.annotation.OptIn(UnstableApi::class)
 fun applySubtitleStyle(view: PlayerView, style: SubtitleStyle) {
