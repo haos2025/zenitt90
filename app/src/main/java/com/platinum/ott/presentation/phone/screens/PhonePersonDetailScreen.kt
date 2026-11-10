@@ -71,7 +71,7 @@ fun PhonePersonDetailScreen(personId: Int, navController: NavHostController, vie
                     scope.launch {
                         val foundId = viewModel.findInCatalog(credit)
                         if (foundId != null) navController.navigate("detail/$foundId")
-                        else Toast.makeText(context, "«${credit.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                        else navController.navigate("tmdb/${if (credit.mediaType == "tv") "tv" else "movie"}/${credit.tmdbId}")
                     }
                 }
 

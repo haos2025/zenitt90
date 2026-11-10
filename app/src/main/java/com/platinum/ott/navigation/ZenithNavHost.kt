@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.platinum.ott.presentation.screens.home.HomeScreen
+import com.platinum.ott.presentation.components.TvSidebarOverlay
 import com.platinum.ott.presentation.components.TvWithSidebar
 import com.platinum.ott.presentation.phone.screens.PhoneWithBottomBar
 import com.platinum.ott.presentation.screens.detail.DetailScreen
@@ -64,22 +65,26 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // и комментарий у "home" ниже про NAVIGATION_SIDEBAR).
         composable("sources") {
             // Все источники одним списком (каналы и фильмы/сериалы). Вкладка «Источники» в «Каналах» убрана.
-            if (isTV) SourcesScreen(
-                onBackPressed = { navController.popBackStack() },
-                onAddSourceClick = { navController.navigate("add_source") }
-            )
-            else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
+            TvMenu(isTV, navController) {
+                if (isTV) SourcesScreen(
+                    onBackPressed = { navController.popBackStack() },
+                    onAddSourceClick = { navController.navigate("add_source") }
+                )
+                else PhoneSourcesScreen(navController, onAddSourceClick = { navController.navigate("add_source") })
+            }
         }
         // «Настройки → Телепрограмма (EPG)»: статус загрузки, журнал, «Обновить сейчас».
         composable("epg_settings") {
-            if (isTV) EpgSettingsScreen() else PhoneEpgSettingsScreen(navController)
+            TvMenu(isTV, navController) { if (isTV) EpgSettingsScreen() else PhoneEpgSettingsScreen(navController) }
         }
         composable(
             route = "add_source?hint={hint}",
             arguments = listOf(navArgument("hint") { type = NavType.StringType; nullable = true; defaultValue = null })
         ) { entry ->
-            if (isTV) AddSourceScreen(onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
-            else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
+            TvMenu(isTV, navController) {
+                if (isTV) AddSourceScreen(onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
+                else PhoneAddSourceScreen(navController, onDone = { navController.popBackStack() }, entryHint = entry.arguments?.getString("hint"))
+            }
         }
         // PROMPT_IPTV_FOUNDATION.md, подзадача "UI слияния каналов" — тот
         // же уровень вложенности, что и "add_source" выше: достижим из
@@ -153,6 +158,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 LaunchedEffect(id) { navController.navigate("player/$id") { popUpTo("detail/{movieId}") { inclusive = true } } }
                 return@composable
             }
+            TvMenu(isTV, navController) {
             if (isTV) DetailScreen(
                 movieId = id,
                 onPlayClick = { navController.navigate("player/$id") },
@@ -166,16 +172,42 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") },
                 // Экран актёра (подзадача 4) — CastRow.kt был осознанно
                 // некликабельным ("актёр никуда не ведёт"), теперь ведёт сюда.
-                onNavigateToPerson = { personId -> navController.navigate("person/$personId") }
+                onNavigateToPerson = { personId -> navController.navigate("person/$personId") },
+                onNavigateToTmdb = { tid, isTv -> navController.navigate("tmdb/${if (isTv) "tv" else "movie"}/$tid") }
             ) else PhoneDetailScreen(id, navController)
+            }
+        }
+        // Фильм/сериал из «Смотрите также», которого нет в каталоге: карточка из TMDB, воспроизведение неактивно.
+        composable("tmdb/{kind}/{tmdbId}", arguments = listOf(
+            navArgument("kind") { type = NavType.StringType },
+            navArgument("tmdbId") { type = NavType.IntType }
+        )) { entry ->
+            val isTvKind = entry.arguments?.getString("kind") == "tv"
+            val tid = entry.arguments?.getInt("tmdbId") ?: return@composable
+            val key = "tmdb_${if (isTvKind) "tv" else "movie"}_$tid"
+            TvMenu(isTV, navController) {
+                if (isTV) com.platinum.ott.presentation.screens.detail.DetailScreen(
+                    movieId = key,
+                    tmdbId = tid,
+                    tmdbIsTv = isTvKind,
+                    onPlayClick = {},
+                    onBackPressed = { navController.popBackStack() },
+                    onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") },
+                    onNavigateToPerson = { personId -> navController.navigate("person/$personId") },
+                    onNavigateToTmdb = { t, tv -> navController.navigate("tmdb/${if (tv) "tv" else "movie"}/$t") }
+                ) else PhoneDetailScreen(movieId = key, navController = navController, tmdbId = tid, tmdbIsTv = isTvKind)
+            }
         }
         composable("person/{personId}", arguments = listOf(navArgument("personId") { type = NavType.IntType })) { entry ->
             val personId = entry.arguments?.getInt("personId") ?: return@composable
-            if (isTV) PersonDetailScreen(
-                personId = personId,
-                onBackPressed = { navController.popBackStack() },
-                onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") }
-            ) else PhonePersonDetailScreen(personId, navController)
+            TvMenu(isTV, navController) {
+                if (isTV) PersonDetailScreen(
+                    personId = personId,
+                    onBackPressed = { navController.popBackStack() },
+                    onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") },
+                    onNavigateToTmdb = { tid, isTv -> navController.navigate("tmdb/${if (isTv) "tv" else "movie"}/$tid") }
+                ) else PhonePersonDetailScreen(personId, navController)
+            }
         }
         composable(
             "player/{movieId}?variantUrl={variantUrl}&catchupStart={catchupStart}&catchupEnd={catchupEnd}",
@@ -213,12 +245,14 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         // PROMPT_CACHE_MANAGEMENT.md — заменяет прежнюю единственную кнопку
         // "Очистить кэш" на TV (её вообще не было на телефоне). Один и тот
         // же CacheManagementViewModel под обеими версиями UI.
-        composable("cache_management") { if (isTV) CacheManagementScreen(onBackPressed = { navController.popBackStack() }) else PhoneCacheManagementScreen(navController) }
+        composable("cache_management") { TvMenu(isTV, navController) { if (isTV) CacheManagementScreen(onBackPressed = { navController.popBackStack() }) else PhoneCacheManagementScreen(navController) } }
         composable("sync_pairing") {
-            SyncPairingScreen(
-                onBackPressed = { navController.popBackStack() },
-                onOpenLocalSyncScan = { navController.navigate("local_sync_scan") }
-            )
+            TvMenu(isTV, navController) {
+                SyncPairingScreen(
+                    onBackPressed = { navController.popBackStack() },
+                    onOpenLocalSyncScan = { navController.navigate("local_sync_scan") }
+                )
+            }
         }
         // PROMPT_LOCAL_SYNC_V1.md — тот же приём, что и "qr_scan" выше: на
         // TV эта ветка никогда не открывается (QR/код рисуются прямо внутри
@@ -229,7 +263,7 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens
         composable("settings_page/{cat}") { entry -> PhoneSettingsCategoryScreen(navController, entry.arguments?.getString("cat")) }
-        composable("plugins") { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) }
+        composable("plugins") { TvMenu(isTV, navController) { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) } }
         composable("search?q={q}", arguments = listOf(navArgument("q") { type = NavType.StringType; defaultValue = "" })) { entry ->
             val q = entry.arguments?.getString("q") ?: ""
             if (isTV) com.platinum.ott.presentation.screens.search.SearchScreen(navController = navController, onBackPressed = { navController.popBackStack() }, onMovieClick = { navController.navigate("detail/$it") }, initialQuery = q)
@@ -248,12 +282,24 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
                 val route = if (variantUrl != null) "player/$episodeId?variantUrl=${android.net.Uri.encode(variantUrl)}" else "player/$episodeId"
                 navController.navigate(route)
             }
-            if (isTV) com.platinum.ott.presentation.screens.series.SeriesEpisodesScreen(seriesId = seriesId, onBackPressed = { navController.popBackStack() }, onEpisodeClick = navigateToPlayer)
-            else PhoneSeriesEpisodesScreen(seriesId = seriesId, navController = navController)
+            TvMenu(isTV, navController) {
+                // ТВ: сериал открывается в едином окне «Деталь» (шапка + серии), отдельный экран серий не используется.
+                if (isTV) com.platinum.ott.presentation.screens.detail.DetailScreen(
+                    movieId = seriesId,
+                    seriesId = seriesId,
+                    onPlayClick = {},
+                    onBackPressed = { navController.popBackStack() },
+                    onNavigateToMovie = { foundId -> navController.navigate("detail/$foundId") },
+                    onNavigateToPerson = { personId -> navController.navigate("person/$personId") },
+                    onNavigateToTmdb = { tid, isTv -> navController.navigate("tmdb/${if (isTv) "tv" else "movie"}/$tid") },
+                    onPlayEpisode = navigateToPlayer
+                )
+                else PhoneDetailScreen(movieId = seriesId, navController = navController, seriesId = seriesId)
+            }
         }
         composable("plugin/{pluginId}", arguments = listOf(navArgument("pluginId") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("pluginId") ?: return@composable
-            if (isTV) PluginDetailScreen(pluginId = id, onBackPressed = { navController.popBackStack() }) else PhonePluginDetailScreen(id, navController)
+            TvMenu(isTV, navController) { if (isTV) PluginDetailScreen(pluginId = id, onBackPressed = { navController.popBackStack() }) else PhonePluginDetailScreen(id, navController) }
         }
     }
 }
@@ -267,4 +313,10 @@ private fun RedirectOnce(navController: NavHostController, from: String, to: Str
             launchSingleTop = true
         }
     }
+}
+
+/** На ТВ даёт экрану без своей боковой панели вызов меню стрелкой влево (см. TvSidebarOverlay); на телефоне — без изменений. */
+@Composable
+private fun TvMenu(isTV: Boolean, navController: NavHostController, content: @Composable () -> Unit) {
+    if (isTV) TvSidebarOverlay(navController, content) else content()
 }

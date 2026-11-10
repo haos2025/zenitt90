@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.FavoriteEntity
+import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.domain.model.Recommendation
+import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.domain.model.looksLikeAnime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +16,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
-    sessionGraph: SessionGraph
+    private val sessionGraph: SessionGraph
 ) : ViewModel() {
     private val getMovie = sessionGraph.getMovieByIdUseCase
     private val favorites = sessionGraph.favoritesUseCase
@@ -43,6 +45,83 @@ class DetailViewModel @Inject constructor(
         val results = searchMovies.execute(recommendation.title).getOrNull() ?: return null
         return results.firstOrNull { it.year == recommendation.year }?.id
             ?: results.firstOrNull()?.id
+    }
+
+    // Выбор озвучки/варианта потока для серии — до запуска плеера (если вариантов больше одного).
+    private val _pendingVariantChoice = MutableStateFlow<Pair<String, List<StreamVariant>>?>(null)
+    val pendingVariantChoice: StateFlow<Pair<String, List<StreamVariant>>?> = _pendingVariantChoice
+
+    fun onEpisodeSelected(episodeId: String, onNavigate: (episodeId: String, variantUrl: String?) -> Unit) {
+        viewModelScope.launch {
+            val variants = try { sessionGraph.getPlayableUrlUseCase.execute(episodeId) } catch (_: Exception) { emptyList() }
+            if (variants.size > 1) _pendingVariantChoice.value = episodeId to variants
+            else onNavigate(episodeId, variants.firstOrNull()?.url)
+        }
+    }
+
+    fun selectVariant(episodeId: String, variant: StreamVariant, onNavigate: (episodeId: String, variantUrl: String?) -> Unit) {
+        _pendingVariantChoice.value = null
+        onNavigate(episodeId, variant.url)
+    }
+
+    fun dismissVariantChoice() { _pendingVariantChoice.value = null }
+
+    /**
+     * Единое окно «Деталь» для сериала: те же шапка и метаданные TMDB, что у фильма (если нашёлся точный
+     * совпадающий сериал), плюс список серий с прогрессом и цель кнопки «Смотреть».
+     */
+    /** Карточка фильма/сериала только из TMDB (его нет в каталоге): описание есть, воспроизведения нет. */
+    fun loadTmdb(tmdbId: Int, isTv: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = DetailUiState.Loading
+            val card = tmdb.getTmdbCard(tmdbId, isTv)
+            if (card == null) { _uiState.value = DetailUiState.Error("Не удалось загрузить описание"); return@launch }
+            val recs = if (isTv) tmdb.getSeriesRecommendations(tmdbId) else tmdb.getRecommendations(tmdbId)
+            val movie = Movie(id = "tmdb_${if (isTv) "tv" else "movie"}_$tmdbId", year = card.year, title = card.title, poster = "")
+            _uiState.value = DetailUiState.Success(movie, card.metadata, false, null, false, recs, null, tmdbOnly = true)
+        }
+    }
+
+    fun loadSeries(seriesId: String) {
+        viewModelScope.launch {
+            _uiState.value = DetailUiState.Loading
+            try {
+                val episodes = sessionGraph.playlistRepository.getEpisodesForSeries(seriesId)
+                if (episodes.isEmpty()) { _uiState.value = DetailUiState.Error("Серии не найдены"); return@launch }
+                val first = episodes.first()
+                val title = first.seriesTitle?.takeIf { it.isNotBlank() } ?: first.title
+                val year = episodes.firstOrNull { it.year > 0 }?.year ?: 0
+                val movie = Movie(
+                    id = seriesId, year = year, title = title,
+                    poster = episodes.firstOrNull { it.poster.isNotBlank() }?.poster.orEmpty(),
+                    seriesId = seriesId, seriesTitle = title
+                )
+                val meta = try { tmdb.getSeriesMetadata(seriesId, title, year.takeIf { it > 0 }).getOrNull() } catch (_: Exception) { null }
+                val favEntity = favorites.getByContentId(seriesId)
+                val histMap = try {
+                    history.getByContentIds(episodes.map { it.id }).associateBy { it.contentId }
+                } catch (_: Exception) { emptyMap() }
+                val recommendations = meta?.tmdbId?.let { tmdb.getSeriesRecommendations(it) } ?: emptyList()
+                val series = SeriesInfo(episodes, histMap, computeResume(episodes, histMap))
+                _uiState.value = DetailUiState.Success(movie, meta, favEntity != null, null, favEntity?.isAnime ?: false, recommendations, series)
+            } catch (e: Exception) {
+                _uiState.value = DetailUiState.Error(e.message ?: "Ошибка")
+            }
+        }
+    }
+
+    // Последнее, что смотрели: недосмотренная серия — «Продолжить»; досмотренная — «Следующая после неё»;
+    // истории нет — первая серия.
+    private fun computeResume(episodes: List<Movie>, hist: Map<String, com.platinum.ott.data.local.entity.WatchHistoryEntity>): SeriesResume {
+        val last = hist.values.filter { h -> episodes.any { it.id == h.contentId } }.maxByOrNull { it.watchedAt }
+            ?: return SeriesResume(episodes.first(), ResumeKind.START, null)
+        val idx = episodes.indexOfFirst { it.id == last.contentId }
+        if (!last.completed && last.positionMs > 0) {
+            val p = if (last.durationMs > 0) (last.positionMs.toFloat() / last.durationMs).coerceIn(0f, 1f) else null
+            return SeriesResume(episodes[idx], ResumeKind.CONTINUE, p)
+        }
+        val next = episodes.getOrNull(idx + 1)
+        return if (next != null) SeriesResume(next, ResumeKind.NEXT, null) else SeriesResume(episodes.first(), ResumeKind.START, null)
     }
 
     fun load(movieId: String) {
@@ -100,7 +179,7 @@ class DetailViewModel @Inject constructor(
             // он часто пустой, у плейлиста — скриншот кадра. Иначе в «Избранном» оставалась пустая карточка.
             val tmdbPoster = com.platinum.ott.core.platform.TmdbImage.posterUrl(current?.metadata?.posterPath, 400)
             val savedPoster = tmdbPoster ?: poster?.takeIf { it.isNotBlank() }
-            favorites.add(FavoriteEntity(contentId = movieId, title = title, poster = savedPoster, folderId = folderId, isAnime = isAnime))
+            favorites.add(FavoriteEntity(contentId = movieId, contentType = if (current?.series != null) "SERIES" else "MOVIE", title = title, poster = savedPoster, folderId = folderId, isAnime = isAnime))
             if (current != null) _uiState.value = current.copy(isFavorite = true, isAnime = isAnime)
         }
     }

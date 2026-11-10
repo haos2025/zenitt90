@@ -13,6 +13,10 @@ interface TmdbApiService {
     suspend fun getMovieDetails(@Path("id") id: Int): TmdbMovieDetails
     @GET("tv/{id}")
     suspend fun getTvDetails(@Path("id") id: Int): TmdbTvDetails
+    @GET("tv/{id}/credits")
+    suspend fun getTvCredits(@Path("id") id: Int): TmdbCredits
+    @GET("tv/{id}/recommendations")
+    suspend fun getTvRecommendations(@Path("id") id: Int): TmdbRecommendationsResponse
     @GET("tv/{id}/next_episode_to_air")
     suspend fun getNextEpisode(@Path("id") id: Int): TmdbNextEpisode
     // PROMPT_DETAIL_SCREEN_UPGRADE.md, п.4 — отдельный запрос вместо
@@ -41,13 +45,13 @@ interface TmdbApiService {
 }
 
 data class TmdbSearchResponse(val results: List<TmdbSearchResult> = emptyList())
-data class TmdbSearchResult(val id: Int, val title: String?, val name: String?, val release_date: String?, val poster_path: String?, val vote_average: Double?)
+data class TmdbSearchResult(val id: Int, val title: String?, val name: String?, val release_date: String?, val poster_path: String?, val vote_average: Double?, val original_name: String? = null, val first_air_date: String? = null)
 // original_language добавлен для авто-определения аниме (PROMPT_FAVORITES_REDESIGN.md,
 // п.1) — ISO 639-1 код языка оригинала ("ja" для японского); у эндпоинта
 // /movie/{id} именно это поле, не origin_country (оно только у /tv/{id}, а
 // getMetadata() работает только с фильмами, см. комментарий в TmdbApiService).
-data class TmdbMovieDetails(val id: Int, val title: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val credits: TmdbCredits? = null, val videos: TmdbVideos? = null, val original_language: String? = null)
-data class TmdbTvDetails(val id: Int, val name: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val next_episode_to_air: TmdbNextEpisode? = null)
+data class TmdbMovieDetails(val id: Int, val title: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val credits: TmdbCredits? = null, val videos: TmdbVideos? = null, val original_language: String? = null, val release_date: String? = null)
+data class TmdbTvDetails(val id: Int, val name: String, val overview: String?, val poster_path: String?, val backdrop_path: String?, val vote_average: Double?, val genres: List<TmdbGenre> = emptyList(), val next_episode_to_air: TmdbNextEpisode? = null, val original_language: String? = null, val first_air_date: String? = null)
 data class TmdbGenre(val id: Int, val name: String)
 data class TmdbCredits(val cast: List<TmdbCast> = emptyList())
 // profile_path добавлен для карусели актёров (п.4) — раньше credits в
@@ -64,7 +68,7 @@ data class TmdbVideos(val results: List<TmdbVideo> = emptyList())
 data class TmdbVideo(val key: String, val site: String, val type: String)
 data class TmdbNextEpisode(val air_date: String?, val season_number: Int, val episode_number: Int, val name: String?)
 data class TmdbRecommendationsResponse(val results: List<TmdbRecommendationItem> = emptyList())
-data class TmdbRecommendationItem(val id: Int, val title: String?, val name: String?, val poster_path: String?, val release_date: String?)
+data class TmdbRecommendationItem(val id: Int, val title: String?, val name: String?, val poster_path: String?, val release_date: String?, val first_air_date: String? = null)
 // Ни deathday, ни biography TMDB не гарантирует непустыми — оба Nullable,
 // экран актёра сам решает, что не показывать при отсутствии данных.
 data class TmdbPersonDetails(val id: Int, val name: String, val biography: String?, val birthday: String?, val deathday: String? = null, val place_of_birth: String? = null, val profile_path: String? = null, val known_for_department: String? = null)

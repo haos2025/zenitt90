@@ -56,8 +56,16 @@ import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
-fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, onNavigateToPerson: (Int) -> Unit = {}, viewModel: DetailViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.load(movieId) }
+fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> Unit, onNavigateToSeries: (String) -> Unit = {}, onNavigateToMovie: (String) -> Unit = {}, onNavigateToPerson: (Int) -> Unit = {}, seriesId: String? = null, onPlayEpisode: (episodeId: String, variantUrl: String?) -> Unit = { _, _ -> }, tmdbId: Int? = null, tmdbIsTv: Boolean = false, onNavigateToTmdb: (tmdbId: Int, isTv: Boolean) -> Unit = { _, _ -> }, viewModel: DetailViewModel = hiltViewModel()) {
+    // Сериал открывается в этом же окне (seriesId != null): та же шапка, внизу серии вместо фильма.
+    LaunchedEffect(movieId, seriesId, tmdbId) {
+        when {
+            seriesId != null -> viewModel.loadSeries(seriesId)
+            tmdbId != null -> viewModel.loadTmdb(tmdbId, tmdbIsTv)
+            else -> viewModel.load(movieId)
+        }
+    }
+    val pendingVariantChoice by viewModel.pendingVariantChoice.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
     val context = LocalContext.current
@@ -195,8 +203,9 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 val compact = screenHeightDp < 500
                 val posterHeight = (screenHeightDp * if (compact) 0.52f else 0.5f).coerceIn(170f, 330f).dp
                 val posterWidth = posterHeight * 2f / 3f
+                val series = state.series
                 val hasCast = state.metadata?.cast?.isNotEmpty() == true
-                val hasMore = hasCast || state.recommendations.isNotEmpty()
+                val hasMore = series != null || hasCast || state.recommendations.isNotEmpty()
                 LazyColumn(state = listState, userScrollEnabled = false, modifier = Modifier.fillMaxSize()) {
                     item(key = "hero") {
                         Column(
@@ -220,9 +229,10 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                 .focusProperties { enter = { playButtonFocusRequester } }
                                 .focusGroup()
                         ) {
-                            if (tmdbPosterUrl != null) {
+                            val heroPoster = tmdbPosterUrl ?: if (series != null) state.movie.poster.ifBlank { null } else null
+                            if (heroPoster != null) {
                                 AsyncImage(
-                                    model = tmdbPosterUrl,
+                                    model = heroPoster,
                                     contentDescription = state.movie.title,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
@@ -249,8 +259,31 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                 // removeFavorite). Системный Back закрывает экран, отдельной
                                 // кнопки «Назад» нет.
                                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-                                    Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
-                                    OutlinedButton(onClick = {
+                                    if (series != null) {
+                                        val r = series.resume
+                                        val pct = r.progress?.let { " ${(it * 100).toInt()}%" }.orEmpty()
+                                        val label = when (r.kind) {
+                                            ResumeKind.CONTINUE -> "Продолжить ${episodeLabel(r.episode)}$pct"
+                                            ResumeKind.NEXT -> "Дальше ${episodeLabel(r.episode)}"
+                                            ResumeKind.START -> "Смотреть ${episodeLabel(r.episode)}"
+                                        }
+                                        Button(onClick = { viewModel.onEpisodeSelected(r.episode.id) { id, url -> onPlayEpisode(id, url) } }, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(label) }
+                                    } else {
+                                        if (state.tmdbOnly) {
+                                            // Нет в каталоге: кнопка неактивна (серая), но остаётся в фокусе, чтобы пульт не терял управление.
+                                            Button(
+                                                onClick = { Toast.makeText(context, "Этого нет в каталоге — смотреть нечего", Toast.LENGTH_SHORT).show() },
+                                                colors = ButtonDefaults.colors(
+                                                    containerColor = ZenithSurfaceVariant, contentColor = ZenithOnSurfaceVariant,
+                                                    focusedContainerColor = ZenithSurfaceVariant, focusedContentColor = ZenithOnSurfaceVariant
+                                                ),
+                                                modifier = Modifier.focusRequester(playButtonFocusRequester)
+                                            ) { Text("Нет в каталоге") }
+                                        } else {
+                                            Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
+                                        }
+                                    }
+                                    if (!state.tmdbOnly) OutlinedButton(onClick = {
                                         when {
                                             state.isFavorite -> viewModel.removeFavorite(movieId)
                                             folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
@@ -258,6 +291,13 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         }
                                     }) {
                                         Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
+                                    }
+                                }
+                                if (series != null) {
+                                    val seasonsCount = series.episodes.mapNotNull { it.seasonNumber }.distinct().size
+                                    Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+                                        if (seasonsCount > 1) DetailPill("$seasonsCount сезонов", ZenithOnSurface, ZenithSurfaceVariant)
+                                        DetailPill("${series.episodes.size} серий", ZenithOnSurface, ZenithSurfaceVariant)
                                     }
                                 }
                                 state.metadata?.let { meta ->
@@ -334,6 +374,23 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                     },
                                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)
                             ) {
+                                if (series != null) {
+                                    SeriesSection(
+                                        series = series,
+                                        cast = state.metadata?.cast.orEmpty(),
+                                        recommendations = state.recommendations,
+                                        onEpisodeClick = { ep -> viewModel.onEpisodeSelected(ep.id) { id, url -> onPlayEpisode(id, url) } },
+                                        onCastClick = onNavigateToPerson,
+                                        onRecommendationClick = { rec ->
+                                            scope.launch {
+                                                val foundId = viewModel.findInCatalog(rec)
+                                                if (foundId != null) onNavigateToMovie(foundId)
+                                                else onNavigateToTmdb(rec.tmdbId, rec.isTv)
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                } else {
                                 if (hasCast) CastRow(state.metadata!!.cast, showRoles = false, onMemberClick = { member -> onNavigateToPerson(member.id) })
                                 if (state.recommendations.isNotEmpty()) {
                                     // Нажатие: ищем совпадение в каталоге (DetailViewModel.findInCatalog()),
@@ -342,13 +399,21 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         scope.launch {
                                             val foundId = viewModel.findInCatalog(rec)
                                             if (foundId != null) onNavigateToMovie(foundId)
-                                            else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                                            else onNavigateToTmdb(rec.tmdbId, rec.isTv)
                                         }
                                     })
+                                }
                                 }
                             }
                         }
                     }
+                }
+                pendingVariantChoice?.let { (episodeId, variants) ->
+                    EpisodeVariantDialog(
+                        variants = variants,
+                        onSelect = { v -> viewModel.selectVariant(episodeId, v) { id, url -> onPlayEpisode(id, url) } },
+                        onDismiss = { viewModel.dismissVariantChoice() }
+                    )
                 }
                 if (showOverviewDialog) {
                     OverviewDialog(

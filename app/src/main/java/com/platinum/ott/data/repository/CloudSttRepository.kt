@@ -92,6 +92,6 @@ class CloudSttRepository(private val api: ZenithApiService) {
          * "https://zenith-stt.ИМЯ.workers.dev/subtitles/transcribe". Пусто = запасной канал выключен.
          * Адрес не секретный (ключи хранятся в секретах Worker).
          */
-        const val BACKUP_TRANSCRIBE_URL = ""
+        const val BACKUP_TRANSCRIBE_URL = "https://zenith-stt.shadowcloud488.workers.dev/subtitles/transcribe"
     }
 }

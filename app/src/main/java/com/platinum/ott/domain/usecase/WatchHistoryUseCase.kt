@@ -41,7 +41,8 @@ class WatchHistoryUseCase(private val dao: WatchHistoryDao) {
     }
 
     suspend fun getByContentId(contentId: String) = dao.getByContentId(contentId)
-    suspend fun getByContentIds(contentIds: List<String>) = dao.getByContentIds(contentIds)
+    // Кусками по 500: у SQLite на старых Android лимит ~999 значений в одном IN (...), у больших сериалов запрос падал.
+    suspend fun getByContentIds(contentIds: List<String>) = contentIds.chunked(500).flatMap { dao.getByContentIds(it) }
     suspend fun saveProgress(contentId: String, title: String, poster: String?, positionMs: Long, durationMs: Long, seriesId: String? = null) {
         val completed = durationMs > 0 && positionMs.toFloat() / durationMs > 0.95f
         dao.upsert(WatchHistoryEntity(contentId, title, poster, positionMs, durationMs, completed = completed, seriesId = seriesId))

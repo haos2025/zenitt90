@@ -41,8 +41,15 @@ import android.widget.Toast
 import kotlinx.coroutines.launch
 
 @Composable
-fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewModel: DetailViewModel = hiltViewModel()) {
-    LaunchedEffect(movieId) { viewModel.load(movieId) }
+fun PhoneDetailScreen(movieId: String, navController: NavHostController, seriesId: String? = null, tmdbId: Int? = null, tmdbIsTv: Boolean = false, viewModel: DetailViewModel = hiltViewModel()) {
+    // Сериал открывается в этом же окне (seriesId != null): шапка как у фильма, ниже серии (PhoneSeriesDetail).
+    LaunchedEffect(movieId, seriesId, tmdbId) {
+        when {
+            seriesId != null -> viewModel.loadSeries(seriesId)
+            tmdbId != null -> viewModel.loadTmdb(tmdbId, tmdbIsTv)
+            else -> viewModel.load(movieId)
+        }
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle(initialValue = emptyList())
     val context = LocalContext.current
@@ -50,7 +57,10 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
     // Как и на TV: диалог выбора папки только при добавлении, снятие с
     // избранного — сразу (PROMPT_FAVORITES_REDESIGN.md, п.2).
     var showAddFavoriteDialog by remember(movieId) { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingM)) {
+    val seriesState = (uiState as? DetailUiState.Success)?.takeIf { it.series != null }
+    // Сериал — свой ленивый список (сотни серий), а не общий verticalScroll: вложить LazyColumn в прокрутку нельзя.
+    if (seriesState != null) PhoneSeriesDetail(seriesState, seriesState.series!!, seriesId ?: movieId, navController, viewModel)
+    else Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()).padding(ZenithDimens.paddingM)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
             // Эпизод сериала — сразу уводим на общий экран сериала вместо
@@ -148,12 +158,12 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-                    Button(onClick = { navController.navigate("player/$movieId") }, modifier = Modifier.weight(1f)) { Text(if (state.watchProgress != null) "Продолжить" else "Смотреть") }
+                    Button(onClick = { navController.navigate("player/$movieId") }, enabled = !state.tmdbOnly, modifier = Modifier.weight(1f)) { Text(if (state.tmdbOnly) "Нет в каталоге" else if (state.watchProgress != null) "Продолжить" else "Смотреть") }
                     // Добавление показывает выбор папки, снятие — сразу, без
                     // диалога. Отметка "аниме" убрана с этого экрана — теперь
                     // только в едином меню на карточке в FavoritesScreen
                     // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                    OutlinedButton(onClick = {
+                    if (!state.tmdbOnly) OutlinedButton(onClick = {
                         when {
                             state.isFavorite -> viewModel.removeFavorite(movieId)
                             folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
@@ -173,7 +183,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
                         scope.launch {
                             val foundId = viewModel.findInCatalog(rec)
                             if (foundId != null) navController.navigate("detail/$foundId")
-                            else Toast.makeText(context, "«${rec.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                            else navController.navigate("tmdb/${if (rec.isTv) "tv" else "movie"}/${rec.tmdbId}")
                         }
                     })
                 }
@@ -194,7 +204,7 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, viewMod
 
 /** Таблетка метаданных на экране фильма (год, длительность, рейтинг, жанр). */
 @Composable
-private fun PhoneDetailPill(text: String, textColor: Color, background: Color) {
+internal fun PhoneDetailPill(text: String, textColor: Color, background: Color) {
     Text(
         text,
         color = textColor,

@@ -1,7 +1,11 @@
 package com.platinum.ott.presentation.screens.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -16,7 +20,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.launch
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -42,24 +57,42 @@ import com.platinum.ott.ui.theme.*
 // ТВ: настройки по категориям (план 09). Слева — колонка категорий, справа — строки выбранной.
 // Категория выбирается фокусом; Вправо/OK — в правую панель; Влево/Назад — обратно на выбранную категорию.
 // Ключи SharedPreferences и логика не менялись — только расположение строк.
-@OptIn(ExperimentalTvMaterial3Api::class)
+// Связь строк страницы с экраном: какая строка-переход была нажата (чтобы вернуть на неё фокус
+// после возврата с «Источники»/«Синхронизация»/«Кэш» и т.п.).
+private class RowFocusHost(val restoreKey: String?, val onClicked: (String) -> Unit, val onRestored: () -> Unit)
+private val LocalRowFocus = compositionLocalOf { RowFocusHost(null, {}, {}) }
+
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onEpgClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     var selectedId by rememberSaveable { mutableStateOf(SettingsCategory.PLAYBACK.id) }
+    var lastRowKey by rememberSaveable { mutableStateOf<String?>(null) }
     val category = SettingsCategory.fromId(selectedId)
     val categoryRequesters = remember { SettingsCategory.entries.associateWith { FocusRequester() } }
     val panelRequester = remember { FocusRequester() }
     var panelHasFocus by remember { mutableStateOf(false) }
+    val panelFocusNow = rememberUpdatedState(panelHasFocus)
+    val rowHost = remember(lastRowKey) { RowFocusHost(lastRowKey, { lastRowKey = it }, { lastRowKey = null }) }
 
     // Экран пересоздаётся при возврате с «Источники»/«Синхронизация» — статусы обновляем заново.
     LaunchedEffect(Unit) {
         viewModel.refreshStatusRows()
         withFrameNanos { }
-        categoryRequesters[SettingsCategory.fromId(selectedId)]?.safeRequestFocus()
+        if (lastRowKey == null) {
+            categoryRequesters[SettingsCategory.fromId(selectedId)]?.safeRequestFocus()
+        } else {
+            // Вернулись с вложенного экрана: строка сама заберёт фокус; если её нет — страхуемся категорией.
+            repeat(4) { withFrameNanos { } }
+            if (!panelFocusNow.value) {
+                lastRowKey = null
+                categoryRequesters[SettingsCategory.fromId(selectedId)]?.safeRequestFocus()
+            }
+        }
     }
     // Назад из правой панели — на выбранную категорию; со списка категорий — обычный выход.
     BackHandler(enabled = panelHasFocus) { categoryRequesters[category]?.safeRequestFocus() }
 
+    CompositionLocalProvider(LocalRowFocus provides rowHost) {
     Row(Modifier.fillMaxSize()) {
         NavSidebar(navController)
         Row(
@@ -77,9 +110,10 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                         selected = cat == category,
                         requester = categoryRequesters.getValue(cat),
                         panelRequester = panelRequester,
-                        onFocused = { selectedId = cat.id }
+                        onFocused = { if (selectedId != cat.id) selectedId = cat.id }
                     )
                 }
+                Spacer(Modifier.height(ZenithDimens.paddingL))
             }
             Spacer(Modifier.width(ZenithDimens.paddingL))
             Column(
@@ -90,7 +124,8 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
                     // Влево из любой строки панели — на выбранную категорию, а не на ближайшую по геометрии.
                     .focusProperties { left = categoryRequesters.getValue(category) }
                     .onFocusChanged { panelHasFocus = it.hasFocus }
-                    .focusGroup()
+                    // Вход в панель (Вправо/OK с категории) — на последнюю строку, где был фокус; иначе на первую.
+                    .focusRestorer()
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(category.title, style = MaterialTheme.typography.headlineMedium, color = ZenithOnSurface)
@@ -110,6 +145,7 @@ fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () 
             }
         }
     }
+    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -120,8 +156,13 @@ private fun CategoryItem(category: SettingsCategory, selected: Boolean, requeste
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            contentColor = ZenithOnSurface,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+            focusedContentColor = ZenithOnSurface,
+            pressedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+            pressedContentColor = ZenithOnSurface
         ),
+        border = focusRing(),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = Modifier
             .fillMaxWidth()
@@ -223,7 +264,9 @@ private fun CategoryPage(
                 NavRow(
                     if (confirmReset) "Нажмите ещё раз — сбросить" else "Сбросить внешний вид",
                     "Размер, акцент и картинки вернутся к исходным",
-                    arrow = false
+                    arrow = false,
+                    leaves = false,
+                    onFocusLost = { confirmReset = false }
                 ) {
                     if (confirmReset) { viewModel.resetAppearance(); confirmReset = false } else confirmReset = true
                 }
@@ -283,7 +326,7 @@ private fun CategoryPage(
                 else -> "Скачать свежие версии парсеров"
             }
             SettingsCard {
-                NavRow("Обновить парсеры", otaStatus, arrow = false) {
+                NavRow("Обновить парсеры", otaStatus, arrow = false, leaves = false) {
                     if (uiState !is SettingsUiState.Loading) { viewModel.runOtaUpdate(); onForceOtaUpdateClick() }
                 }
                 SettingsDivider()
@@ -326,69 +369,112 @@ private fun formatLastSynced(ms: Long): String {
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun SettingsItem(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)) { Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f)); Text(value, color = ZenithOnSurfaceVariant) }
 }
-// Строка-переход (было: отдельная Button вне секции — SettingsSection(...)
-// рисовала только заголовок, а кнопка "Плагины"/"Источники"/"Синхронизация"
-// шла отдельным Row ПОСЛЕ, визуально не читаясь как часть той же карточки).
-// Теперь это ряд ВНУТРИ карточки, со статусом и стрелкой, тот же паттерн
-// фокусируемой строки целиком, что и у CycleSetting.
-//
-// scale = ClickableSurfaceDefaults.scale(focusedScale = 1f) — по умолчанию
-// у tv-material3 Surface фокус ещё и увеличивает сам компонент (~10%,
-// стандартный TV-эффект "pop"), рассчитанный на карточки с гуттерами
-// вокруг (постеры в сетке каталога, где вокруг есть запас). Тут ряд на
-// всю ширину карточки почти впритык к её скруглённой рамке — при
-// увеличении на фокусе строка вылезала за пределы этой рамки и даже за
-// край экрана (реальный скриншот с TV: подсветка и текст обрезаны). Тот
-// же фикс — в CycleSetting ниже.
-@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, arrow: Boolean = true, onClick: () -> Unit) {
+// Единая обводка фокуса для строк настроек: на светлых/тёмных темах и любом акценте видно, где фокус.
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun focusRing() = ClickableSurfaceDefaults.border(
+    focusedBorder = Border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), shape = ZenithShapeSmall)
+)
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun rowColors() = ClickableSurfaceDefaults.colors(
+    containerColor = Color.Transparent,
+    contentColor = ZenithOnSurface,
+    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+    focusedContentColor = ZenithOnSurface,
+    pressedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+    pressedContentColor = ZenithOnSurface
+)
+
+// Строка при фокусе подтягивается в видимую область С ЗАПАСОМ сверху/снизу — видно соседние строки,
+// а не только саму строку впритык к краю экрана. Если строка помечена для возврата (после вложенного экрана),
+// она сама забирает фокус.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.settingsRowFocus(key: String, requester: FocusRequester): Modifier {
+    val host = LocalRowFocus.current
+    val bring = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(host.restoreKey) {
+        if (host.restoreKey == key) {
+            withFrameNanos { }
+            requester.safeRequestFocus()
+            host.onRestored()
+        }
+    }
+    return this
+        .onSizeChanged { size = it }
+        .bringIntoViewRequester(bring)
+        .focusRequester(requester)
+        .onFocusChanged {
+            if (it.isFocused) scope.launch {
+                val m = 72f
+                bring.bringIntoView(Rect(0f, -m, size.width.toFloat(), size.height + m))
+            }
+        }
+}
+
+// Строка-переход на вложенный экран: целиком фокусируемая, со статусом и стрелкой.
+// scale = 1f — иначе подсветка при фокусе выпирает за скруглённую рамку карточки (реальный скриншот с TV).
+@OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun NavRow(label: String, status: String, arrow: Boolean = true, onFocusLost: () -> Unit = {}, leaves: Boolean = true, onClick: () -> Unit) {
+    val host = LocalRowFocus.current
+    val requester = remember { FocusRequester() }
+    var wasFocused by remember { mutableStateOf(false) }
     Surface(
-        onClick = onClick,
+        onClick = { if (leaves) host.onClicked(label); onClick() },
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-        ),
+        colors = rowColors(),
+        border = focusRing(),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .settingsRowFocus(label, requester)
+            .onFocusChanged { if (wasFocused && !it.isFocused) onFocusLost(); wasFocused = it.isFocused }
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(label, color = ZenithOnSurface)
-                Text(status, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(label, color = ZenithOnSurface, maxLines = 2)
+                Text(status, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
             if (arrow) Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = ZenithOnSurfaceVariant)
         }
     }
 }
-// Раньше это была Row с Text + маленькой Button, прижатой к правому краю —
-// с пульта фокус-цель получалась узкой (только сама кнопка), а строки шли
-// плотно (vertical = 4.dp), из-за чего было тяжело понять, какая строка
-// сейчас в фокусе, и легко было промахнуться курсором мимо кнопки на
-// соседнюю строку. Теперь фокусируемая область — вся строка целиком
-// (Surface с onClick), с явной подсветкой фона в фокусе и высотой,
-// достаточной для уверенного попадания D-pad'ом.
+
+// Строка-переключатель. OK или Вправо — следующее значение; Влево/Назад — к списку категорий.
+// Фокусируемая область — вся строка, высота достаточна для уверенного D-pad.
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun CycleSetting(label: String, value: String, onClick: () -> Unit) {
+    val requester = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-        ),
-        // См. комментарий у NavRow выше — тот же оверфлоу подсветки за край
-        // скруглённой карточки/экрана на реальном TV, тот же фикс.
+        colors = rowColors(),
+        border = focusRing(),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .settingsRowFocus(label, requester)
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onClick(); true } else false
+            }
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f))
-            Text(value, color = MaterialTheme.colorScheme.primary)
+            Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f), maxLines = 2)
+            Spacer(Modifier.width(ZenithDimens.paddingSM))
+            Text(value, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+            if (focused) Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         }
     }
 }

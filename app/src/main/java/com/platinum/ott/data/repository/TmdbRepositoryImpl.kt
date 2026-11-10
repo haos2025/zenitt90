@@ -98,6 +98,105 @@ class TmdbRepositoryImpl(private val api: TmdbApiService, private val metadataDa
         }
     }
 
+    override suspend fun getSeriesMetadata(contentId: String, title: String, year: Int?): Result<TmdbMetadata> = withContext(Dispatchers.IO) {
+        val cached = metadataDao.getByContentId(contentId)
+        if (cached != null && System.currentTimeMillis() - cached.cachedAt < 24 * 3600 * 1000L) {
+            return@withContext Result.success(cached.toDomain())
+        }
+        val missAt = missCache[contentId]
+        if (missAt != null && System.currentTimeMillis() - missAt < 30 * 60 * 1000L) {
+            return@withContext Result.failure(Exception("TMDB: недавно не найдено"))
+        }
+        try {
+            val entity = tmdbConcurrencyLimiter.withPermit { fetchSeriesWithRetry(contentId, title, year) }
+            metadataDao.upsert(entity)
+            Result.success(entity.toDomain())
+        } catch (e: Exception) { missCache[contentId] = System.currentTimeMillis(); Result.failure(e) }
+    }
+
+    private fun normalizeTitle(s: String?): String =
+        s.orEmpty().lowercase().replace('ё', 'е').replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+    // Принимаем результат только если название (русское или оригинальное) совпало ТОЧНО после нормализации;
+    // год — лишь для выбора между несколькими совпадениями (у сериала год серии часто не равен году премьеры).
+    private suspend fun fetchSeriesWithRetry(contentId: String, title: String, year: Int?, attempt: Int = 0): MetadataEntity {
+        try {
+            var found: com.platinum.ott.data.remote.tmdb.TmdbSearchResult? = null
+            for (v in titleVariants(title)) {
+                val key = normalizeTitle(v)
+                if (key.isEmpty()) continue
+                val exact = api.searchTv(v).results.filter { normalizeTitle(it.name) == key || normalizeTitle(it.original_name) == key }
+                if (exact.isNotEmpty()) {
+                    found = exact.firstOrNull { r ->
+                        val y = r.first_air_date?.takeIf { it.length >= 4 }?.substring(0, 4)?.toIntOrNull()
+                        year != null && year > 0 && y != null && kotlin.math.abs(y - year) <= 1
+                    } ?: exact.first()
+                    break
+                }
+            }
+            val result = found ?: throw Exception("TMDB: сериал не найден (точного совпадения названия нет)")
+            val details = api.getTvDetails(result.id)
+            val genres = details.genres.joinToString(", ") { it.name }
+            val castMembers = try {
+                api.getTvCredits(result.id).cast.take(15)
+                    .map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path, it.id) }
+            } catch (e: Exception) { emptyList() }
+            val castJson = if (castMembers.isNotEmpty()) gson.toJson(castMembers) else null
+            return MetadataEntity(contentId, result.id, details.poster_path, details.backdrop_path,
+                details.overview, details.vote_average, genres, null,
+                castJson = castJson, originalLanguage = details.original_language)
+        } catch (e: HttpException) {
+            if (e.code() == 429 && attempt < 2) {
+                delay(800L * (attempt + 1))
+                return fetchSeriesWithRetry(contentId, title, year, attempt + 1)
+            }
+            throw e
+        }
+    }
+
+    override suspend fun getSeriesRecommendations(tmdbId: Int): List<Recommendation> = withContext(Dispatchers.IO) {
+        try {
+            tmdbConcurrencyLimiter.withPermit {
+                api.getTvRecommendations(tmdbId).results.mapNotNull { item ->
+                    val title = item.name ?: item.title ?: return@mapNotNull null
+                    val dateStr = item.first_air_date ?: item.release_date
+                    val year = dateStr?.takeIf { it.length >= 4 }?.substring(0, 4)?.toIntOrNull()
+                    Recommendation(item.id, title, item.poster_path, year, isTv = true)
+                }
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    private fun yearOf(date: String?): Int = date?.takeIf { it.length >= 4 }?.substring(0, 4)?.toIntOrNull() ?: 0
+
+    override suspend fun getTmdbCard(tmdbId: Int, isTv: Boolean): com.platinum.ott.domain.model.TmdbCard? = withContext(Dispatchers.IO) {
+        try {
+            tmdbConcurrencyLimiter.withPermit {
+                if (isTv) {
+                    val d = api.getTvDetails(tmdbId)
+                    val cast = try {
+                        api.getTvCredits(tmdbId).cast.take(15).map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path, it.id) }
+                    } catch (e: Exception) { emptyList() }
+                    com.platinum.ott.domain.model.TmdbCard(
+                        d.name, yearOf(d.first_air_date),
+                        TmdbMetadata(tmdbId, d.poster_path, d.backdrop_path, d.overview, d.vote_average,
+                            d.genres.joinToString(", ") { it.name }, null, cast, d.original_language)
+                    )
+                } else {
+                    val d = api.getMovieDetails(tmdbId)
+                    val cast = try {
+                        api.getMovieCredits(tmdbId).cast.take(15).map { CastMember(it.name, it.character?.takeIf { c -> c.isNotBlank() }, it.profile_path, it.id) }
+                    } catch (e: Exception) { emptyList() }
+                    com.platinum.ott.domain.model.TmdbCard(
+                        d.title, yearOf(d.release_date),
+                        TmdbMetadata(tmdbId, d.poster_path, d.backdrop_path, d.overview, d.vote_average,
+                            d.genres.joinToString(", ") { it.name }, null, cast, d.original_language)
+                    )
+                }
+            }
+        } catch (e: Exception) { null }
+    }
+
     private fun titleVariants(title: String): List<String> {
         val out = LinkedHashSet<String>()
         out += title.trim()

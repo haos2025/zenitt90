@@ -53,7 +53,7 @@ private val photoHeight = 165.dp
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMovie: (String) -> Unit = {}, viewModel: PersonDetailViewModel = hiltViewModel()) {
+fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMovie: (String) -> Unit = {}, onNavigateToTmdb: (tmdbId: Int, isTv: Boolean) -> Unit = { _, _ -> }, viewModel: PersonDetailViewModel = hiltViewModel()) {
     LaunchedEffect(personId) { viewModel.load(personId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -83,7 +83,7 @@ fun PersonDetailScreen(personId: Int, onBackPressed: () -> Unit, onNavigateToMov
                     scope.launch {
                         val foundId = viewModel.findInCatalog(credit)
                         if (foundId != null) onNavigateToMovie(foundId)
-                        else Toast.makeText(context, "«${credit.title}» не найден в каталоге", Toast.LENGTH_SHORT).show()
+                        else onNavigateToTmdb(credit.tmdbId, credit.mediaType == "tv")
                     }
                 }
 

@@ -18,6 +18,12 @@ interface TmdbRepository {
     // при tmdbId == null или любой ошибке сети — вызывающая сторона просто
     // не рисует блок "Смотрите также", не показывает ошибку.
     suspend fun getRecommendations(tmdbId: Int): List<Recommendation>
+    // Сериалы (единое окно «Деталь»): метаданные ищутся в TMDB как сериал и принимаются ТОЛЬКО при точном
+    // совпадении названия (иначе — failure и экран без описания), чтобы не подставлять чужой постер.
+    suspend fun getSeriesMetadata(contentId: String, title: String, year: Int? = null): Result<TmdbMetadata>
+    suspend fun getSeriesRecommendations(tmdbId: Int): List<Recommendation>
+    // Карточка прямо из TMDB (фильм или сериал) — для «Смотрите также», когда в каталоге такого нет. null при ошибке.
+    suspend fun getTmdbCard(tmdbId: Int, isTv: Boolean): com.platinum.ott.domain.model.TmdbCard?
     // Экран актёра (подзадача 4) — та же логика "живого запроса", что и
     // getRecommendations() выше: один актёр за раз на время открытого
     // экрана, не 20-30 карточек ленты разом — кэшировать в Room, как
