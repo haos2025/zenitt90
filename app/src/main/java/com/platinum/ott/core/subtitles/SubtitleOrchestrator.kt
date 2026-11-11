@@ -88,6 +88,10 @@ class SubtitleOrchestrator(
     private var keyDiag = ""
     // Сколько реально шло извлечение предзагруженного окна (с момента запуска, а не ожидания).
     @Volatile private var prefetchTookMs = 0L
+    // Для meta: выбранная дорожка плеера (at=2/3) и сколько раз пришлось повторять извлечение звука.
+    private var audioTag = ""
+    private var extractRetriesTotal = 0
+    private fun retryTag() = if (extractRetriesTotal > 0) ";xr=$extractRetriesTotal" else ""
 
     /**
      * @param contentDurationMs полная длительность VOD-контента — окно не
@@ -107,9 +111,12 @@ class SubtitleOrchestrator(
         contentDurationMs: Long,
         currentPositionMsProvider: () -> Long,
         language: String = "ru",
+        audioInfo: String = "",
         onOpenSubtitlesFound: (url: String, language: String, format: SubtitleFormat) -> Unit,
     ) {
         stop()
+        audioTag = if (audioInfo.isBlank()) "" else ";$audioInfo"
+        extractRetriesTotal = 0
         _cues.value = emptyList()
         cacheKey = null
         coveredRanges = emptyList()
@@ -234,6 +241,10 @@ class SubtitleOrchestrator(
         coroutineScope {
             var coveredUpToMs = 0L
             var windowIndex = 0
+            // Подряд неудачных извлечений одного и того же окна. Раньше неудачное окно сразу считалось
+            // пройденным, и на этом месте оставалась дыра в субтитрах на минуту и больше (торренты и CDN
+            // иногда отвечают с задержкой или отказом только на одно окно).
+            var extractFailures = 0
             // Предзагрузка: пока текущее окно распознаётся (в основном ожидание ответов сети),
             // следующее уже извлекается из потока. Раньше шаги шли строго друг за другом:
             // окно 2 минут занимало ~100 с (≈70 с звук + ≈27 с запросы) и пайплайн едва
@@ -322,10 +333,20 @@ class SubtitleOrchestrator(
                 // continue внутри инлайн-лямбды (getOrElse{}) — поэтому явная проверка Result.
                 if (chunkResult.isFailure) {
                     Log.w(TAG, "extract failed", chunkResult.exceptionOrNull())
-                    _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${chunkResult.exceptionOrNull()?.message}")
-                    coveredUpToMs = windowEnd // не зацикливаемся вечно на одном и том же неудачном окне
+                    _state.value = AutoSubtitleState.Error("Не удалось извлечь аудио: ${audioExtractor.describeError(chunkResult.exceptionOrNull())}")
+                    if (extractFailures < MAX_EXTRACT_RETRIES) {
+                        // Повторяем то же окно (после паузы), а не перепрыгиваем через него.
+                        extractFailures++
+                        extractRetriesTotal++
+                        windowIndex-- // окно считается тем же, длина не растёт
+                        delay(EXTRACT_RETRY_DELAY_MS * extractFailures)
+                        continue
+                    }
+                    extractFailures = 0
+                    coveredUpToMs = windowEnd // после нескольких попыток всё же идём дальше, чтобы не застрять навсегда
                     continue
                 }
+                extractFailures = 0
                 val chunk = chunkResult.getOrThrow()
                 setProgress("звук готов за ${(System.currentTimeMillis() - t0) / 1000} с")
                 // Диагностика для логов Render (поле meta): сколько заняло извлечение звука, насколько
@@ -371,7 +392,7 @@ class SubtitleOrchestrator(
                 // ни декодирования в PCM на устройстве — отправляем окно целиком одним файлом,
                 // реплики и время размечает сам Whisper на сервере.
                 if (LIGHT_PIPELINE) {
-                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag"
+                    val meta = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag$audioTag${retryTag()}"
                     val stop = transcribeWholeWindow(chunk, language, meta)
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
@@ -399,7 +420,7 @@ class SubtitleOrchestrator(
                 val vadMs = System.currentTimeMillis() - t0 - extractMs
                 val prep = ((extractMs + vadMs).toDouble() / windowDuration).coerceIn(0.02, 3.0)
                 prepRatio = if (prepRatio < 0) prep else 0.5 * prepRatio + 0.5 * prep
-                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag"
+                val metaBase = "w=$windowIndex;start=${windowStart / 1000};dur=${windowDuration / 1000};extract_ms=$extractMs;took_ms=$tookMs;vad_ms=$vadMs;lead_ms=$leadMs;mode=${modeTag()};cache=$cacheStatus;${memTag()}${exTag()}${if (windowIndex <= 1) keyDiag else ""};src=$srcTag$audioTag${retryTag()}"
                 val aborted = transcribeChunk(chunk, segments, language, metaBase)
                 File(chunk.filePath).delete() // временный аудио-файл окна больше не нужен
                 Log.d(TAG, "window #$windowIndex done after ${System.currentTimeMillis() - t0} ms")
@@ -425,7 +446,13 @@ class SubtitleOrchestrator(
      */
     private suspend fun transcribeWholeWindow(chunk: ExtractedAudioChunk, language: String, meta: String): Boolean {
         setProgress("запрос")
-        return when (val outcome = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4", meta)) {
+        var first = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4", meta)
+        if (first is CloudSttRepository.Outcome.Error) {
+            // Сетевой сбой при отправке: пробуем ещё раз тот же файл (повторное извлечение звука дорого).
+            delay(UPLOAD_RETRY_DELAY_MS)
+            first = transcribeWithRetry(File(chunk.filePath), language, "audio/mp4", meta)
+        }
+        return when (val outcome = first) {
             is CloudSttRepository.Outcome.Success -> {
                 // Время реплик в ответе — от начала загруженного окна.
                 for (s in outcome.result.segments) {
@@ -644,6 +671,9 @@ class SubtitleOrchestrator(
         const val REQUEST_PACE_MS = 3_000L // ≤ 20 запросов в минуту
         const val RATE_LIMIT_BACKOFF_MS = 10_000L
         const val MAX_RATE_LIMIT_RETRIES = 3
+        const val MAX_EXTRACT_RETRIES = 2 // повторов извлечения звука одного окна
+        const val EXTRACT_RETRY_DELAY_MS = 3_000L // пауза перед повтором: 3 с, затем 6 с
+        const val UPLOAD_RETRY_DELAY_MS = 3_000L
         const val POLL_INTERVAL_MS = 15_000L // как часто проверяем, не пора ли расширить покрытое окно
     }
 }

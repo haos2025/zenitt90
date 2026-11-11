@@ -987,9 +987,14 @@ class PlayerViewModel @Inject constructor(
             title = currentTitle,
             year = currentYear,
             streamUrl = current.currentVariant.url,
-            headers = current.currentVariant.headers,
+            headers = headersFor(current.currentVariant),
             contentDurationMs = durationMs,
             currentPositionMsProvider = { exoPlayer.currentPosition },
+            // Для логов сервера: какая по счёту аудиодорожка выбрана у плеера (звук для распознавания берётся
+            // из потока отдельно, и если дорожки у плеера и у извлечения разные, текст будет «выдуманным»).
+            audioInfo = current.audioTracks.let { t ->
+                if (t.isEmpty()) "at=1" else "at=${t.indexOfFirst { it.isSelected } + 1}/${t.size}"
+            },
             onOpenSubtitlesFound = { url, language, format -> loadExternalSubtitle(url, language, format) },
         )
     }
@@ -997,11 +1002,23 @@ class PlayerViewModel @Inject constructor(
     fun disableAutoSubtitles() {
         subtitleOrchestrator.stop()
     }
+    /**
+     * Заголовки, с которыми плеер ходит к источнику: общий User-Agent + собственные заголовки варианта
+     * (+ Referer для archive.org). Те же заголовки нужны и извлечению звука для автосубтитров: раньше туда шли
+     * только заголовки варианта (чаще всего пустые), запрос уходил как «okhttp», и CDN, которые режут чужие
+     * клиенты (cdnvideohub), отвечали отказом, хотя сам плеер играл.
+     */
+    private fun headersFor(v: StreamVariant): Map<String, String> {
+        var h = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
+        if (v.url.contains("archive.org", ignoreCase = true)) h = h + ("Referer" to "https://archive.org/")
+        return h
+    }
+
     private fun playVariant(v: StreamVariant, seekTo: Long = 0L) {
         // Свои заголовки канала (#EXTVLCOPT) поверх общего дефолта — если
         // канал ничего не требует явно, edge-case не ломается, просто
         // используется тот же generic User-Agent, что и раньше.
-        var effectiveHeaders = if (v.headers.isNotEmpty()) defaultHeaders + v.headers else defaultHeaders
+        val effectiveHeaders = headersFor(v)
         // ИСПРАВЛЕНО: раньше здесь стояла проверка `v.source == "Zenith"` —
         // но source="Zenith" стоит у ЛЮБОГО backend-варианта, и у yt_, и у
         // ia_ (см. GetPlayableUrlUseCase.executeWithPluginRace — оба
@@ -1013,9 +1030,6 @@ class PlayerViewModel @Inject constructor(
         // раз сработало, потом опять сломалось": скорее всего сработавший
         // раз был ia_, а сломавшийся — yt_ с другим сервером. Проверяем
         // по фактическому хосту URL, не по source.
-        if (v.url.contains("archive.org", ignoreCase = true)) {
-            effectiveHeaders = effectiveHeaders + ("Referer" to "https://archive.org/")
-        }
         val mediaItemBuilder = MediaItem.Builder().setUri(v.url)
         // ВТОРАЯ гипотеза той же природы: ExoPlayer определяет контейнер по
         // расширению в URL (Util.inferContentType) — рабочие М3У/Xtream-

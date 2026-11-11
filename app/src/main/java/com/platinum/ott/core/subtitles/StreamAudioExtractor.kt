@@ -81,6 +81,21 @@ class StreamAudioExtractor(private val context: Context) {
         .retryOnConnectionFailure(true)
         .build()
 
+    /** Короткое описание ошибки извлечения: код Media3 и причина (нужно, чтобы понять, чем недоволен источник). */
+    fun describeError(t: Throwable?): String {
+        if (t == null) return "неизвестная ошибка"
+        val code = (t as? ExportException)?.errorCodeName
+        val cause = t.cause
+        val inner = cause?.let { " · ${it.javaClass.simpleName}${it.message?.let { m -> ": " + m.take(120) } ?: ""}" }.orEmpty()
+        return "${code ?: t.javaClass.simpleName}${t.message?.let { " (" + it.take(120) + ")" } ?: ""}$inner"
+    }
+
+    private fun isLocalHost(url: String): Boolean {
+        val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase().orEmpty()
+        return host == "localhost" || host.startsWith("127.") || host.startsWith("10.") ||
+            host.startsWith("192.168.") || Regex("^172\\.(1[6-9]|2\\d|3[01])\\.").containsMatchIn(host)
+    }
+
     suspend fun extract(request: AudioExtractionRequest): Result<ExtractedAudioChunk> = withContext(Dispatchers.Main) {
         // Transformer требует, чтобы весь публичный API вызывался с одного
         // потока с Looper'ом (по документации Media3 — обычно main thread) —
@@ -89,9 +104,15 @@ class StreamAudioExtractor(private val context: Context) {
         suspendCancellableCoroutine { cont ->
             val outputFile = File(context.cacheDir, "subs_audio_${System.currentTimeMillis()}.m4a")
             try {
+                // TorrServer и другие локальные источники иногда отвечают на новую позицию дольше 20 с
+                // (торрент ещё докачивает куски впереди просмотра), поэтому для них таймаут чтения больше.
+                val client = if (isLocalHost(request.streamUrl)) okHttpClient.newBuilder().readTimeout(60, TimeUnit.SECONDS).build() else okHttpClient
+                // Те же заголовки, что у плеера. Без User-Agent запрос уходил как «okhttp», и часть CDN его отклоняла.
+                val headers = if (request.headers.keys.any { it.equals("User-Agent", ignoreCase = true) }) request.headers
+                    else request.headers + ("User-Agent" to "ZenithOTT/1.0 (Linux;Android) ExoPlayerLib/media3")
                 val dataSourceFactory = DataSource.Factory {
-                    OkHttpDataSource.Factory(okHttpClient)
-                        .setDefaultRequestProperties(request.headers)
+                    OkHttpDataSource.Factory(client)
+                        .setDefaultRequestProperties(headers)
                         .createDataSource()
                 }
                 val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
