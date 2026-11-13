@@ -1,0 +1,80 @@
+name: Build FFmpeg audio decoder AAR (Media3 1.4.0)
+
+# Отдельная ручная сборка. НЕ трогает приложение: собирает только AAR с
+# аудио-декодерами FFmpeg (AC-3, E-AC-3, MP2) из исходников Media3 тега 1.4.0
+# (та же версия, что в приложении), чтобы видео-путь плеера не менялся.
+# Результат — артефакт "ffmpeg-decoder-aar" (скачать со страницы запуска).
+
+on:
+  workflow_dispatch:
+    inputs:
+      decoders:
+        description: "Декодеры FFmpeg через пробел (минимум: ac3 eac3 mp2)"
+        required: true
+        default: "ac3 eac3 mp2"
+
+env:
+  MEDIA_TAG: "1.4.0"
+  FFMPEG_BRANCH: "release/6.0"
+  NDK_VERSION: "26.1.10909125"   # r26b — по README модуля decoder_ffmpeg
+  ANDROID_ABI_LEVEL: "26"        # = minSdk приложения, не выше
+
+jobs:
+  ffmpeg-aar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK + NDK r26b + CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;26.1.10909125 cmake;3.22.1
+          accept-android-sdk-licenses: true
+
+      - name: Clone Media3 (tag 1.4.0)
+        run: git clone --depth=1 --branch "$MEDIA_TAG" https://github.com/androidx/media.git media
+
+      - name: Clone FFmpeg (release/6.0)
+        run: |
+          git clone --depth=1 --branch "$FFMPEG_BRANCH" https://github.com/FFmpeg/FFmpeg.git \
+            media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg
+
+      - name: Build FFmpeg static libs (armeabi-v7a, arm64-v8a, x86, x86_64)
+        run: |
+          set -eux
+          MODULE="$GITHUB_WORKSPACE/media/libraries/decoder_ffmpeg/src/main"
+          NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+          cd "$MODULE/jni"
+          ./build_ffmpeg.sh "$MODULE" "$NDK_PATH" "linux-x86_64" "$ANDROID_ABI_LEVEL" ${{ github.event.inputs.decoders }}
+
+      - name: Pin NDK version for the module
+        run: |
+          echo "android.ndkVersion = '$NDK_VERSION'" >> media/libraries/decoder_ffmpeg/build.gradle
+
+      - name: Assemble AAR
+        working-directory: media
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :lib-decoder-ffmpeg:assembleRelease
+
+      - name: Collect and verify AAR
+        run: |
+          set -eux
+          mkdir -p out
+          AAR=$(find media -name "*.aar" -path "*decoder_ffmpeg*" | head -n 1)
+          test -n "$AAR"
+          cp "$AAR" out/decoder_ffmpeg-1.4.0-release.aar
+          unzip -l out/decoder_ffmpeg-1.4.0-release.aar | tee out/aar-contents.txt
+          ls -l out
+          cp media/LICENSE out/MEDIA3-LICENSE.txt
+          echo "decoders: ${{ github.event.inputs.decoders }}; FFmpeg $FFMPEG_BRANCH; media3 $MEDIA_TAG; lib built WITHOUT --enable-gpl/--enable-nonfree" > out/BUILD-INFO.txt
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-decoder-aar
+          path: out/
