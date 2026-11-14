@@ -14,9 +14,10 @@ import com.platinum.ott.data.local.entity.*
         MovieEntity::class, FavoriteEntity::class, FolderEntity::class,
         WatchHistoryEntity::class, MetadataEntity::class, SeriesScheduleEntity::class,
         PluginEntity::class, PlaylistMovieEntity::class, PlaylistSourceEntity::class,
-        ChannelEntity::class, ChannelStreamEntity::class, EpgProgramEntity::class
+        ChannelEntity::class, ChannelStreamEntity::class, EpgProgramEntity::class,
+        SyncTombstoneEntity::class
     ],
-    version = 21, exportSchema = true
+    version = 22, exportSchema = true
 )
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun movieDao(): MovieDao
@@ -30,6 +31,7 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
     abstract fun channelStreamDao(): ChannelStreamDao
     abstract fun epgProgramDao(): EpgProgramDao
+    abstract fun syncTombstoneDao(): SyncTombstoneDao
 
     companion object {
         // Раньше версия схемы никогда не поднималась после первого релиза,
@@ -296,10 +298,44 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        // Синхронизация v2: метки удаления. Триггеры ловят ЛЮБОЕ удаление избранного и
+        // истории (в том числе массовое — «очистить историю», удаление папки), поэтому
+        // ни один из десятков мест, где приложение удаляет эти записи, менять не нужно.
+        // INSERT той же записи метку снимает (обновление «удалить + вставить» меток не оставляет).
+        // IF NOT EXISTS + выполнение в onOpen: триггеры есть и у свежей установки (там миграций нет).
+        private val SYNC_TRIGGERS_SQL = listOf(
+            "CREATE TRIGGER IF NOT EXISTS trg_sync_fav_del AFTER DELETE ON favorites BEGIN " +
+                "INSERT OR REPLACE INTO sync_tombstones(kind, contentId, deletedAt) " +
+                "VALUES('favorite', OLD.contentId, CAST(strftime('%s','now') AS INTEGER) * 1000); END",
+            "CREATE TRIGGER IF NOT EXISTS trg_sync_fav_ins AFTER INSERT ON favorites BEGIN " +
+                "DELETE FROM sync_tombstones WHERE kind = 'favorite' AND contentId = NEW.contentId; END",
+            "CREATE TRIGGER IF NOT EXISTS trg_sync_hist_del AFTER DELETE ON watch_history BEGIN " +
+                "INSERT OR REPLACE INTO sync_tombstones(kind, contentId, deletedAt) " +
+                "VALUES('history', OLD.contentId, CAST(strftime('%s','now') AS INTEGER) * 1000); END",
+            "CREATE TRIGGER IF NOT EXISTS trg_sync_hist_ins AFTER INSERT ON watch_history BEGIN " +
+                "DELETE FROM sync_tombstones WHERE kind = 'history' AND contentId = NEW.contentId; END"
+        )
+
+        private val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sync_tombstones` (`kind` TEXT NOT NULL, `contentId` TEXT NOT NULL, " +
+                        "`deletedAt` INTEGER NOT NULL, PRIMARY KEY(`kind`, `contentId`))"
+                )
+                SYNC_TRIGGERS_SQL.forEach { db.execSQL(it) }
+            }
+        }
+
         @Volatile private var INSTANCE: ZenithDatabase? = null
         fun getInstance(context: Context): ZenithDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context, ZenithDatabase::class.java, "zenith.db")
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onOpen(db: SupportSQLiteDatabase) {
+                        super.onOpen(db)
+                        SYNC_TRIGGERS_SQL.forEach { db.execSQL(it) }
+                    }
+                })
                 .fallbackToDestructiveMigration() // остаётся как сетка безопасности для НЕзапланированных скачков версии
                 .build().also { INSTANCE = it }
         }

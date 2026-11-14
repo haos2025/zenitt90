@@ -266,7 +266,7 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
         }
         SettingsCategory.DEVICES -> {
             val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
-            NavCard("Синхронизация устройств", "Последняя: ${formatLastSynced(lastSyncedAtMs)}") { navController.navigate("sync_pairing") }
+            NavCard("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}") { navController.navigate("sync_pairing") }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             // Не то же, что синхронизация: этот канал — напрямую по локальной сети, без бэкенда.
             NavCard("Телефон-компаньон", "Отсканировать QR с TV — например, чтобы отправить ссылку на субтитры") { navController.navigate("qr_scan") }

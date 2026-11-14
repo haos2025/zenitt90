@@ -149,7 +149,10 @@ class SessionGraph @Inject constructor(
         val tmdbClient = RetrofitFactory.createOkHttpClient(authPreferences, TmdbInterceptor(), timeoutSeconds = timeoutSeconds)
         tmdbApi = RetrofitFactory.createTmdbApi(tmdbClient)
         tmdbRepository = TmdbRepositoryImpl(tmdbApi, database.metadataDao())
-        syncRepository = SyncRepositoryImpl(api, database.favoritesDao(), database.watchHistoryDao(), authPreferences)
+        syncRepository = SyncRepositoryImpl(
+            appContext, api, database.favoritesDao(), database.watchHistoryDao(), database.syncTombstoneDao(),
+            authPreferences, com.platinum.ott.sync.SyncReportStore(appContext)
+        )
         getCatalogUseCase = GetCatalogUseCase(movieRepository)
         getPlaylistCatalogUseCase = GetPlaylistCatalogUseCase(playlistRepository)
         getMovieByIdUseCase = GetMovieByIdUseCase(movieRepository)

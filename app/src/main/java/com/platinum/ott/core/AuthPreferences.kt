@@ -19,6 +19,24 @@ class AuthPreferences(context: Context) {
     var syncToken: String? get() = prefs.getString("sync_token", null); set(v) = prefs.edit().putString("sync_token", v).apply()
     var lastSyncTimestamp: Long get() = prefs.getLong("last_sync_ts", 0); set(v) = prefs.edit().putLong("last_sync_ts", v).apply()
 
+    // ---- Синхронизация v2 ("Мои устройства") ----
+    // Токен устройства (Bearer) лежит здесь, в EncryptedSharedPreferences, а не в Room.
+    var v2DeviceId: String? get() = prefs.getString("v2_device_id", null); set(v) = prefs.edit().putString("v2_device_id", v).apply()
+    var v2Token: String? get() = prefs.getString("v2_token", null); set(v) = prefs.edit().putString("v2_token", v).apply()
+    /** Серверный курсор последнего полученного изменения (вместо lastSyncTimestamp). */
+    var v2Cursor: Long get() = prefs.getLong("v2_cursor", 0); set(v) = prefs.edit().putLong("v2_cursor", v).apply()
+    /** Время (клиентское) начала последней успешной отправки: локальные изменения новее него уходят на сервер. */
+    var lastPushAt: Long get() = prefs.getLong("v2_last_push_at", 0); set(v) = prefs.edit().putLong("v2_last_push_at", v).apply()
+    var deviceName: String? get() = prefs.getString("device_name", null); set(v) = prefs.edit().putString("device_name", v).apply()
+    /** Фоновая синхронизация через сервер. Работает только после первой ручной синхронизации/связывания. */
+    var autoSyncEnabled: Boolean get() = prefs.getBoolean("auto_sync_enabled", true); set(v) = prefs.edit().putBoolean("auto_sync_enabled", v).apply()
+    /** Сервер не узнал токен (данные на сервере потеряны): устройство зарегистрировано заново, связи нужно восстановить. */
+    var syncLinksLost: Boolean get() = prefs.getBoolean("sync_links_lost", false); set(v) = prefs.edit().putBoolean("sync_links_lost", v).apply()
+
+    fun clearV2Credentials() {
+        prefs.edit().remove("v2_device_id").remove("v2_token").putLong("v2_cursor", 0).putLong("v2_last_push_at", 0).apply()
+    }
+
     /**
      * syncToken раньше объявлялся, но нигде не заполнялся и не отправлялся —
      * /sync и /sync/push не могли определить, чьи это данные. Здесь он

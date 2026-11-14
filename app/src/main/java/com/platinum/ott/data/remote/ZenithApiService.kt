@@ -28,6 +28,27 @@ interface ZenithApiService {
     suspend fun createPairingCode(@Query("device_id") deviceId: String): PairingCreateDto
     @POST("sync/pairing/redeem")
     suspend fun redeemPairingCode(@Query("device_id") deviceId: String, @Body body: PairingRedeemDto): Response<ResponseBody>
+    // ---- Синхронизация v2 (zenith-backend /v2/*). Авторизация — заголовок
+    // "Bearer <token>" (токен выдаёт /v2/devices/register), а не голый device_id.
+    @POST("v2/devices/register")
+    suspend fun registerDevice(@Body body: DeviceRegisterRequest): DeviceRegisterResponse
+    @GET("v2/devices")
+    suspend fun getDevices(@Header("Authorization") auth: String): DevicesResponse
+    @PATCH("v2/devices/{id}")
+    suspend fun renameDevice(@Header("Authorization") auth: String, @Path("id") id: String, @Body body: DeviceRenameRequest): DeviceInfoDto
+    @DELETE("v2/devices/{id}")
+    suspend fun unlinkDevice(@Header("Authorization") auth: String, @Path("id") id: String): Response<ResponseBody>
+    @POST("v2/pairing/create")
+    suspend fun createPairingCodeV2(@Header("Authorization") auth: String): PairingCreateV2Dto
+    @POST("v2/pairing/redeem")
+    suspend fun redeemPairingCodeV2(@Header("Authorization") auth: String?, @Body body: PairingRedeemV2Request): PairingRedeemV2Dto
+    @GET("v2/sync")
+    suspend fun pullSyncV2(@Header("Authorization") auth: String, @Query("cursor") cursor: Long, @Query("limit") limit: Int = 500): SyncPullResponseV2
+    @POST("v2/sync/push")
+    suspend fun pushSyncV2(@Header("Authorization") auth: String, @Body body: SyncPushRequestV2): SyncPushResponseV2
+    @POST("v2/sync/ack")
+    suspend fun ackSyncV2(@Header("Authorization") auth: String, @Body body: SyncAckRequest): SyncAckResponse
+
     // PROMPT_SUBTITLES.md, подзадача 1 — лёгкая проверка OpenSubtitles для
     // VOD, по названию/году (не по хешу — контент стримится, а не
     // скачивается файлом, матчинг неидеален, особенно для YouTube/

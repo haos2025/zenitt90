@@ -311,7 +311,7 @@ private fun CategoryPage(
         }
         SettingsCategory.DEVICES -> {
             val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
-            SettingsCard { NavRow("Синхронизация", "Последняя: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick) }
+            SettingsCard { NavRow("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick) }
         }
         SettingsCategory.MAINTENANCE -> {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()

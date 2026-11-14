@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.platform.isTV
@@ -26,57 +26,45 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import com.platinum.ott.sync.CategoryReport
+import com.platinum.ott.sync.DeviceInfo
+import com.platinum.ott.sync.SyncReport
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.platinum.ott.ui.theme.*
 
 /**
- * Один экран на TV и на телефон, а не пара TV/Phone-вариантов как у
- * остальных экранов приложения — сознательное отступление: это редко
- * используемая служебная функция (ввёл код один раз при первой настройке
- * второго устройства и забыл), не основной путь навигации, где важна
- * TV-специфичная стилистика (androidx.tv.material3). Обычный
- * androidx.compose.material3 нормально фокусируется пультом через
- * стандартную систему фокуса Compose, просто визуально не "TV-нативный".
- *
- * Диагностика PROMPT_ACCOUNT_REDESIGN.md, шаг 1 (репорт "жмёшь Подключить —
- * ничего не происходит, ни ошибок", одинаково на TV и телефоне): было два
- * реальных бага, оба здесь.
- *  1) У Column не было verticalScroll — тот же класс бага, что уже чинили
- *     на TV в настройках (см. NEXT_STEPS.md). Экран показывает две полные
- *     секции подряд без скролла — на TV с overscan или на невысоком экране
- *     телефона нижняя часть могла просто не влезать в видимую область.
- *  2) Индикатор для формы ввода кода (верх, "На новом устройстве") делил
- *     один uiState с показом своего кода (низ, "На уже настроенном
- *     устройстве") и рендерился ТОЛЬКО в нижней секции — визуально и по
- *     смыслу под чужим заголовком, никак не привязан к месту, где на него
- *     смотрел бы человек, только что нажавший "Подключить" наверху.
- * Оба исправлены: добавлен verticalScroll, состояния разведены на
- * redeemState (рендерится сразу под формой ввода кода) и pairingState
- * (как раньше, под показом своего кода). Кнопка "Синхронизировать сейчас"
- * сделана всегда видимой, не только сразу после первого сопряжения.
+ * «Мои устройства»: один экран на TV и телефон (обычный material3, фокус пультом работает штатно).
+ * Сверху — это устройство и синхронизация через сервер (отчёт, автосинхронизация), ниже — список
+ * связанных устройств с подтверждением получения, добавление устройства по коду, и в конце прежняя
+ * секция локальной синхронизации по Wi-Fi (она отдельный канал и пока без изменений).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncPairingScreen(
     onBackPressed: () -> Unit,
-    // PROMPT_LOCAL_SYNC_V1.md — только сторона телефона его вызывает (кнопка
-    // "Сканировать QR с TV" ниже); на TV ветка QR/кода рисуется прямо в этом
-    // экране, без перехода. Дефолт {} — чтобы не ломать более ранние места,
-    // если такие остались, не подключающие локальную синхронизацию.
+    // Только сторона телефона вызывает (кнопка «Сканировать QR с TV» в секции локальной синхронизации).
     onOpenLocalSyncScan: () -> Unit = {},
     viewModel: SyncPairingViewModel = hiltViewModel(),
     localSyncViewModel: LocalSyncViewModel = hiltViewModel()
 ) {
+    val devicesState by viewModel.devices.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val reports by viewModel.reports.collectAsStateWithLifecycle()
     val redeemState by viewModel.redeemState.collectAsStateWithLifecycle()
     val pairingState by viewModel.pairingState.collectAsStateWithLifecycle()
-    val manualSyncState by viewModel.manualSyncState.collectAsStateWithLifecycle()
+    val autoSync by viewModel.autoSync.collectAsStateWithLifecycle()
+    val deviceName by viewModel.deviceName.collectAsStateWithLifecycle()
+    val linksLost by viewModel.linksLost.collectAsStateWithLifecycle()
     val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
+    val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     var enteredCode by remember { mutableStateOf("") }
+    var renameTarget by remember { mutableStateOf<DeviceInfo?>(null) }
+    var unlinkTarget by remember { mutableStateOf<DeviceInfo?>(null) }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Синхронизация устройств") })
+        TopAppBar(title = { Text("Мои устройства") })
     }) { padding ->
         Column(
             Modifier
@@ -88,98 +76,119 @@ fun SyncPairingScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "Подключите ещё одно своё устройство, чтобы видеть одно и то же избранное и историю просмотра на обоих.",
+                "Свяжите свои устройства, чтобы на всех было одно и то же избранное и история просмотра.",
                 color = ZenithOnSurface.copy(0.8f)
             )
-            Spacer(Modifier.height(ZenithDimens.paddingSM))
-            // Раньше единственным индикатором того, что синхронизация вообще
-            // произошла, была мимолётная надпись "Готово!" сразу после
-            // действия — уйдя с экрана, узнать статус было неоткуда, из-за
-            // чего было неясно, работает ли синхронизация вообще. Строка
-            // ниже видна всегда, независимо от текущего состояния формы.
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+
+            if (linksLost) {
+                Text(
+                    "Связи с другими устройствами потеряны: это устройство было отвязано или данные на сервере сброшены. " +
+                        "Оно зарегистрировано заново — свяжите устройства снова кодом ниже.",
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall
+                )
+                TextButton(onClick = { viewModel.dismissLinksLost() }) { Text("Понятно") }
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+            }
+
+            // ---- Это устройство и синхронизация ----
+            Text("Это устройство", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
             Text(
-                if (lastSyncedAtMs > 0)
-                    "Последняя синхронизация: ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(lastSyncedAtMs))}"
+                if (deviceName.isNotBlank()) deviceName else "Имя появится после первой синхронизации",
+                color = ZenithOnSurfaceVariant
+            )
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = autoSync, onCheckedChange = { viewModel.setAutoSync(it) })
+                Spacer(Modifier.width(ZenithDimens.paddingS))
+                Column {
+                    Text("Автосинхронизация через сервер", color = ZenithOnSurface)
+                    Text(
+                        "Избранное и история — раз в 30 минут и вскоре после изменений",
+                        color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Text(
+                if (lastSyncedAtMs > 0) "Последняя синхронизация: ${formatTime(lastSyncedAtMs)}"
                 else "Синхронизация ещё ни разу не выполнялась на этом устройстве",
                 color = if (lastSyncedAtMs > 0) ZenithSuccess else ZenithOnSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
             )
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            when (val ms = manualSyncState) {
-                is RedeemUiState.Loading -> Text("Синхронизация...", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                is RedeemUiState.Success -> Text("Синхронизировано только что", color = ZenithSuccess, style = MaterialTheme.typography.bodySmall)
-                is RedeemUiState.Error -> Text(ms.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                is RedeemUiState.Idle -> {}
+            when (val st = syncState) {
+                is SyncRunState.Running -> Text("Синхронизация…", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                is SyncRunState.Failed -> Text(st.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                is SyncRunState.Idle -> {}
             }
-            TextButton(onClick = { viewModel.syncNowManually() }, enabled = manualSyncState !is RedeemUiState.Loading) {
+            Button(onClick = { viewModel.syncNow() }, enabled = syncState !is SyncRunState.Running) {
                 Text("Синхронизировать сейчас")
             }
-            Spacer(Modifier.height(20.dp))
-
-            Text("На новом устройстве", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text("Введите код, показанный на уже настроенном устройстве:", color = ZenithOnSurfaceVariant)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            OutlinedTextField(
-                value = enteredCode,
-                onValueChange = {
-                    if (it.length <= 6 && it.all { c -> c.isDigit() }) {
-                        enteredCode = it
-                        if (redeemState !is RedeemUiState.Idle) viewModel.resetRedeem()
-                    }
-                },
-                label = { Text("6-значный код") },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
-            )
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            // Диагностика PROMPT_ACCOUNT_REDESIGN.md, шаг 1 (продолжение):
-            // проверка логов Render показала, что запрос /sync/pairing/redeem
-            // НИ РАЗУ не доходил до бэкенда, хотя /sync/pairing/create с
-            // другого устройства успешно отрабатывал дважды — то есть дело
-            // не в бэкенде вообще, а в том, что сетевой вызов ни разу не
-            // происходил на клиенте. Раньше кнопка была enabled только при
-            // enteredCode.length == 6 — если по любой причине (особенность
-            // ввода на пульте TV, поведение конкретной клавиатуры/IME)
-            // enteredCode не набирал ровно 6 символов, кнопка молча
-            // оставалась disabled: нажатие не производило вообще ничего —
-            // ни сети, ни состояния, ни ошибки, потому что onClick физически
-            // не вызывался. Теперь кнопка активна при непустом вводе, а
-            // проверку "ровно 6 цифр" делает redeemCode() и показывает
-            // понятную ошибку — нажатие теперь ГАРАНТИРОВАННО даёт видимую
-            // реакцию, а не тихо ничего.
-            Button(onClick = { viewModel.redeemCode(enteredCode) }, enabled = enteredCode.isNotEmpty() && redeemState !is RedeemUiState.Loading) {
-                Text("Подключить")
+            reports.firstOrNull()?.let { latest ->
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+                SyncReportCard(latest)
             }
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            // Реакция на "Подключить" теперь сразу здесь, а не в нижней
-            // секции под чужим заголовком.
-            when (val state = redeemState) {
-                is RedeemUiState.Loading -> CircularProgressIndicator()
-                is RedeemUiState.Success -> Text("Готово! Избранное и история перенесены.", color = ZenithSuccess)
-                is RedeemUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
-                is RedeemUiState.Idle -> {}
-            }
-
-            Spacer(Modifier.height(40.dp))
-            HorizontalDivider(color = Color.DarkGray)
-            Spacer(Modifier.height(40.dp))
-
-            Text("На уже настроенном устройстве", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text("Покажите код здесь и введите его на новом устройстве:", color = ZenithOnSurfaceVariant)
-            Spacer(Modifier.height(ZenithDimens.paddingM))
-
-            when (val state = pairingState) {
-                is PairingUiState.CodeShown -> {
+            if (reports.size > 1) {
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+                Text("Предыдущие синхронизации", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                reports.drop(1).take(5).forEach { r ->
                     Text(
-                        state.code,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Bold
+                        "${formatTime(r.finishedAt)} · ${triggerLabel(r.trigger)} · " +
+                            if (r.ok) "получено ${r.favorites.received + r.history.received}, отправлено ${r.favorites.sent + r.history.sent + r.favorites.deletedSent + r.history.deletedSent}"
+                            else "ошибка: ${r.error ?: "—"}",
+                        color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+            HorizontalDivider(color = Color.DarkGray)
+            Spacer(Modifier.height(24.dp))
+
+            // ---- Список устройств ----
+            Text("Связанные устройства", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            when {
+                !viewModel.isRegistered ->
+                    Text("Список появится после первой синхронизации или связывания.", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                devicesState.loading && devicesState.devices.isEmpty() -> CircularProgressIndicator()
+                else -> devicesState.devices.forEach { d ->
+                    DeviceCard(
+                        device = d,
+                        onRename = { renameTarget = d },
+                        onUnlink = { unlinkTarget = d }
                     )
                     Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text("Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}", color = ZenithOnSurfaceVariant)
+                }
+            }
+            devicesState.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            actionMessage?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { viewModel.dismissActionMessage() }) { Text("Скрыть") }
+            }
+            if (viewModel.isRegistered) {
+                TextButton(onClick = { viewModel.refreshDevices() }) { Text("Обновить список") }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = Color.DarkGray)
+            Spacer(Modifier.height(24.dp))
+
+            // ---- Добавить устройство ----
+            Text("Добавить устройство", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            Text("На этом устройстве покажите код — и введите его на другом:", color = ZenithOnSurfaceVariant)
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            when (val state = pairingState) {
+                is PairingUiState.CodeShown -> {
+                    Text(state.code, color = MaterialTheme.colorScheme.primary, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
+                    Text(
+                        "Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}",
+                        color = ZenithOnSurfaceVariant
+                    )
                 }
                 is PairingUiState.Loading -> CircularProgressIndicator()
                 is PairingUiState.Error -> {
@@ -188,6 +197,35 @@ fun SyncPairingScreen(
                     Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
                 }
                 is PairingUiState.Idle -> Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingM))
+            Text("Или введите код, показанный на другом устройстве:", color = ZenithOnSurfaceVariant)
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            OutlinedTextField(
+                value = enteredCode,
+                onValueChange = {
+                    // Только буквы и дефис, регистр не важен; 8 букв + дефис.
+                    val cleaned = it.uppercase().filter { c -> c.isLetter() || c == '-' }
+                    if (cleaned.length <= 9) {
+                        enteredCode = cleaned
+                        if (redeemState !is RedeemUiState.Idle) viewModel.resetRedeem()
+                    }
+                },
+                label = { Text("Код из 8 букв, например KFMQ-TNDT") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                singleLine = true
+            )
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            // Кнопка активна при любом непустом вводе: нажатие всегда даёт видимую реакцию (проверку делает ViewModel).
+            Button(onClick = { viewModel.redeemCode(enteredCode) }, enabled = enteredCode.isNotEmpty() && redeemState !is RedeemUiState.Loading) {
+                Text("Подключить")
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            when (val state = redeemState) {
+                is RedeemUiState.Loading -> CircularProgressIndicator()
+                is RedeemUiState.Success -> Text(state.message, color = ZenithSuccess)
+                is RedeemUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
+                is RedeemUiState.Idle -> {}
             }
 
             Spacer(Modifier.height(40.dp))
@@ -231,7 +269,7 @@ fun SyncPairingScreen(
                         }
                         Spacer(Modifier.height(ZenithDimens.paddingM))
                         Text(
-                            "На телефоне: «Синхронизация устройств» → «Сканировать QR с TV», затем введите код выше вручную.",
+                            "На телефоне: «Мои устройства» → «Сканировать QR с TV», затем введите код выше вручную.",
                             color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(Modifier.height(ZenithDimens.paddingS))
@@ -261,7 +299,127 @@ fun SyncPairingScreen(
             Spacer(Modifier.height(ZenithDimens.paddingL))
         }
     }
+
+    renameTarget?.let { target ->
+        var text by remember(target.id) { mutableStateOf(target.name) }
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("Переименовать устройство") },
+            text = { OutlinedTextField(value = text, onValueChange = { if (it.length <= 64) text = it }, singleLine = true) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.renameDevice(target.id, text); renameTarget = null }, enabled = text.isNotBlank()) { Text("Сохранить") }
+            },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Отмена") } }
+        )
+    }
+    unlinkTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { unlinkTarget = null },
+            title = { Text("Отвязать устройство?") },
+            text = {
+                Text(
+                    if (target.isCurrent) "Это устройство перестанет синхронизироваться с остальными. Данные на нём останутся."
+                    else "«${target.name}» перестанет получать ваши избранное и историю. Данные на нём останутся."
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.unlinkDevice(target.id); unlinkTarget = null }) { Text("Отвязать") } },
+            dismissButton = { TextButton(onClick = { unlinkTarget = null }) { Text("Отмена") } }
+        )
+    }
 }
+
+@Composable
+private fun DeviceCard(device: DeviceInfo, onRename: () -> Unit, onUnlink: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(ZenithDimens.paddingM)) {
+            Text(
+                device.name + if (device.isCurrent) " (это устройство)" else "",
+                color = ZenithOnSurface, fontWeight = FontWeight.Bold
+            )
+            Text(typeLabel(device.type) + " · " + presence(device), color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (device.lastSyncAt > 0) "Синхронизировалось: ${formatTime(device.lastSyncAt)}" else "Ещё не синхронизировалось",
+                color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
+            )
+            device.ackAt?.let { at ->
+                val applied = "избранное ${device.ackApplied["favorite"] ?: 0}, история ${device.ackApplied["history"] ?: 0}"
+                val ok = device.ackMatchesServer == true
+                Text(
+                    (if (ok) "✓ Подтвердило получение: " else "⚠ Получило, но данные ещё расходятся: ") + "$applied (${formatTime(at)})",
+                    color = if (ok) ZenithSuccess else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Row {
+                TextButton(onClick = onRename) { Text("Переименовать") }
+                TextButton(onClick = onUnlink) { Text(if (device.isCurrent) "Отвязать это устройство" else "Отвязать") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncReportCard(r: SyncReport) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(ZenithDimens.paddingM)) {
+            Text(
+                "Отчёт: ${formatTime(r.finishedAt)} · ${triggerLabel(r.trigger)}",
+                color = ZenithOnSurface, fontWeight = FontWeight.Bold
+            )
+            if (!r.ok) {
+                Text("Не удалось: ${r.error ?: "ошибка"}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                return@Column
+            }
+            Text(categoryLine("Избранное", r.favorites), color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(categoryLine("История", r.history), color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Сервер принял: новых ${r.serverAccepted}, обновил ${r.serverUpdated}, без изменений ${r.serverIgnored}" +
+                    if (r.serverRejected > 0) ", отклонил ${r.serverRejected}" else "",
+                color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
+            )
+            when (r.checksumMatches) {
+                true -> Text("✓ Данные на этом устройстве совпадают с серверными", color = ZenithSuccess, style = MaterialTheme.typography.bodySmall)
+                false -> Text(
+                    "⚠ Данные расходятся с серверными: другое устройство могло ещё не отправить изменения — повторите синхронизацию",
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall
+                )
+                null -> Text("Подтверждение от сервера не получено", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            r.notes.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+private fun categoryLine(title: String, c: CategoryReport): String {
+    val sent = c.sent + c.deletedSent
+    val sentPart = if (c.deletedSent > 0) "отправлено $sent (удалений ${c.deletedSent})" else "отправлено $sent"
+    val received = "получено ${c.received}" +
+        if (c.received > 0) " (новых ${c.added}, обновлено ${c.updated}, удалено ${c.deleted}, пропущено ${c.skipped})" else ""
+    return "$title: $sentPart; $received" + if (c.errors > 0) "; ошибок ${c.errors}" else ""
+}
+
+private fun triggerLabel(trigger: String) = when (trigger) {
+    "auto" -> "автоматически"
+    "pairing" -> "после связывания"
+    else -> "вручную"
+}
+
+private fun typeLabel(type: String) = when (type) {
+    "tv" -> "ТВ"
+    "phone" -> "Телефон"
+    "tablet" -> "Планшет"
+    else -> "Устройство"
+}
+
+/** «В сети» — если сервер видел устройство за последние 5 минут (оно обращается к серверу только при синхронизации). */
+private fun presence(d: DeviceInfo): String {
+    if (d.lastSeenAt <= 0) return "не было на связи"
+    return if (System.currentTimeMillis() - d.lastSeenAt < 5 * 60_000) "на связи" else "было на связи ${formatTime(d.lastSeenAt)}"
+}
+
+private fun formatTime(ms: Long): String =
+    SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(ms))
+
 
 // Тот же helper, что и в presentation/screens/qr/QrScanScreen.kt — не
 // переиспользован оттуда напрямую (тот файл — TV/tv-material3, этот экран

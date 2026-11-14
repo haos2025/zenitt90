@@ -53,7 +53,7 @@ fun PhoneLocalSyncScreen(navController: NavHostController, viewModel: LocalSyncV
         scanLauncher.launch(
             ScanOptions()
                 .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                .setPrompt("Наведите камеру на QR-код в разделе «Синхронизация устройств» на TV")
+                .setPrompt("Наведите камеру на QR-код в разделе «Мои устройства» на TV")
                 .setBeepEnabled(false)
                 .setOrientationLocked(false)
         )

@@ -15,6 +15,9 @@ import com.platinum.ott.worker.SeriesUpdateWorker
 import com.platinum.ott.worker.ChannelHealthCheckWorker
 import com.platinum.ott.worker.EpgCleanupWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.io.File
 import java.io.PrintWriter
@@ -30,6 +33,9 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
     // ниже, за счёт сгенерированного базового класса (см. официальную
     // документацию Hilt "Use Hilt with other Jetpack libraries").
     @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+    // Для автосинхронизации («Мои устройства»): подписка на изменения избранного/истории.
+    @Inject lateinit var database: com.platinum.ott.data.local.ZenithDatabase
+    @Inject lateinit var authPreferences: com.platinum.ott.core.AuthPreferences
 
     // Дефолтный автоинициализатор WorkManager отключён в AndroidManifest.xml
     // (androidx.startup.InitializationProvider, tools:node="remove" на
@@ -60,6 +66,13 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
         ChannelHealthCheckWorker.enqueue(this)
         EpgCleanupWorker.enqueue(this)
         com.platinum.ott.worker.EpgRefreshWorker.enqueue(this)
+        // Автосинхронизация через сервер (работает, только если устройство уже зарегистрировано
+        // и она не выключена — см. AutoSyncWorker). Подписку на таблицы делаем вне главного потока.
+        com.platinum.ott.sync.AutoSync.enqueuePeriodic(this)
+        com.platinum.ott.sync.AutoSync.requestSoon(this, 20)
+        CoroutineScope(Dispatchers.IO).launch {
+            com.platinum.ott.sync.AutoSync.observeChanges(this@ZenithApplication, database, authPreferences)
+        }
     }
 
     private fun createNotificationChannel() {
