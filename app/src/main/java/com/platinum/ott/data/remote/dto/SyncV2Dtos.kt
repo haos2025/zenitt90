@@ -3,7 +3,7 @@ package com.platinum.ott.data.remote.dto
 import com.google.gson.JsonObject
 
 /**
- * DTO протокола синхронизации v2 (`/v2/*` на zenith-backend, см. app/routers/sync_v2.py).
+ * DTO протокола синхронизации v2 (`/v2/...` на zenith-backend, см. app/routers/sync_v2.py).
  * Все поля имеют значения по умолчанию — Gson тогда использует безаргументный
  * конструктор и не оставляет null в не-null полях, если сервер чего-то не прислал.
  */

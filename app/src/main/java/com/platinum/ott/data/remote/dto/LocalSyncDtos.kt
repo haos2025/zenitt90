@@ -64,7 +64,10 @@ data class LocalSyncSourceDto(
     // План 07: режим разведения M3U ("auto"|"vod"|"live") и переопределения групп.
     // Nullable: старые устройства этих полей не шлют — тогда у получателя остаются прежние значения.
     val contentKind: String? = null,
-    val groupOverrides: String? = null
+    val groupOverrides: String? = null,
+    // Протокол v2: источник отправлен БЕЗ данных входа (получатель не разрешил передачу паролей).
+    // Получатель добавляет его выключенным и просит ввести логин/пароль; уже имеющиеся у него данные не затираются.
+    val needsCredentials: Boolean? = null
 )
 
 // Скрытый/показанный канал или категория (21.10.2026). kind = "channel" | "category"; key — id канала или

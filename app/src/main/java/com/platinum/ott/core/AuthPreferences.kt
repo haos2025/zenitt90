@@ -33,6 +33,9 @@ class AuthPreferences(context: Context) {
     /** Сервер не узнал токен (данные на сервере потеряны): устройство зарегистрировано заново, связи нужно восстановить. */
     var syncLinksLost: Boolean get() = prefs.getBoolean("sync_links_lost", false); set(v) = prefs.edit().putBoolean("sync_links_lost", v).apply()
 
+    /** Идентификатор установки для локальной синхронизации по Wi-Fi (не зависит от серверной регистрации). */
+    var localDeviceId: String? get() = prefs.getString("local_device_id", null); set(v) = prefs.edit().putString("local_device_id", v).apply()
+
     fun clearV2Credentials() {
         prefs.edit().remove("v2_device_id").remove("v2_token").putLong("v2_cursor", 0).putLong("v2_last_push_at", 0).apply()
     }

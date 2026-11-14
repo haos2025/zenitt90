@@ -163,7 +163,8 @@ class SessionGraph @Inject constructor(
         localSyncRepository = LocalSyncRepository(
             appContext, database.favoritesDao(), database.watchHistoryDao(), database.playlistSourceDao(),
             playlistSourceRepository, database.pluginDao(), pluginManager, pluginRepository,
-            networkPreferences, notificationPreferences, hiddenChannelsStore
+            networkPreferences, notificationPreferences, hiddenChannelsStore,
+            database.syncTombstoneDao(), authPreferences
         )
         appScope.launch { pluginManager.loadAllEnabled() }
         getPlayableUrlUseCase = GetPlayableUrlUseCase(scriptProvider, api, playlistRepository, pluginManager, getMovieByIdUseCase, database.channelDao(), database.channelStreamDao(), database.playlistSourceDao())
@@ -193,7 +194,7 @@ class SessionGraph @Inject constructor(
         // в момент реинициализации графа) не должен пережить свой
         // LocalSyncRepository — иначе порт остаётся занят "осиротевшим"
         // NanoHTTPD-инстансом.
-        if (::localSyncRepository.isInitialized) localSyncRepository.stopTvServer()
+        if (::localSyncRepository.isInitialized) localSyncRepository.stopNearby()
         initAuth()
     }
 }

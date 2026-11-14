@@ -2,9 +2,6 @@ package com.platinum.ott.presentation.screens.sync
 
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import com.platinum.ott.ui.theme.ZenithOnSurface
-import android.graphics.Bitmap
-import android.graphics.Color as AndroidColor
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,8 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -24,8 +19,6 @@ import com.platinum.ott.core.platform.isTV
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import com.platinum.ott.sync.CategoryReport
 import com.platinum.ott.sync.DeviceInfo
 import com.platinum.ott.sync.SyncReport
@@ -37,15 +30,13 @@ import com.platinum.ott.ui.theme.*
 /**
  * «Мои устройства»: один экран на TV и телефон (обычный material3, фокус пультом работает штатно).
  * Сверху — это устройство и синхронизация через сервер (отчёт, автосинхронизация), ниже — список
- * связанных устройств с подтверждением получения, добавление устройства по коду, и в конце прежняя
- * секция локальной синхронизации по Wi-Fi (она отдельный канал и пока без изменений).
+ * связанных устройств с подтверждением получения, добавление устройства по коду, и в конце «Устройства рядом»
+ * (NearbyDevicesSection): локальная синхронизация по Wi-Fi.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncPairingScreen(
     onBackPressed: () -> Unit,
-    // Только сторона телефона вызывает (кнопка «Сканировать QR с TV» в секции локальной синхронизации).
-    onOpenLocalSyncScan: () -> Unit = {},
     viewModel: SyncPairingViewModel = hiltViewModel(),
     localSyncViewModel: LocalSyncViewModel = hiltViewModel()
 ) {
@@ -232,69 +223,8 @@ fun SyncPairingScreen(
             HorizontalDivider(color = Color.DarkGray)
             Spacer(Modifier.height(40.dp))
 
-            // PROMPT_LOCAL_SYNC_V1.md — второй, независимый канал (см.
-            // обоснование в LocalSyncDtos.kt/LocalSyncRepository.kt): напрямую
-            // между устройствами по локальной сети, без бэкенда, зато
-            // переносит больше (настройки, плагины, список источников), не
-            // только избранное и историю, как секции выше.
-            Text("Локальная синхронизация (без интернета)", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text(
-                "Избранное, история, настройки, источники и плагины — напрямую между устройствами в одной Wi-Fi сети. Оба устройства должны быть физически рядом.",
-                color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(Modifier.height(ZenithDimens.paddingM))
-
-            val context = LocalContext.current
-            val isTv = remember { isTV(context) }
-            val tvState by localSyncViewModel.tvState.collectAsStateWithLifecycle()
-
-            if (isTv) {
-                when (val state = tvState) {
-                    is LocalSyncTvState.Idle -> Button(onClick = { localSyncViewModel.startTv() }) { Text("Начать") }
-                    is LocalSyncTvState.Showing -> {
-                        Text(state.code, color = MaterialTheme.colorScheme.primary, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(ZenithDimens.paddingS))
-                        Text(
-                            "Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}",
-                            color = ZenithOnSurfaceVariant
-                        )
-                        Spacer(Modifier.height(ZenithDimens.paddingM))
-                        val bitmap = remember(state.qrContent) { generateLocalSyncQrBitmap(state.qrContent, 260) }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap.asImageBitmap(), contentDescription = "QR-код",
-                                modifier = Modifier.size(260.dp).background(ZenithOnSurface).padding(ZenithDimens.paddingS)
-                            )
-                        }
-                        Spacer(Modifier.height(ZenithDimens.paddingM))
-                        Text(
-                            "На телефоне: «Мои устройства» → «Сканировать QR с TV», затем введите код выше вручную.",
-                            color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(Modifier.height(ZenithDimens.paddingS))
-                        OutlinedButton(onClick = { localSyncViewModel.stopTv() }) { Text("Отмена") }
-                    }
-                    is LocalSyncTvState.Applied -> {
-                        Text(
-                            "Готово! Перенесено: ${state.summary.favorites} избранного, ${state.summary.history} записей истории, " +
-                                "${state.summary.sources} источников, ${state.summary.plugins} плагинов.",
-                            color = ZenithSuccess
-                        )
-                        Spacer(Modifier.height(ZenithDimens.paddingS))
-                        Button(onClick = { localSyncViewModel.resetTv() }) { Text("Ок") }
-                    }
-                    is LocalSyncTvState.Error -> {
-                        Text(state.message, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(ZenithDimens.paddingS))
-                        Button(onClick = { localSyncViewModel.startTv() }) { Text("Повторить") }
-                    }
-                }
-            } else {
-                Text("Отсканируйте QR-код, показанный на TV в этом же разделе.", color = ZenithOnSurfaceVariant)
-                Spacer(Modifier.height(ZenithDimens.paddingS))
-                Button(onClick = onOpenLocalSyncScan) { Text("Сканировать QR с TV") }
-            }
+            // Второй, независимый канал: устройства рядом по Wi-Fi (без интернета и сервера).
+            NearbyDevicesSection(localSyncViewModel)
 
             Spacer(Modifier.height(ZenithDimens.paddingL))
         }
@@ -419,21 +349,3 @@ private fun presence(d: DeviceInfo): String {
 
 private fun formatTime(ms: Long): String =
     SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(ms))
-
-
-// Тот же helper, что и в presentation/screens/qr/QrScanScreen.kt — не
-// переиспользован оттуда напрямую (тот файл — TV/tv-material3, этот экран
-// сознательно на обычном material3, см. комментарий в шапке файла), но
-// реализация идентична: ZXing QRCodeWriter → Bitmap пиксель за пикселем.
-private fun generateLocalSyncQrBitmap(content: String, sizePx: Int): Bitmap? = try {
-    val bitMatrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, sizePx, sizePx)
-    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.RGB_565)
-    for (x in 0 until sizePx) {
-        for (y in 0 until sizePx) {
-            bitmap.setPixel(x, y, if (bitMatrix[x, y]) AndroidColor.BLACK else AndroidColor.WHITE)
-        }
-    }
-    bitmap
-} catch (_: Exception) {
-    null
-}

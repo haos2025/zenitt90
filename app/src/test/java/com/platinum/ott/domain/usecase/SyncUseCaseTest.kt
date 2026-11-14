@@ -1,5 +1,6 @@
 package com.platinum.ott.domain.usecase
 
+import com.platinum.ott.sync.SyncReport
 import com.platinum.ott.sync.SyncRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -21,7 +22,7 @@ class SyncUseCaseTest {
 
     @Test
     fun `syncNow delegates to repository exactly once and returns its result`() = runTest {
-        coEvery { repo.sync() } returns Result.success(Unit)
+        coEvery { repo.sync() } returns Result.success(SyncReport())
 
         val result = useCase.syncNow()
 
