@@ -156,6 +156,19 @@ class LocalSyncClient(
         SendResult(device.name, checks, report)
     }
 
+    // ---------------------------------------------------------------- ввод на другом устройстве
+
+    /** Спрашивает у связанного устройства, ждёт ли оно ввод (и какой). */
+    suspend fun inputInfo(endpoint: Endpoint, device: PairedDevice): Result<InputInfoReply> = guarded {
+        call(endpoint, LocalCrypto.unb64(device.secret), LocalProto.PATH_INPUT_INFO, gson.toJson(InputInfoReq()), InputInfoReply::class.java)
+    }
+
+    /** Отправляет текст на запрос requestId (см. inputInfo). */
+    suspend fun sendInput(endpoint: Endpoint, device: PairedDevice, requestId: String, text: String): Result<Unit> = guarded {
+        val r = call(endpoint, LocalCrypto.unb64(device.secret), LocalProto.PATH_INPUT, gson.toJson(InputReq(requestId, text)), InputReply::class.java)
+        if (!r.ok) throw LocalSyncException(r.error ?: "Устройство не приняло текст")
+    }
+
     // ---------------------------------------------------------------- внутреннее
 
     private suspend fun <T> call(endpoint: Endpoint, secret: ByteArray, path: String, plain: String, type: Class<T>): T {

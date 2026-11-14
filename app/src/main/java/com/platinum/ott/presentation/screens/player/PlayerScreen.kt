@@ -29,13 +29,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.platinum.ott.core.LiveArrowMode
-import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.platform.safeRequestFocus
 import com.platinum.ott.presentation.components.PlayerProgressStrip
 import com.platinum.ott.core.subtitles.AutoSubtitleState
-import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.presentation.screens.nearby.PhoneInputOverlay
+import com.platinum.ott.sync.local.LocalProto
 import com.platinum.ott.ui.theme.ZenithDurationMedium
 import com.platinum.ott.ui.theme.ZenithEasingStandard
 import com.platinum.ott.ui.theme.ZenithShapeMedium
@@ -162,35 +162,9 @@ fun PlayerScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionNonce by remember { mutableStateOf(0) }
 
-    // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md) —
-    // сервер живёт ровно пока открыт этот оверлей, не дольше: DisposableEffect
-    // на showCompanionQr стартует его при открытии и гарантированно
-    // останавливает при закрытии (отменой, получением URL или уходом с экрана).
-    var showCompanionQr by remember { mutableStateOf(false) }
-    var companionAddress by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(showCompanionQr) {
-        var server: CompanionHttpServer? = null
-        if (showCompanionQr) {
-            server = CompanionHttpServer(endpointPath = "/subtitle") { url ->
-                // NanoHTTPD обрабатывает запрос в своём собственном потоке —
-                // viewModel.loadExternalSubtitle() и запись в Compose-state
-                // (showCompanionQr) должны уйти на главный поток явно.
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    viewModel.loadExternalSubtitle(url)
-                    showCompanionQr = false
-                }
-            }
-            val port = server.startServer()
-            val ip = LocalNetworkUtils.getLocalIpAddress()
-            // "#subtitle" — подсказка телефону, какой экран показать после
-            // сканирования (см. PhoneQrScanScreen.kt: разбирает суффикс
-            // после "#", чтобы не заводить для этого отдельный QR-формат/JSON).
-            companionAddress = if (ip != null) "http://$ip:$port#subtitle" else null
-        } else {
-            companionAddress = null
-        }
-        onDispose { server?.stop() }
-    }
+    // «Ввод с телефона» (замена QR): связанный телефон присылает ссылку на субтитры по защищённому каналу.
+    // Само окно ожидания и приём — в PhoneInputOverlay.
+    var showPhoneInput by remember { mutableStateOf(false) }
 
     // У ExoPlayer нет готового Flow под текущую позицию — опрашиваем, пока экран Ready
     LaunchedEffect(uiState) {
@@ -212,9 +186,9 @@ fun PlayerScreen(
     // Автоскрытие (если включено в настройках). Само «показать» делает touchControls() в
     // обработчике клавиш — этот эффект ничего не показывает насильно, поэтому ручное
     // «Вверх = скрыть» не перебивается.
-    LaunchedEffect(hideDelayMs, interactionNonce, isDpadSeekActive, menuOpen, showCompanionQr, holdForPause, modalOpen, controlsVisible, uiState is PlayerUiState.Ready) {
+    LaunchedEffect(hideDelayMs, interactionNonce, isDpadSeekActive, menuOpen, showPhoneInput, holdForPause, modalOpen, controlsVisible, uiState is PlayerUiState.Ready) {
         if (!controlsVisible || hideDelayMs <= 0 || uiState !is PlayerUiState.Ready) return@LaunchedEffect
-        if (isDpadSeekActive || menuOpen || showCompanionQr || holdForPause || modalOpen) return@LaunchedEffect
+        if (isDpadSeekActive || menuOpen || showPhoneInput || holdForPause || modalOpen) return@LaunchedEffect
         delay(hideDelayMs.toLong())
         controlsVisible = false
         selectedAction = null
@@ -256,8 +230,8 @@ fun PlayerScreen(
     // Корень экрана должен держать фокус всегда, когда нет модального окна/меню/QR —
     // иначе клавиши пульта не дойдут до обработчика ниже.
     val isReady = uiState is PlayerUiState.Ready
-    LaunchedEffect(modalOpen, menuOpen, showCompanionQr, isReady) {
-        if (isReady && !modalOpen && !menuOpen && !showCompanionQr) {
+    LaunchedEffect(modalOpen, menuOpen, showPhoneInput, isReady) {
+        if (isReady && !modalOpen && !menuOpen && !showPhoneInput) {
             delay(30)
             focusRequester.safeRequestFocus()
         }
@@ -288,7 +262,7 @@ fun PlayerScreen(
         fun afterWindowClosed() { selectedAction = null; if (closeAll) controlsVisible = false else touchControls() }
         when {
             uiState !is PlayerUiState.Ready -> onBackPressed()
-            showCompanionQr -> { showCompanionQr = false; afterWindowClosed() }
+            showPhoneInput -> { showPhoneInput = false; afterWindowClosed() }
             modal != PlayerModal.NONE -> { modal = PlayerModal.NONE; afterWindowClosed() }
             menuOpen -> { viewModel.dismissPlaybackMenu(); afterWindowClosed() }
             selectedAction != null -> { selectedAction = null; touchControls() }
@@ -307,7 +281,7 @@ fun PlayerScreen(
             .onPreviewKeyEvent { event ->
                 // «Назад» в окне (меню/каналы/серии/программа/QR) закрывает его сразу, до того как
                 // Compose успеет сначала снять фокус с элемента (из-за этого было два нажатия).
-                if (event.key == Key.Back && (showCompanionQr || modal != PlayerModal.NONE || menuOpen)) {
+                if (event.key == Key.Back && (showPhoneInput || modal != PlayerModal.NONE || menuOpen)) {
                     if (event.type == KeyEventType.KeyDown) handleBack()
                     return@onPreviewKeyEvent true
                 }
@@ -320,7 +294,7 @@ fun PlayerScreen(
                 val isChannel = movieId.startsWith("ch_")
 
                 // Поверх экрана модальное окно / QR / меню — клавиши отдаём им (Назад — в BackHandler).
-                if (showCompanionQr || modal != PlayerModal.NONE) return@onKeyEvent false
+                if (showPhoneInput || modal != PlayerModal.NONE) return@onKeyEvent false
                 if (ready.showPlaybackMenu) {
                     return@onKeyEvent if (event.key == Key.Menu) { viewModel.dismissPlaybackMenu(); true } else false
                 }
@@ -535,7 +509,7 @@ fun PlayerScreen(
                         subtitlesEnabled = state.subtitlesEnabled,
                         onSelectSubtitle = { viewModel.selectSubtitleTrack(it); closeMenuAfterPick() },
                         onDisableSubtitles = { viewModel.disableSubtitles(); closeMenuAfterPick() },
-                        onRequestExternalSubtitleQr = { viewModel.dismissPlaybackMenu(); showCompanionQr = true },
+                        onRequestExternalSubtitleFromPhone = { viewModel.dismissPlaybackMenu(); showPhoneInput = true },
                         autoSubtitleState = autoSubtitleState,
                         onToggleAutoSubtitles = {
                             if (autoSubtitleState == AutoSubtitleState.Off) viewModel.enableAutoSubtitles()
@@ -547,10 +521,12 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                if (showCompanionQr) {
-                    QrScanScreen(
-                        content = companionAddress,
-                        onDismiss = { showCompanionQr = false },
+                if (showPhoneInput) {
+                    PhoneInputOverlay(
+                        mode = LocalProto.INPUT_SUBTITLE,
+                        prompt = "Введите на телефоне ссылку на файл субтитров (.srt, .vtt)",
+                        onText = { url -> viewModel.loadExternalSubtitle(url); showPhoneInput = false },
+                        onDismiss = { showPhoneInput = false },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

@@ -66,6 +66,7 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
     val incoming by vm.incoming.collectAsStateWithLifecycle()
     val send by vm.send.collectAsStateWithLifecycle()
     val received by vm.received.collectAsStateWithLifecycle()
+    val input by vm.input.collectAsStateWithLifecycle()
 
     var manualAddress by remember { mutableStateOf("") }
     var codeTarget by remember { mutableStateOf<CodeTarget?>(null) }
@@ -134,6 +135,7 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                     Button(onClick = { vm.sendTo(d, manualAddress) }, enabled = send !is SendUi.Running) { Text("Отправить сюда") }
+                    OutlinedButton(onClick = { vm.startInputTo(d, manualAddress) }) { Text("Ввести на устройстве") }
                     TextButton(onClick = { forgetTarget = d }) { Text("Забыть") }
                 }
             }
@@ -260,45 +262,9 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
         )
     }
 
-    when (val p = pair) {
-        is PairUi.None -> {}
-        is PairUi.Connecting -> AlertDialog(
-            onDismissRequest = {}, title = { Text("Связывание") },
-            text = { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp); Spacer(Modifier.width(12.dp)); Text(p.text) } },
-            confirmButton = {}
-        )
-        is PairUi.Confirm -> AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Сверьте цифры") },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text(p.sas, color = MaterialTheme.colorScheme.primary, fontSize = 44.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    if (!p.selfDecided) {
-                        Text("Те же четыре цифры должны быть на экране «${p.peerName}». Если они совпадают — подтвердите. Если нет, нажмите «Не совпадает»: возможно, в сети кто-то вмешивается.")
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Text("Ждём подтверждения на «${p.peerName}»…")
-                        }
-                    }
-                }
-            },
-            confirmButton = { if (!p.selfDecided) TextButton(onClick = { vm.confirmPairing(true) }) { Text("Совпадает") } },
-            dismissButton = { TextButton(onClick = { vm.confirmPairing(false) }) { Text(if (p.selfDecided) "Отмена" else "Не совпадает") } }
-        )
-        is PairUi.Done -> AlertDialog(
-            onDismissRequest = { vm.dismissPair() }, title = { Text("Готово") },
-            text = { Text("«${p.peerName}» связано. Теперь можно отправлять данные без кода.") },
-            confirmButton = { TextButton(onClick = { vm.dismissPair() }) { Text("Ок") } }
-        )
-        is PairUi.Failed -> AlertDialog(
-            onDismissRequest = { vm.dismissPair() }, title = { Text("Не получилось") },
-            text = { Text(p.message) },
-            confirmButton = { TextButton(onClick = { vm.dismissPair() }) { Text("Ок") } }
-        )
-    }
+    PairingDialogs(pair, vm)
+
+    InputDialogs(input, vm)
 
     incoming?.let { offer ->
         val m = offer.manifest
@@ -359,6 +325,90 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
             text = { Text("«${d.name}» исчезнет из связанных на этом устройстве. Чтобы снова обмениваться данными, свяжите их заново.") },
             confirmButton = { TextButton(onClick = { vm.forget(d); forgetTarget = null }) { Text("Забыть") } },
             dismissButton = { TextButton(onClick = { forgetTarget = null }) { Text("Отмена") } }
+        )
+    }
+}
+
+/** Окна связывания: подключение, сверка контрольной строки, итог. Общие для «Мои устройства» и экранов «Ввод с телефона». */
+@Composable
+fun PairingDialogs(pair: PairUi, vm: LocalSyncViewModel) {
+    when (val p = pair) {
+        is PairUi.None -> {}
+        is PairUi.Connecting -> AlertDialog(
+            onDismissRequest = {}, title = { Text("Связывание") },
+            text = { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp); Spacer(Modifier.width(12.dp)); Text(p.text) } },
+            confirmButton = {}
+        )
+        is PairUi.Confirm -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Сверьте цифры") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text(p.sas, color = MaterialTheme.colorScheme.primary, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(ZenithDimens.paddingS))
+                    if (!p.selfDecided) {
+                        Text("Те же четыре цифры должны быть на экране «${p.peerName}». Если они совпадают — подтвердите. Если нет, нажмите «Не совпадает»: возможно, в сети кто-то вмешивается.")
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Ждём подтверждения на «${p.peerName}»…")
+                        }
+                    }
+                }
+            },
+            confirmButton = { if (!p.selfDecided) TextButton(onClick = { vm.confirmPairing(true) }) { Text("Совпадает") } },
+            dismissButton = { TextButton(onClick = { vm.confirmPairing(false) }) { Text(if (p.selfDecided) "Отмена" else "Не совпадает") } }
+        )
+        is PairUi.Done -> AlertDialog(
+            onDismissRequest = { vm.dismissPair() }, title = { Text("Готово") },
+            text = { Text("«${p.peerName}» связано. Теперь можно отправлять данные без кода.") },
+            confirmButton = { TextButton(onClick = { vm.dismissPair() }) { Text("Ок") } }
+        )
+        is PairUi.Failed -> AlertDialog(
+            onDismissRequest = { vm.dismissPair() }, title = { Text("Не получилось") },
+            text = { Text(p.message) },
+            confirmButton = { TextButton(onClick = { vm.dismissPair() }) { Text("Ок") } }
+        )
+    }
+
+}
+
+/** Ввод текста на другом устройстве: показывает, что оно ждёт, даёт поле и отправляет. */
+@Composable
+private fun InputDialogs(input: InputUi, vm: LocalSyncViewModel) {
+    when (val i = input) {
+        is InputUi.None -> {}
+        is InputUi.Loading -> AlertDialog(
+            onDismissRequest = { vm.dismissInput() }, title = { Text("«${i.deviceName}»") },
+            text = { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp); Spacer(Modifier.width(12.dp)); Text("Узнаю, что нужно ввести…") } },
+            confirmButton = {}
+        )
+        is InputUi.Prompt -> {
+            var text by remember(i.requestId) { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { vm.dismissInput() },
+                title = { Text("«${i.device.name}»") },
+                text = {
+                    Column {
+                        Text(i.prompt)
+                        Spacer(Modifier.height(ZenithDimens.paddingS))
+                        OutlinedTextField(value = text, onValueChange = { if (it.length <= LocalProto.MAX_INPUT_CHARS) text = it }, enabled = !i.sending)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { vm.submitInput(text) }, enabled = text.isNotBlank() && !i.sending) { Text(if (i.sending) "Отправляю…" else "Отправить") } },
+                dismissButton = { TextButton(onClick = { vm.dismissInput() }) { Text("Отмена") } }
+            )
+        }
+        is InputUi.Done -> AlertDialog(
+            onDismissRequest = { vm.dismissInput() }, title = { Text("Готово") },
+            text = { Text("Текст отправлен на «${i.deviceName}».") },
+            confirmButton = { TextButton(onClick = { vm.dismissInput() }) { Text("Ок") } }
+        )
+        is InputUi.Failed -> AlertDialog(
+            onDismissRequest = { vm.dismissInput() }, title = { Text("Не получилось") },
+            text = { Text("«${i.deviceName}»: ${i.message}") },
+            confirmButton = { TextButton(onClick = { vm.dismissInput() }) { Text("Ок") } }
         )
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,7 +70,7 @@ import com.platinum.ott.ui.theme.*
 // вообще не было заметно, что такая возможность есть. Теперь "Свой файл
 // по ссылке" — равноправная строка в том же списке; печатать URL пультом
 // по-прежнему неудобно, так что клик по ней не открывает поле ввода на
-// месте (как на телефоне), а вызывает тот же QR-поток — onRequestExternalSubtitleQr.
+// месте (как на телефоне), а вызывает тот же QR-поток — onRequestExternalSubtitleFromPhone.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlaybackMenuOverlay(
@@ -87,7 +87,7 @@ fun PlaybackMenuOverlay(
     subtitlesEnabled: Boolean,
     onSelectSubtitle: (TrackOption) -> Unit,
     onDisableSubtitles: () -> Unit,
-    onRequestExternalSubtitleQr: () -> Unit,
+    onRequestExternalSubtitleFromPhone: () -> Unit,
     // PROMPT_SUBTITLES.md, подзадача 8 — ручной переключатель "Субтитры"
     // (распознавание речи), отдельная сущность от subtitlesEnabled выше
     // (тот про уже существующие встроенные/внешние дорожки).
@@ -235,10 +235,10 @@ fun PlaybackMenuOverlay(
                         item {
                             MenuRow(
                                 label = "Свой файл по ссылке",
-                                subLabel = "по QR с телефона",
+                                subLabel = "ссылкой с телефона",
                                 isSelected = false,
-                                trailingIcon = Icons.Default.QrCode
-                            ) { onRequestExternalSubtitleQr() }
+                                trailingIcon = Icons.Default.PhoneAndroid
+                            ) { onRequestExternalSubtitleFromPhone() }
                         }
                         items(subtitleTracks) { t -> MenuRow(t.label, null, subtitlesEnabled && t.isSelected) { onSelectSubtitle(t) } }
                         // Оформление «как в YouTube»: OK на строке переключает значение по кругу.

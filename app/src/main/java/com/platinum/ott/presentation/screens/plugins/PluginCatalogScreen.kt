@@ -28,11 +28,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
 import androidx.compose.material3.CircularProgressIndicator
-import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.plugin.PluginRepository
 import com.platinum.ott.data.local.entity.PluginEntity
-import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.presentation.screens.nearby.PhoneInputOverlay
+import com.platinum.ott.sync.local.LocalProto
 import com.platinum.ott.ui.theme.*
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -49,36 +49,13 @@ fun PluginCatalogScreen(
 
     LaunchedEffect(Unit) { viewModel.loadCatalog() }
 
-    // Телефон-компаньон (PROMPT_QR_PANELS.md), третье применение канала —
-    // "/plugin_url". Поле URL поднято сюда из InstallFromUrlRow (было
-    // локальным remember внутри неё) — текст со скана нужно подставить в
-    // то же поле, что и ручной ввод, кнопку "Установить по URL" всё равно
-    // нажимает пользователь сам (см. промт: установка необратимее поиска,
-    // автоматической установки по приезду текста быть не должно).
+    // «Ввод с телефона» (замена QR). Поле URL поднято сюда, чтобы текст с телефона подставлялся в то же поле,
+    // что и ручной ввод; кнопку «Установить по URL» всё равно нажимает пользователь сам (установка необратимее поиска,
+    // автоматической установки по приходу текста быть не должно).
     var installUrl by remember { mutableStateOf("") }
     var installScript by remember { mutableStateOf("") }
-    var showCompanionQr by remember { mutableStateOf(false) }
-    var companionAddress by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(showCompanionQr) {
-        var server: CompanionHttpServer? = null
-        if (showCompanionQr) {
-            server = CompanionHttpServer(endpointPath = "/plugin_url") { text ->
-                // Обработчик NanoHTTPD вызывается не в главном потоке — то
-                // же самое, что уже сделано в SearchScreen.kt/PlayerScreen.kt.
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    installUrl = text
-                    showCompanionQr = false
-                }
-            }
-            val port = server.startServer()
-            val ip = LocalNetworkUtils.getLocalIpAddress()
-            companionAddress = if (ip != null) "http://$ip:$port#plugin_url" else null
-        } else {
-            companionAddress = null
-        }
-        onDispose { server?.stop() }
-    }
-    androidx.activity.compose.BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
+    var showPhoneInput by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showPhoneInput) { showPhoneInput = false }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(ZenithDimens.paddingXL)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -105,7 +82,7 @@ fun PluginCatalogScreen(
             installState = installState,
             onInstall = viewModel::installFromUrl,
             onReset = viewModel::resetInstallState,
-            onQrClick = { showCompanionQr = true }
+            onPhoneInputClick = { showPhoneInput = true }
         )
         Spacer(Modifier.height(ZenithDimens.paddingM))
         // PROMPT_HOME_LOADING_FIX.md, п.3 — installFromScript() в
@@ -126,10 +103,12 @@ fun PluginCatalogScreen(
         }
     }
 
-    if (showCompanionQr) {
-        QrScanScreen(
-            content = companionAddress,
-            onDismiss = { showCompanionQr = false },
+    if (showPhoneInput) {
+        PhoneInputOverlay(
+            mode = LocalProto.INPUT_PLUGIN,
+            prompt = "Введите на телефоне ссылку на плагин (.js)",
+            onText = { text -> installUrl = text; showPhoneInput = false },
+            onDismiss = { showPhoneInput = false },
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -143,7 +122,7 @@ private fun InstallFromUrlRow(
     installState: PluginViewModel.InstallState,
     onInstall: (String) -> Unit,
     onReset: () -> Unit,
-    onQrClick: () -> Unit
+    onPhoneInputClick: () -> Unit
 ) {
     val installing = installState is PluginViewModel.InstallState.Installing
     Column {
@@ -162,7 +141,7 @@ private fun InstallFromUrlRow(
                 }
             )
             Spacer(Modifier.width(ZenithDimens.paddingS))
-            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), enabled = !installing, onClick = onQrClick) { Text("По QR с телефона") }
+            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), enabled = !installing, onClick = onPhoneInputClick) { Text("С телефона") }
             Spacer(Modifier.width(ZenithDimens.paddingS))
             Button(scale = ButtonDefaults.scale(focusedScale = 1f), enabled = url.isNotBlank() && !installing, onClick = { onInstall(url.trim()) }) {
                 Text(if (installing) "Установка…" else "Установить по URL")

@@ -28,11 +28,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.*
-import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.data.playlist.EntryClassifier
-import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.presentation.screens.nearby.PhoneInputOverlay
+import com.platinum.ott.sync.local.LocalProto
 import com.platinum.ott.ui.theme.*
 
 /**
@@ -43,14 +43,12 @@ import com.platinum.ott.ui.theme.*
  * ИЗ навигации, а не вместо неё), ни отдельного "успешного" редиректа на
  * home — по завершении просто возвращаемся на список источников (onDone).
  *
- * QR-подключение телефона для ввода M3U-ссылки — перенесённый без изменений
- * код из старого SetupScreen.kt (тот же endpointPath "/m3u_url"). Доступен
- * только на TV — на телефоне у пользователя уже есть клавиатура, сканировать
- * что-либо там незачем (см. также решение PROMPT_QR_PANELS.md: Xtream и
- * телефонная сторона такую кнопку никогда не получали).
+ * Ввод M3U-ссылки с телефона (замена прежнего QR): связанный телефон присылает ссылку
+ * по защищённому каналу (PhoneInputOverlay). Доступно только на TV — на телефоне у пользователя
+ * уже есть клавиатура.
  */
 private enum class SourceType { M3U, XTREAM }
-private enum class M3uMethod { URL, FILE, QR }
+private enum class M3uMethod { URL, FILE, PHONE }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -84,29 +82,8 @@ fun AddSourceScreen(
         }
     }
 
-    // Тот же паттерн, что в старом SetupScreen.kt — локальный HTTP-сервер
-    // живёт ровно пока открыт QR-оверлей, останавливается в onDispose.
-    var showCompanionQr by remember { mutableStateOf(false) }
-    var companionAddress by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(showCompanionQr) {
-        var server: CompanionHttpServer? = null
-        if (showCompanionQr) {
-            server = CompanionHttpServer(endpointPath = "/m3u_url") { text ->
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    m3uUrl = text
-                    m3uMethod = M3uMethod.URL
-                    showCompanionQr = false
-                }
-            }
-            val port = server.startServer()
-            val ip = LocalNetworkUtils.getLocalIpAddress()
-            companionAddress = if (ip != null) "http://$ip:$port#m3u_url" else null
-        } else {
-            companionAddress = null
-        }
-        onDispose { server?.stop() }
-    }
-    BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
+    var showPhoneInput by remember { mutableStateOf(false) }
+    BackHandler(enabled = showPhoneInput) { showPhoneInput = false }
 
     val result = uiState as? AddSourceUiState.Result
     if (result != null) {
@@ -132,7 +109,7 @@ fun AddSourceScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                         TabButton("Ссылка", m3uMethod == M3uMethod.URL) { m3uMethod = M3uMethod.URL }
                         TabButton("Файл", m3uMethod == M3uMethod.FILE) { m3uMethod = M3uMethod.FILE }
-                        TabButton("QR", m3uMethod == M3uMethod.QR) { m3uMethod = M3uMethod.QR }
+                        TabButton("С телефона", m3uMethod == M3uMethod.PHONE) { m3uMethod = M3uMethod.PHONE }
                     }
                     when (m3uMethod) {
                         M3uMethod.URL -> SourceTextField(m3uUrl, { m3uUrl = it }, "http://example.com/playlist.m3u")
@@ -141,8 +118,8 @@ fun AddSourceScreen(
                                 Text(fileName ?: "Выбрать файл .m3u")
                             }
                         }
-                        M3uMethod.QR -> {
-                            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showCompanionQr = true }, modifier = Modifier.fillMaxWidth()) { Text("Показать QR для телефона") }
+                        M3uMethod.PHONE -> {
+                            OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showPhoneInput = true }, modifier = Modifier.fillMaxWidth()) { Text("Ввести ссылку с телефона") }
                             if (m3uUrl.isNotBlank()) Text("Получено: $m3uUrl", color = ZenithOnSurface.copy(alpha = 0.5f))
                         }
                     }
@@ -178,7 +155,7 @@ fun AddSourceScreen(
                     onClick = {
                         when (sourceType) {
                             SourceType.M3U -> when (m3uMethod) {
-                                M3uMethod.URL, M3uMethod.QR -> viewModel.addM3uUrlWithResult(label, m3uUrl, mode)
+                                M3uMethod.URL, M3uMethod.PHONE -> viewModel.addM3uUrlWithResult(label, m3uUrl, mode)
                                 M3uMethod.FILE -> fileContent?.let { viewModel.addM3uFileWithResult(label, it, mode) }
                             }
                             SourceType.XTREAM -> viewModel.addXtreamWithResult(label, xtHost, xtUser, xtPass)
@@ -194,8 +171,14 @@ fun AddSourceScreen(
     }
     }
 
-    if (showCompanionQr) {
-        QrScanScreen(content = companionAddress, onDismiss = { showCompanionQr = false }, modifier = Modifier.fillMaxSize())
+    if (showPhoneInput) {
+        PhoneInputOverlay(
+            mode = LocalProto.INPUT_M3U,
+            prompt = "Введите на телефоне ссылку на M3U-плейлист",
+            onText = { text -> m3uUrl = text; m3uMethod = M3uMethod.URL; showPhoneInput = false },
+            onDismiss = { showPhoneInput = false },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 

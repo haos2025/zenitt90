@@ -25,9 +25,6 @@ securityCrypto = "1.1.0-alpha06"
 junit = "4.13.2"
 detekt = "1.23.7"
 ktlint = "12.1.2"
-# П3: QR
-zxingCore = "3.5.4"
-zxingEmbedded = "4.3.0"
 # ROADMAP.md п.6: телефон-компаньон — лёгкий локальный HTTP-сервер на TV
 nanohttpd = "2.3.1"
 # П4: Sync
@@ -96,8 +93,6 @@ androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref 
 androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltNavigationCompose" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 # П3
-zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
-zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingEmbedded" }
 nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
 # П4, П6, П7
 work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }

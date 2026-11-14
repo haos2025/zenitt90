@@ -32,6 +32,8 @@ object LocalProto {
     const val PATH_OFFER = "/zl/v2/offer"
     const val PATH_OFFER_STATUS = "/zl/v2/offer/status"
     const val PATH_PUSH = "/zl/v2/push"
+    const val PATH_INPUT_INFO = "/zl/v2/input/info"
+    const val PATH_INPUT = "/zl/v2/input"
     const val PATH_PREFIX = "/zl/v2/"
 
     const val CLOCK_SKEW_MS = 10 * 60 * 1000L
@@ -39,6 +41,14 @@ object LocalProto {
     const val OFFER_TTL_MS = 3 * 60 * 1000L
     const val NONCE_TTL_MS = 20 * 60 * 1000L
     const val MAX_BODY_BYTES = 24 * 1024 * 1024
+    const val INPUT_TTL_MS = 10 * 60 * 1000L
+    const val MAX_INPUT_CHARS = 4000
+
+    // Режимы «ввод с телефона» (заменяют прежние QR-каналы)
+    const val INPUT_SUBTITLE = "subtitle"
+    const val INPUT_SEARCH = "search"
+    const val INPUT_PLUGIN = "plugin"
+    const val INPUT_M3U = "m3u"
 
     const val CAT_FAVORITES = "favorites"
     const val CAT_HISTORY = "history"
@@ -94,6 +104,12 @@ data class Manifest(
         )
     }
 }
+
+/** Запрос на ввод текста с другого устройства (ссылка на субтитры, поисковый запрос и т. п.). */
+data class InputInfoReq(val v: Int = 0)
+data class InputInfoReply(val pending: Boolean = false, val requestId: String = "", val mode: String = "", val prompt: String = "")
+data class InputReq(val requestId: String = "", val text: String = "")
+data class InputReply(val ok: Boolean = false, val error: String? = null)
 
 /** Что получатель разрешил принять. passwords — ОТДЕЛЬНОЕ разрешение на логины/пароли источников. */
 data class AcceptSet(
@@ -178,6 +194,8 @@ interface ReceiverEvents {
     fun onOffer(transferId: String, device: PairedDevice, manifest: Manifest, autoAccepted: Boolean)
     fun onOfferCancelled(transferId: String)
     fun onTransferFinished(transferId: String, device: PairedDevice, report: ApplyReport?, error: String?)
+    /** Связанное устройство прислало текст по запросу beginInput(). */
+    fun onInput(requestId: String, device: PairedDevice, mode: String, text: String)
 }
 
 /** Всё то же плюс применение принятых данных к базе приложения. */

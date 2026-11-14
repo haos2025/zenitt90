@@ -159,14 +159,6 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
     
-    // QR / Camera
-    implementation(libs.zxing.core)
-    implementation(libs.zxing.android.embedded)
-    // CameraX + ML Kit Barcode убраны — 0 использований в коде, дублировали
-    // ZXing под тот же незаконченный QR-флоу (два разных сканера штрихкодов
-    // одновременно). ZXing оставлен — планируется переиспользовать под
-    // телефон-компаньон (после Hilt-рефакторинга).
-
     // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md):
     // NanoHTTPD вместо ktor-server-cio — промт прямо просил "не тащить
     // тяжёлый фреймворк ради пары эндпоинтов", NanoHTTPD — один небольшой

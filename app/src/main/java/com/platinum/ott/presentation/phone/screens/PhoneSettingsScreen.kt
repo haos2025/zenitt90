@@ -269,7 +269,6 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
             NavCard("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}") { navController.navigate("sync_pairing") }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             // Не то же, что синхронизация: этот канал — напрямую по локальной сети, без бэкенда.
-            NavCard("Телефон-компаньон", "Отсканировать QR с TV — например, чтобы отправить ссылку на субтитры") { navController.navigate("qr_scan") }
         }
         SettingsCategory.MAINTENANCE -> {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()

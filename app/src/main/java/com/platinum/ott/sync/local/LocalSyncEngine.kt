@@ -22,6 +22,9 @@ class LocalSyncEngine(
     private val sessions = HashMap<String, PairSession>()
     private val offers = HashMap<String, IncomingOffer>()
     private val seenNonces = LinkedHashMap<String, Long>()
+    private var pendingInput: PendingInput? = null
+
+    private class PendingInput(val id: String, val mode: String, val prompt: String, val createdAt: Long)
 
     private class PairSession(
         val sid: String, val peerId: String, val peerName: String, val peerType: String,
@@ -78,11 +81,26 @@ class LocalSyncEngine(
         }
     }
 
+    /**
+     * Это устройство ждёт текст с другого (экран «Ввод с телефона»). Связанное устройство увидит запрос
+     * и сможет прислать текст; результат придёт в ReceiverEvents.onInput. Возвращает номер запроса.
+     */
+    fun beginInput(mode: String, prompt: String): String {
+        val id = LocalCrypto.hex(LocalCrypto.randomBytes(8))
+        synchronized(lock) { pendingInput = PendingInput(id, mode, prompt, clock()) }
+        return id
+    }
+
+    fun cancelInput(requestId: String) {
+        synchronized(lock) { if (pendingInput?.id == requestId) pendingInput = null }
+    }
+
     /** Остановка приёма: гасит код, сессии и ожидающие предложения. */
     fun shutdown() {
         val cancelled = ArrayList<String>()
         synchronized(lock) {
             activeCode = null
+            pendingInput = null
             sessions.clear()
             offers.values.filter { it.state == "pending" }.forEach { it.state = "expired"; cancelled += it.id }
             offers.clear()
@@ -98,7 +116,8 @@ class LocalSyncEngine(
             when (path) {
                 LocalProto.PATH_PAIR_INIT -> pairInit(body)
                 LocalProto.PATH_PAIR_STATE -> pairState(body)
-                LocalProto.PATH_OFFER, LocalProto.PATH_OFFER_STATUS, LocalProto.PATH_PUSH -> authed(path, body)
+                LocalProto.PATH_OFFER, LocalProto.PATH_OFFER_STATUS, LocalProto.PATH_PUSH,
+                LocalProto.PATH_INPUT_INFO, LocalProto.PATH_INPUT -> authed(path, body)
                 else -> err(404, "not_found", "Неизвестный запрос")
             }
         } catch (e: CancellationException) {
@@ -126,6 +145,7 @@ class LocalSyncEngine(
             val it = seenNonces.entries.iterator()
             while (it.hasNext()) { if (now - it.next().value > LocalProto.NONCE_TTL_MS) it.remove() else break }
             activeCode?.let { if (!it.isAlive(now)) activeCode = null }
+            pendingInput?.let { if (now - it.createdAt > LocalProto.INPUT_TTL_MS) pendingInput = null }
         }
         dead.filter { !it.reported }.forEach { host.onPairingFinished(it.sid, false, null, "Время ожидания вышло") }
         cancelled.forEach { host.onOfferCancelled(it) }
@@ -242,6 +262,8 @@ class LocalSyncEngine(
         val answer = when (path) {
             LocalProto.PATH_OFFER -> onOffer(device, gson.fromJson(plain, OfferReq::class.java), now)
             LocalProto.PATH_OFFER_STATUS -> onOfferStatus(device, gson.fromJson(plain, OfferStatusReq::class.java), now)
+            LocalProto.PATH_INPUT_INFO -> onInputInfo()
+            LocalProto.PATH_INPUT -> onInput(device, gson.fromJson(plain, InputReq::class.java))
             else -> onPush(device, gson.fromJson(plain, PushReq::class.java), now)
         }
         return HttpReply(200, gson.toJson(Seal.response(secret, env, path, answer)))
@@ -315,5 +337,22 @@ class LocalSyncEngine(
             host.onTransferFinished(req.transferId, device, null, msg)
             gson.toJson(PushReply(false, null, msg))
         }
+    }
+
+    // ---------------------------------------------------------------- ввод с другого устройства
+
+    private fun onInputInfo(): String {
+        val p = synchronized(lock) { pendingInput }
+        return gson.toJson(if (p == null) InputInfoReply() else InputInfoReply(true, p.id, p.mode, p.prompt))
+    }
+
+    private fun onInput(device: PairedDevice, req: InputReq): String {
+        val text = req.text.trim().take(LocalProto.MAX_INPUT_CHARS)
+        if (text.isEmpty()) return gson.toJson(InputReply(false, "Пустой текст"))
+        val p = synchronized(lock) {
+            pendingInput?.takeIf { it.id == req.requestId }?.also { pendingInput = null }
+        } ?: return gson.toJson(InputReply(false, "Устройство уже не ждёт ввод. Откройте запрос на нём заново."))
+        host.onInput(p.id, device, p.mode, text)
+        return gson.toJson(InputReply(true))
     }
 }

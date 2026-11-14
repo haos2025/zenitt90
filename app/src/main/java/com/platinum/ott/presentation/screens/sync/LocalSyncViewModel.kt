@@ -54,6 +54,15 @@ sealed interface SendUi {
     data class Failed(val deviceName: String, val message: String) : SendUi
 }
 
+/** Ввод текста на другом устройстве (телефон → ТВ): окно с запросом и полем. */
+sealed interface InputUi {
+    object None : InputUi
+    data class Loading(val deviceName: String) : InputUi
+    data class Prompt(val device: PairedDevice, val requestId: String, val mode: String, val prompt: String, val sending: Boolean = false) : InputUi
+    data class Done(val deviceName: String) : InputUi
+    data class Failed(val deviceName: String, val message: String) : InputUi
+}
+
 data class ReceivedUi(val deviceName: String, val report: ApplyReport?, val error: String?)
 
 /**
@@ -82,6 +91,13 @@ class LocalSyncViewModel @Inject constructor(
 
     private val _received = MutableStateFlow<ReceivedUi?>(null)
     val received: StateFlow<ReceivedUi?> = _received
+
+    private val _input = MutableStateFlow<InputUi>(InputUi.None)
+    val input: StateFlow<InputUi> = _input
+
+    private var inputId: String? = null
+    private var inputCallback: ((String) -> Unit)? = null
+    private var inputEndpoint: Endpoint? = null
 
     private var codeJob: Job? = null
     private var pairSession: ClientPairSession? = null
@@ -116,6 +132,15 @@ class LocalSyncViewModel @Inject constructor(
             if (_incoming.value?.transferId == transferId) _incoming.value = null
         }
 
+        override fun onInput(requestId: String, device: PairedDevice, mode: String, text: String) {
+            if (requestId != inputId) return
+            inputId = null
+            val cb = inputCallback
+            inputCallback = null
+            // Обработчик вызывается в потоке HTTP-сервера, а экраны меняют Compose-состояние — уходим на главный поток.
+            if (cb != null) android.os.Handler(android.os.Looper.getMainLooper()).post { cb(text) }
+        }
+
         override fun onTransferFinished(transferId: String, device: PairedDevice, report: ApplyReport?, error: String?) {
             if (_incoming.value?.transferId == transferId) _incoming.value = null
             _received.value = ReceivedUi(device.name, report, error)
@@ -147,6 +172,58 @@ class LocalSyncViewModel @Inject constructor(
     }
 
     fun dismissNotice() { _state.value = _state.value.copy(notice = null) }
+
+    // ---------------------------------------------------------------- «ввод с телефона» (эта сторона ждёт текст)
+
+    /** Начать ждать текст с другого устройства; onText вызывается на главном потоке. Запускает приём, если он не запущен. */
+    fun beginInput(mode: String, prompt: String, onText: (String) -> Unit) {
+        startNearby()
+        val engine = repo.engine() ?: return
+        endInput()
+        inputCallback = onText
+        inputId = engine.beginInput(mode, prompt)
+    }
+
+    fun endInput() {
+        inputId?.let { repo.engine()?.cancelInput(it) }
+        inputId = null
+        inputCallback = null
+    }
+
+    // ---------------------------------------------------------------- ввод на другом устройстве (эта сторона шлёт текст)
+
+    fun startInputTo(device: PairedDevice, manualAddress: String) {
+        val peer = peers.value.firstOrNull { it.deviceId == device.id }
+        val endpoint = if (peer != null) Endpoint(peer.host, peer.port) else EndpointParser.parse(manualAddress)
+        if (endpoint == null) {
+            _input.value = InputUi.Failed(device.name, "Устройство не найдено рядом. Откройте на нём «Мои устройства» и убедитесь, что оба в одной Wi-Fi сети, или введите его адрес вручную.")
+            return
+        }
+        inputEndpoint = endpoint
+        viewModelScope.launch {
+            _input.value = InputUi.Loading(device.name)
+            repo.client().inputInfo(endpoint, device)
+                .onSuccess { info ->
+                    _input.value = if (info.pending) InputUi.Prompt(device, info.requestId, info.mode, info.prompt)
+                    else InputUi.Failed(device.name, "«${device.name}» сейчас ничего не ждёт. Откройте на нём экран, где нужно ввести текст (субтитры, поиск, плагин или источник), и нажмите «С телефона».")
+                }
+                .onFailure { _input.value = InputUi.Failed(device.name, it.message ?: "Не удалось связаться") }
+        }
+    }
+
+    fun submitInput(text: String) {
+        val p = _input.value as? InputUi.Prompt ?: return
+        val endpoint = inputEndpoint ?: return
+        if (p.sending || text.isBlank()) return
+        _input.value = p.copy(sending = true)
+        viewModelScope.launch {
+            repo.client().sendInput(endpoint, p.device, p.requestId, text)
+                .onSuccess { _input.value = InputUi.Done(p.device.name) }
+                .onFailure { _input.value = InputUi.Failed(p.device.name, it.message ?: "Не удалось отправить") }
+        }
+    }
+
+    fun dismissInput() { _input.value = InputUi.None }
 
     // ---------------------------------------------------------------- код на этом устройстве
 
@@ -289,6 +366,7 @@ class LocalSyncViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        endInput()
         repo.stopNearby()
     }
 }

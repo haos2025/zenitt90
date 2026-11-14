@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import com.platinum.ott.core.companion.CompanionHttpServer
 import com.platinum.ott.core.companion.LocalNetworkUtils
 import com.platinum.ott.core.platform.ZenithDimens
 import androidx.compose.ui.unit.sp
@@ -45,7 +44,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import com.platinum.ott.presentation.components.MovieCard
 import com.platinum.ott.presentation.components.NavSidebar
-import com.platinum.ott.presentation.screens.qr.QrScanScreen
+import com.platinum.ott.presentation.screens.nearby.PhoneInputOverlay
+import com.platinum.ott.sync.local.LocalProto
 import com.platinum.ott.ui.theme.ZenithShapeSmall
 
 // Раньше поиск существовал только снаружи приложения (системный поиск TV
@@ -67,40 +67,9 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
 
     LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery) }
 
-    // Телефон-компаньон (ROADMAP.md п.6, PROMPT_PHONE_COMPANION.md),
-    // применение 2 — та же инфраструктура, что и внешние субтитры в
-    // PlayerScreen.kt (CompanionHttpServer/QrScanScreen), эндпоинт "/search"
-    // вместо "/subtitle". Набирать поисковый запрос пультом неудобно
-    // посимвольно — телефонная клавиатура быстрее.
-    var showCompanionQr by remember { mutableStateOf(false) }
-    var companionAddress by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(showCompanionQr) {
-        var server: CompanionHttpServer? = null
-        if (showCompanionQr) {
-            server = CompanionHttpServer(endpointPath = "/search") { text ->
-                // Как и в PlayerScreen.kt: обработчик NanoHTTPD вызывается
-                // не в главном потоке — onQueryChange трогает StateFlow,
-                // технически можно и не из Main, но showCompanionQr — это
-                // Compose state, запись в него обязана уйти на главный поток.
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    viewModel.onQueryChange(text)
-                    showCompanionQr = false
-                }
-            }
-            val port = server.startServer()
-            val ip = LocalNetworkUtils.getLocalIpAddress()
-            companionAddress = if (ip != null) "http://$ip:$port#search" else null
-        } else {
-            companionAddress = null
-        }
-        onDispose { server?.stop() }
-    }
-    // Без этого системная "Назад" на пульте закрыла бы весь экран поиска
-    // прямо через открытый QR-оверлей, а не сам оверлей — тот же принцип,
-    // что и обработка Key.Back в PlayerScreen.kt, только здесь через
-    // BackHandler, а не onKeyEvent (в SearchScreen своего перехвата клавиш
-    // раньше не было вообще).
-    androidx.activity.compose.BackHandler(enabled = showCompanionQr) { showCompanionQr = false }
+    // «Ввод с телефона» (замена QR): поисковый запрос набирается на связанном телефоне — так быстрее, чем пультом.
+    var showPhoneInput by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showPhoneInput) { showPhoneInput = false }
 
     // Голосовой ввод внутри самого экрана поиска (PROMPT_VOICE_SEARCH.md) —
     // отдельный канал от системного ACTION_SEARCH/searchable.xml (см.
@@ -172,7 +141,7 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
                 // по нажатию OK на поле (раньше всплывала сама при получении фокуса).
                 SearchField(query = query, onChange = viewModel::onQueryChange, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(ZenithDimens.paddingM))
-                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showCompanionQr = true }) { Text("По QR с телефона") }
+                OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = { showPhoneInput = true }) { Text("С телефона") }
                 // Кнопки нет вообще, если на устройстве нет голосового сервиса —
                 // не показываем нерабочий элемент (см. комментарий у
                 // voiceRecognitionAvailable выше).
@@ -232,10 +201,12 @@ fun SearchScreen(navController: NavHostController, onBackPressed: () -> Unit, on
         }
     }
 
-    if (showCompanionQr) {
-        QrScanScreen(
-            content = companionAddress,
-            onDismiss = { showCompanionQr = false },
+    if (showPhoneInput) {
+        PhoneInputOverlay(
+            mode = LocalProto.INPUT_SEARCH,
+            prompt = "Введите на телефоне поисковый запрос",
+            onText = { text -> viewModel.onQueryChange(text); showPhoneInput = false },
+            onDismiss = { showPhoneInput = false },
             modifier = Modifier.fillMaxSize()
         )
     }

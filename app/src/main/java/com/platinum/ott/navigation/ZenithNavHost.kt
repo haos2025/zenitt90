@@ -28,7 +28,6 @@ import com.platinum.ott.presentation.screens.history.HistoryScreen
 import com.platinum.ott.presentation.screens.settings.SettingsScreen
 import com.platinum.ott.presentation.screens.cache.CacheManagementScreen
 import com.platinum.ott.presentation.screens.sync.SyncPairingScreen
-import com.platinum.ott.presentation.screens.qr.QrScanScreen
 import com.platinum.ott.presentation.screens.plugins.PluginCatalogScreen
 import com.platinum.ott.presentation.screens.plugins.PluginDetailScreen
 import com.platinum.ott.presentation.screens.channels.ChannelsBrowseScreen
@@ -43,7 +42,6 @@ import com.platinum.ott.presentation.phone.screens.PhoneHistoryScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSettingsScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSettingsCategoryScreen
 import com.platinum.ott.presentation.phone.screens.PhonePlayerScreen
-import com.platinum.ott.presentation.phone.screens.PhoneQrScanScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginCatalogScreen
 import com.platinum.ott.presentation.phone.screens.PhonePluginDetailScreen
 import com.platinum.ott.presentation.phone.screens.PhoneSearchScreen
@@ -252,7 +250,6 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
         }
         composable("favorites") { if (isTV) FavoritesScreen(navController = navController, onItemClick = { fav -> if (fav.contentType == "SERIES") navController.navigate("series/${fav.contentId}") else navController.navigate("detail/${fav.contentId}") }) else PhoneFavoritesScreen(navController) }
         composable("history") { if (isTV) HistoryScreen(navController = navController, onMovieClick = { navController.navigate("detail/$it") }) else PhoneHistoryScreen(navController) }
-        composable("qr_scan") { if (isTV) Box(Modifier.fillMaxSize()) else PhoneQrScanScreen(navController) }
         // Plugin screens
         composable("settings_page/{cat}") { entry -> PhoneSettingsCategoryScreen(navController, entry.arguments?.getString("cat")) }
         composable("plugins") { TvMenu(isTV, navController) { if (isTV) PluginCatalogScreen(onBackPressed = { navController.popBackStack() }, onPluginClick = { navController.navigate("plugin/$it") }) else PhonePluginCatalogScreen(navController) } }
