@@ -38,6 +38,10 @@ class ChannelsViewModel @Inject constructor(
     private val _hiddenCategories = MutableStateFlow<List<String>>(emptyList())
     val hiddenCategories: StateFlow<List<String>> = _hiddenCategories.asStateFlow()
 
+    // Свой порядок категорий (имена); пустой — по умолчанию, по числу каналов.
+    private val _categoryOrder = MutableStateFlow<List<String>>(emptyList())
+    val categoryOrder: StateFlow<List<String>> = _categoryOrder.asStateFlow()
+
     private val _epgBusy = MutableStateFlow(false)
     val epgBusy: kotlinx.coroutines.flow.StateFlow<Boolean> = _epgBusy
     // Увеличивается после обновления программы — экраны перечитывают «сейчас в эфире».
@@ -88,6 +92,7 @@ class ChannelsViewModel @Inject constructor(
                 emptyList()
             }
             _hiddenCategories.value = repository.hiddenCategoryNames()
+            _categoryOrder.value = repository.categoryOrder()
             _uiState.value = ChannelsUiState.Success(channels)
         }
     }
@@ -139,6 +144,34 @@ class ChannelsViewModel @Inject constructor(
     fun rename(channelId: String, name: String, regionHint: String?) {
         if (name.isBlank()) return
         viewModelScope.launch { repository.rename(channelId, name.trim(), regionHint?.trim()?.ifBlank { null }); load() }
+    }
+
+    /** Переставить канал внутри видимого списка [viewIds] на место [newIndex] (0 — первый). */
+    fun reorder(viewIds: List<String>, channelId: String, newIndex: Int) {
+        viewModelScope.launch { repository.reorder(viewIds, channelId, newIndex); load() }
+    }
+
+    fun setNumber(channelId: String, number: Int) {
+        viewModelScope.launch { repository.setNumber(channelId, number); load() }
+    }
+
+    /** Перенести канал в другую категорию; null — «Без категории». */
+    fun moveToCategory(channelId: String, category: String?) {
+        viewModelScope.launch { repository.moveToCategory(channelId, category); load() }
+    }
+
+    fun renameCategory(oldName: String, newName: String) {
+        viewModelScope.launch { repository.renameCategory(oldName, newName); load() }
+    }
+
+    /** Сдвинуть категорию в списке [displayed] (в том порядке, как она показана): на шаг, в начало, в конец. */
+    fun moveCategory(displayed: List<String>, name: String, to: Int) {
+        val from = displayed.indexOf(name)
+        if (from < 0) return
+        val list = displayed.toMutableList()
+        list.add(to.coerceIn(0, list.lastIndex), list.removeAt(from))
+        repository.setCategoryOrder(list)
+        _categoryOrder.value = list
     }
 
     fun delete(channelId: String) {

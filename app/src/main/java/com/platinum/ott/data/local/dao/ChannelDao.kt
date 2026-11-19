@@ -38,6 +38,13 @@ interface ChannelDao {
     @Query("DELETE FROM channels WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    // Ручные правки пользователя (редактор канала/категории). Int-возврат — тот же обход KSP2, что и ниже.
+    @Query("UPDATE channels SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun setSortOrder(id: String, sortOrder: Int): Int
+
+    @Query("UPDATE channels SET category = :category WHERE id IN (:ids)")
+    suspend fun setCategory(ids: List<String>, category: String?): Int
+
     // Каналы-сироты (потоков больше нет ни в одном источнике). Подписки на каналы убраны (20.10.2026) —
     // колонка isSubscribed осталась в схеме, но у всех каналов = 1, поэтому чистим любых сирот.
     // Int-возврат — обход бага KSP2 с неявным Unit.

@@ -25,7 +25,7 @@ enum class SettingsCategory(val id: String, val title: String, val subtitle: Str
     NETWORK("network", "Сеть и данные", "Таймаут, мобильные данные, кэш", Icons.Outlined.Wifi),
     NOTIFICATIONS("notifications", "Уведомления", "Новые серии", Icons.Outlined.Notifications),
     SOURCES("sources", "Источники", "Плейлисты, плагины, телепрограмма", Icons.Outlined.Source),
-    DEVICES("devices", "Устройства", "Синхронизация, телефон-компаньон", Icons.Outlined.Devices),
+    DEVICES("devices", "Устройства", "Мои устройства, синхронизация", Icons.Outlined.Devices),
     MAINTENANCE("maintenance", "Обслуживание", "Парсеры, о приложении", Icons.Outlined.Build);
 
     companion object {

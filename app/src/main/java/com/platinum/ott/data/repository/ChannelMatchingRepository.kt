@@ -47,7 +47,9 @@ data class RawChannelCandidate(
  */
 class ChannelMatchingRepository(
     private val channelDao: ChannelDao,
-    private val channelStreamDao: ChannelStreamDao
+    private val channelStreamDao: ChannelStreamDao,
+    // Каналы с ручной сменой категории/номера обновление источника не перезаписывает (см. ChannelUserEditsStore).
+    private val userEdits: ChannelUserEditsStore? = null
 ) {
     /** Все каналы (для сопоставления EPG по названию). */
     suspend fun allChannels(): List<com.platinum.ott.data.local.entity.ChannelEntity> = channelDao.getAll()
@@ -171,14 +173,16 @@ class ChannelMatchingRepository(
             channelDao.upsert(
                 existing.copy(
                     logo = candidate.logo ?: existing.logo,
-                    category = candidate.category ?: existing.category,
+                    category = if (userEdits?.isCategoryLocked(channelId) == true) existing.category
+                        else candidate.category ?: existing.category,
                     // Обновляем, только если источник явно прислал номер И
                     // он отличается — источник авторитетен для ЯВНОГО
                     // номера (провайдер мог перенумеровать канал), но
                     // молчание источника (candidate.channelNumber == null)
                     // никогда не должно откатывать уже присвоенный
                     // авто-номер обратно в неопределённость.
-                    sortOrder = candidate.channelNumber ?: existing.sortOrder
+                    sortOrder = if (userEdits?.isOrderLocked(channelId) == true) existing.sortOrder
+                        else candidate.channelNumber ?: existing.sortOrder
                 )
             )
         }

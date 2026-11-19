@@ -51,7 +51,9 @@ data class ChannelUiItem(
 class ChannelRepository(
     private val channelDao: ChannelDao,
     private val channelStreamDao: ChannelStreamDao,
-    private val hiddenStore: HiddenChannelsStore
+    private val hiddenStore: HiddenChannelsStore,
+    // Ручные правки (категория, номер, порядок категорий) — не затираются обновлением источника.
+    private val userEdits: ChannelUserEditsStore? = null
 ) {
     // Все каналы, которые не скрыты (ни сами, ни категорией). Подписок на каналы нет, поэтому в базе
     // isSubscribed у всех = 1 — «видимость» целиком определяется HiddenChannelsStore.
@@ -163,7 +165,87 @@ class ChannelRepository(
     suspend fun delete(channelId: String) = withContext(Dispatchers.IO) {
         channelStreamDao.deleteByChannelId(channelId)
         channelDao.deleteById(channelId)
+        userEdits?.forget(channelId)
     }
+
+    // ---------- Ручное перемещение и категории (редактор канала) ----------
+
+    /**
+     * Переставляет канал внутри списка [viewIds] (в том порядке, в каком его видит пользователь) на место [newIndex].
+     * Номера не выдумываются заново: берутся номера самих этих каналов (по возрастанию) и раздаются в новом порядке,
+     * поэтому каналы вне списка и их номера не затрагиваются. Если у каналов повторяются номера — слоты
+     * делаются строго возрастающими, иначе порядок внутри одинаковых номеров нельзя было бы задать.
+     */
+    suspend fun reorder(viewIds: List<String>, channelId: String, newIndex: Int) = withContext(Dispatchers.IO) {
+        val byId = channelDao.getAll().associateBy { it.id }
+        val present = viewIds.filter { it in byId }
+        val from = present.indexOf(channelId)
+        if (from < 0) return@withContext
+        val to = newIndex.coerceIn(0, present.lastIndex)
+        if (from == to) return@withContext
+        val slots = present.map { byId.getValue(it).sortOrder }.sorted().toMutableList()
+        for (i in 1 until slots.size) if (slots[i] <= slots[i - 1]) slots[i] = slots[i - 1] + 1
+        val newOrder = present.toMutableList().also { it.add(to, it.removeAt(from)) }
+        val changed = ArrayList<String>()
+        newOrder.forEachIndexed { i, id ->
+            if (byId.getValue(id).sortOrder != slots[i]) {
+                channelDao.setSortOrder(id, slots[i])
+                changed.add(id)
+            }
+        }
+        userEdits?.lockOrder(changed)
+    }
+
+    /** Задать номер канала. Если номер занят другим каналом — они меняются номерами. */
+    suspend fun setNumber(channelId: String, number: Int) = withContext(Dispatchers.IO) {
+        if (number < 1) return@withContext
+        val all = channelDao.getAll()
+        val me = all.firstOrNull { it.id == channelId } ?: return@withContext
+        if (me.sortOrder == number) return@withContext
+        val other = all.firstOrNull { it.id != channelId && it.sortOrder == number }
+        channelDao.setSortOrder(channelId, number)
+        val locked = arrayListOf(channelId)
+        if (other != null) {
+            channelDao.setSortOrder(other.id, me.sortOrder)
+            locked.add(other.id)
+        }
+        userEdits?.lockOrder(locked)
+    }
+
+    /** Перенести канал в другую категорию (null — «Без категории»). Обновление источника это не отменит. */
+    suspend fun moveToCategory(channelId: String, category: String?) = withContext(Dispatchers.IO) {
+        channelDao.setCategory(listOf(channelId), normalizeCategory(category))
+        userEdits?.lockCategory(listOf(channelId))
+    }
+
+    /**
+     * Переименовать категорию у всех её каналов. Если новое имя уже есть — категории сольются. Скрытость и место
+     * в своём порядке категорий переезжают на новое имя.
+     */
+    suspend fun renameCategory(oldName: String, newName: String) = withContext(Dispatchers.IO) {
+        val target = newName.trim()
+        if (target.isEmpty() || target == oldName) return@withContext
+        val ids = channelDao.getAll()
+            .filter { (it.category?.trim()?.ifBlank { null } ?: HiddenChannelsStore.NO_CATEGORY) == oldName }
+            .map { it.id }
+        ids.chunked(500).forEach { channelDao.setCategory(it, normalizeCategory(target)) }
+        userEdits?.lockCategory(ids)
+        userEdits?.renameInCategoryOrder(oldName, target)
+        val oldKey = if (oldName == HiddenChannelsStore.NO_CATEGORY) null else oldName
+        val newKey = if (target == HiddenChannelsStore.NO_CATEGORY) null else target
+        if (hiddenStore.isCategoryHidden(oldKey)) {
+            hiddenStore.setCategoryHidden(newKey, true)
+            hiddenStore.setCategoryHidden(oldKey, false)
+        }
+    }
+
+    private fun normalizeCategory(name: String?): String? =
+        name?.trim()?.ifBlank { null }?.takeIf { it != HiddenChannelsStore.NO_CATEGORY }
+
+    /** Свой порядок категорий (имена); пустой — порядок по умолчанию (по числу каналов). */
+    fun categoryOrder(): List<String> = userEdits?.categoryOrder().orEmpty()
+
+    fun setCategoryOrder(order: List<String>) { userEdits?.setCategoryOrder(order) }
 
     /**
      * Слияние вручную подтверждённое пользователем (см. UI слияния) — не

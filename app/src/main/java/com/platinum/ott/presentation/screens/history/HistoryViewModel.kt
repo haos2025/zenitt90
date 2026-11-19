@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.data.local.entity.WatchHistoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -20,6 +22,26 @@ class HistoryViewModel @Inject constructor(
     // именно последней просмотренной серии — DetailViewModel сам сделает
     // редирект на series/{id} через уже существующий механизм.
     val history = sessionGraph.watchHistoryUseCase.getRecentDeduped()
+
+    // Те же записи, но с типом (фильм/сериал/канал) и готовой подписью: для сериалов — сезон, серия, сколько осталось
+    // серий и времени. Серии сериала берутся одним запросом по seriesId; если их в базе нет — обычная подпись.
+    val items: Flow<List<HistoryItem>> = history.map { entries -> entries.map { toItem(it) } }
+
+    private suspend fun toItem(entry: WatchHistoryEntity): HistoryItem {
+        val kind = historyKindOf(entry)
+        val seriesId = entry.seriesId
+        val subtitle = if (kind == HistoryKind.SERIES && seriesId != null) {
+            val episodes = try {
+                sessionGraph.playlistRepository.getEpisodesForSeries(seriesId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+            historySubtitle(entry, seriesProgressOf(episodes, entry.contentId))
+        } else historySubtitle(entry)
+        return HistoryItem(entry, kind, subtitle)
+    }
 
     // WatchHistoryUseCase.delete()/clearAll() существовали с самого начала,
     // но ни один экран их не вызывал (см. PROMPT_HISTORY_UPGRADE.md, п.1) —

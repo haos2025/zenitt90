@@ -121,16 +121,16 @@ private enum class SidebarItem(
 private val CollapsedWidth = 88.dp
 private val ExpandedWidth = 300.dp
 
-/** Пункты, которые можно переставлять и скрывать (всё, кроме «Настроек»), в порядке пользователя. */
+/** Все пункты панели (в том числе «Настройки») в порядке пользователя; новые пункты встают в конец. */
 private fun orderedItems(layout: SidebarLayout): List<SidebarItem> {
-    val movable = SidebarItem.values().filter { it.group != SidebarGroup.BOTTOM }
+    val movable = SidebarItem.values().toList()
     val byRoute = movable.associateBy { it.route }
     val saved = layout.order.mapNotNull { byRoute[it] }.distinct()
     return saved + movable.filter { it !in saved }
 }
 
-/** «Главная» скрыть нельзя — иначе не останется явной точки возврата. */
-private fun SidebarItem.canHide() = this != SidebarItem.HOME
+/** «Главную» и «Настройки» скрыть нельзя — иначе не останется явной точки возврата и входа в настройки. */
+private fun SidebarItem.canHide() = this != SidebarItem.HOME && this != SidebarItem.SETTINGS
 
 @OptIn(ExperimentalTvMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
@@ -150,7 +150,7 @@ fun NavSidebar(
     val context = LocalContext.current
     remember { SidebarLayoutStore.ensureLoaded(context); true }
     val layout by SidebarLayoutStore.layout.collectAsState()
-    val visibleItems = orderedItems(layout).filter { it == SidebarItem.HOME || it.route !in layout.hidden }
+    val visibleItems = orderedItems(layout).filter { !it.canHide() || it.route !in layout.hidden }
     var editing by remember { mutableStateOf(false) }
 
     var expanded by remember { mutableStateOf(false) }
@@ -273,8 +273,7 @@ fun NavSidebar(
                 )
             }
 
-            // Пункты в прокручиваемой области (на 720p колонка не помещается по высоте),
-            // «Настройки» закреплены под ней и видны всегда.
+            // Все пункты, включая «Настройки», — в одной прокручиваемой области (на 720p колонка не помещается по высоте).
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)) {
                 var lastGroup: SidebarGroup? = null
                 visibleItems.forEach { item ->
@@ -322,30 +321,6 @@ fun NavSidebar(
                 }
             }
 
-            Text(
-                "Удерживайте OK — настроить меню",
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp).graphicsLayer { alpha = labelAlpha.value * 0.6f },
-                fontSize = 11.sp,
-                color = ZenithOnSurfaceVariant,
-                maxLines = 1,
-                softWrap = false,
-            )
-
-            // Настройки — отдельно внизу.
-            Box(Modifier.padding(top = 6.dp, start = 6.dp, end = 6.dp)) {
-                SidebarEntry(
-                    item = SidebarItem.SETTINGS,
-                    selected = SidebarItem.SETTINGS == activeItem,
-                    labelAlpha = labelAlpha,
-                    requester = requesters.getValue(SidebarItem.SETTINGS),
-                    onLongClick = { editing = true },
-                    onClick = {
-                        if (SidebarItem.SETTINGS == activeItem) {
-                            expanded = false; snapCollapse = true; moveToContent++
-                        } else navController.navigateToTab(SidebarItem.SETTINGS.route)
-                    }
-                )
-            }
         }
     }
     if (editing) SidebarEditorDialog(onDismiss = { editing = false })
@@ -458,7 +433,7 @@ private fun SidebarEditorDialog(onDismiss: () -> Unit) {
             Text("Меню", style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Переставляйте разделы стрелками и скрывайте ненужные. «Главная» и «Настройки» всегда на месте.",
+                "Переставляйте разделы стрелками и скрывайте ненужные. «Главную» и «Настройки» скрыть нельзя.",
                 style = MaterialTheme.typography.bodySmall,
                 color = ZenithOnSurfaceVariant
             )

@@ -61,6 +61,8 @@ class SessionGraph @Inject constructor(
     lateinit var channelMatchingRepository: ChannelMatchingRepository; private set
     // Скрытые каналы и категории (заменили подписки на каналы) — см. HiddenChannelsStore.
     lateinit var hiddenChannelsStore: HiddenChannelsStore; private set
+    // Ручные правки каналов (категория, номер, порядок категорий), которые обновление источника не затирает.
+    lateinit var channelUserEditsStore: ChannelUserEditsStore; private set
     // Читающая/управляющая сторона того же слоя (список каналов для UI,
     // подписка/переименование/слияние) — см. заголовок ChannelRepository.kt.
     lateinit var channelRepository: ChannelRepository; private set
@@ -126,9 +128,10 @@ class SessionGraph @Inject constructor(
         val timeoutSeconds = networkPreferences.getTimeoutSeconds().toLong()
         val okHttpClient = RetrofitFactory.createOkHttpClient(authPreferences, timeoutSeconds = timeoutSeconds)
         val api = RetrofitFactory.createApi(okHttpClient)
-        channelMatchingRepository = ChannelMatchingRepository(database.channelDao(), database.channelStreamDao())
+        channelUserEditsStore = ChannelUserEditsStore(appContext)
+        channelMatchingRepository = ChannelMatchingRepository(database.channelDao(), database.channelStreamDao(), channelUserEditsStore)
         hiddenChannelsStore = HiddenChannelsStore(appContext)
-        channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao(), hiddenChannelsStore)
+        channelRepository = ChannelRepository(database.channelDao(), database.channelStreamDao(), hiddenChannelsStore, channelUserEditsStore)
         channelHealthChecker = ChannelHealthChecker(database.channelDao(), database.channelStreamDao(), hiddenChannelsStore)
         epgProgramRepository = EpgProgramRepository(database.epgProgramDao())
         playlistSourceRepository = PlaylistSourceRepository(appContext, authPreferences, database.playlistSourceDao(), database.playlistMovieDao(), okHttpClient, channelMatchingRepository, epgProgramRepository)

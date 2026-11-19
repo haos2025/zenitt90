@@ -109,8 +109,7 @@ class PlaylistRepository(
         // ли сейчас его источник — не так важно для этого метода; дедуп по
         // названию+год тут неприменим (это эпизоды одного сериала, не
         // разные фильмы).
-        movieDao.getAll()
-            .filter { it.seriesId == seriesId }
+        movieDao.getBySeriesId(seriesId)
             .sortedWith(compareBy({ it.seasonNumber ?: 0 }, { it.episodeNumber ?: 0 }))
             .map { it.toMovie() }
     }

@@ -56,11 +56,26 @@ fun <T> CardCollection(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalGap: Dp = ZenithDimens.paddingSM,
     verticalGap: Dp = ZenithDimens.paddingM,
+    // Если задано, «Список» тоже лежит в адаптивной сетке (GridCells.Adaptive): строки не уже этой ширины,
+    // на широком экране встают в несколько колонок. null — одна колонка, как раньше.
+    listMinWidth: Dp? = null,
     listItem: @Composable (item: T, index: Int) -> Unit,
     cardItem: @Composable (item: T, index: Int, wide: Boolean) -> Unit
 ) {
     val appearance = LocalAppearance.current
     val style = appearance.styleOf(section, isTv)
+    if (style == CardStyle.LIST && listMinWidth != null) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(listMinWidth * appearance.sizeMultiplier),
+            modifier = modifier,
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+            verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+        ) {
+            gridItemsIndexed(items, key = { _, item -> key(item) }) { index, item -> listItem(item, index) }
+        }
+        return
+    }
     if (style == CardStyle.LIST) {
         LazyColumn(modifier, contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
             itemsIndexed(items, key = { _, item -> key(item) }) { index, item -> listItem(item, index) }
@@ -102,6 +117,8 @@ fun PosterListRow(
     modifier: Modifier = Modifier,
     progress: Float? = null,
     thumbWidth: Dp = 64.dp,
+    // Внутренний отступ карточки строки (по умолчанию ZenithDimens.paddingSM = 12 dp).
+    contentPadding: Dp = ZenithDimens.paddingSM,
     trailing: @Composable () -> Unit = {}
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -121,7 +138,7 @@ fun PosterListRow(
             colors = CardDefaults.cardColors(containerColor = if (focused) ZenithSurfaceVariant else ZenithSurfaceVariant.copy(alpha = 0.5f)),
             border = if (focused) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null
         ) {
-            Row(Modifier.padding(ZenithDimens.paddingSM), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(contentPadding), verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
                     model = request,
                     contentDescription = title,
@@ -133,7 +150,8 @@ fun PosterListRow(
                 Spacer(Modifier.width(ZenithDimens.paddingSM))
                 Column(Modifier.weight(1f)) {
                     Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (!subtitle.isNullOrBlank()) Text(subtitle, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    // Подпись может быть в две строки («Сезон 2 · серия 5 из 10 …» / «Дальше ещё 5 серий»).
+                    if (!subtitle.isNullOrBlank()) Text(subtitle, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (progress != null && progress > 0f) {
                         LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS))
                     }

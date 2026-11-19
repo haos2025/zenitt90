@@ -11,6 +11,9 @@ interface PlaylistMovieDao {
     suspend fun getAll(): List<PlaylistMovieEntity>
     @Query("SELECT * FROM playlist_movies WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): PlaylistMovieEntity?
+    // Серии одного сериала одним запросом (раньше брали всю таблицу и фильтровали в памяти).
+    @Query("SELECT * FROM playlist_movies WHERE seriesId = :seriesId")
+    suspend fun getBySeriesId(seriesId: String): List<PlaylistMovieEntity>
     @Query("SELECT MAX(cachedAt) FROM playlist_movies")
     suspend fun getLatestCacheTime(): Long?
     @Query("DELETE FROM playlist_movies")
