@@ -128,6 +128,14 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
                 }
                 CardDivider()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Следующая серия сама", color = ZenithOnSurface)
+                        Text("После окончания серии — отсчёт 5 секунд и запуск следующей", color = ZenithOnSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = overlay.autoPlayNext, onCheckedChange = { viewModel.setAutoPlayNext(it) })
+                }
+                CardDivider()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Полоска прогресса", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                     Switch(checked = overlay.showProgressStrip, onCheckedChange = { viewModel.setShowProgressStrip(it) })
                 }

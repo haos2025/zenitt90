@@ -30,7 +30,7 @@ import com.platinum.ott.ui.theme.*
 /**
  * «Мои устройства»: один экран на TV и телефон (обычный material3, фокус пультом работает штатно).
  * Сверху — это устройство и синхронизация через сервер (отчёт, автосинхронизация), ниже — список
- * связанных устройств с подтверждением получения, добавление устройства по коду, и в конце «Устройства рядом»
+ * связанных устройств с подтверждением получения, связывание устройств одним кодом (сервер и Wi-Fi), и в конце «Устройства рядом»
  * (NearbyDevicesSection): локальная синхронизация по Wi-Fi.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +38,8 @@ import com.platinum.ott.ui.theme.*
 fun SyncPairingScreen(
     onBackPressed: () -> Unit,
     viewModel: SyncPairingViewModel = hiltViewModel(),
-    localSyncViewModel: LocalSyncViewModel = hiltViewModel()
+    localSyncViewModel: LocalSyncViewModel = hiltViewModel(),
+    pairingHub: PairingHubViewModel = hiltViewModel()
 ) {
     val devicesState by viewModel.devices.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
@@ -167,57 +168,8 @@ fun SyncPairingScreen(
             HorizontalDivider(color = Color.DarkGray)
             Spacer(Modifier.height(24.dp))
 
-            // ---- Добавить устройство ----
-            Text("Добавить устройство", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            Text("На этом устройстве покажите код — и введите его на другом:", color = ZenithOnSurfaceVariant)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            when (val state = pairingState) {
-                is PairingUiState.CodeShown -> {
-                    Text(state.code, color = MaterialTheme.colorScheme.primary, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Text(
-                        "Истекает через ${state.secondsLeft / 60}:${(state.secondsLeft % 60).toString().padStart(2, '0')}",
-                        color = ZenithOnSurfaceVariant
-                    )
-                }
-                is PairingUiState.Loading -> CircularProgressIndicator()
-                is PairingUiState.Error -> {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
-                }
-                is PairingUiState.Idle -> Button(onClick = { viewModel.createCode() }) { Text("Показать код") }
-            }
-            Spacer(Modifier.height(ZenithDimens.paddingM))
-            Text("Или введите код, показанный на другом устройстве:", color = ZenithOnSurfaceVariant)
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            OutlinedTextField(
-                value = enteredCode,
-                onValueChange = {
-                    // Только буквы и дефис, регистр не важен; 8 букв + дефис.
-                    val cleaned = it.uppercase().filter { c -> c.isLetter() || c == '-' }
-                    if (cleaned.length <= 9) {
-                        enteredCode = cleaned
-                        if (redeemState !is RedeemUiState.Idle) viewModel.resetRedeem()
-                    }
-                },
-                label = { Text("Код из 8 букв, например KFMQ-TNDT") },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                singleLine = true
-            )
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            // Кнопка активна при любом непустом вводе: нажатие всегда даёт видимую реакцию (проверку делает ViewModel).
-            Button(onClick = { viewModel.redeemCode(enteredCode) }, enabled = enteredCode.isNotEmpty() && redeemState !is RedeemUiState.Loading) {
-                Text("Подключить")
-            }
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            when (val state = redeemState) {
-                is RedeemUiState.Loading -> CircularProgressIndicator()
-                is RedeemUiState.Success -> Text(state.message, color = ZenithSuccess)
-                is RedeemUiState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
-                is RedeemUiState.Idle -> {}
-            }
+            // ---- Связать устройство: один код и один ввод для обоих способов (сервер и Wi-Fi) ----
+            PairingHubSection(pairingHub, localSyncViewModel, onLinked = { viewModel.refreshDevices() })
 
             Spacer(Modifier.height(40.dp))
             HorizontalDivider(color = Color.DarkGray)

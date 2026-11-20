@@ -151,7 +151,7 @@ fun PosterListRow(
                 Column(Modifier.weight(1f)) {
                     Text(title, color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     // Подпись может быть в две строки («Сезон 2 · серия 5 из 10 …» / «Дальше ещё 5 серий»).
-                    if (!subtitle.isNullOrBlank()) Text(subtitle, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (!subtitle.isNullOrBlank()) Text(subtitle, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     if (progress != null && progress > 0f) {
                         LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingXS))
                     }

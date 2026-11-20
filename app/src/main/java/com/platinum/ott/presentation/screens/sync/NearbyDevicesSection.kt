@@ -52,7 +52,6 @@ import java.util.Date
 import java.util.Locale
 
 /** Куда вводим код: найденное устройство или адрес, набранный вручную. */
-private data class CodeTarget(val peer: NearbyPeer?, val address: String?)
 
 /**
  * «Устройства рядом»: связывание по Wi-Fi (код из 8 букв + сверка контрольной строки) и передача данных
@@ -68,8 +67,8 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
     val received by vm.received.collectAsStateWithLifecycle()
     val input by vm.input.collectAsStateWithLifecycle()
 
-    var manualAddress by remember { mutableStateOf("") }
-    var codeTarget by remember { mutableStateOf<CodeTarget?>(null) }
+    // Адрес вручную вводится в блоке «Связать устройство → Дополнительно» и общий для связывания, отправки и ввода.
+    val manualAddress by vm.manualAddress.collectAsStateWithLifecycle()
     var forgetTarget by remember { mutableStateOf<PairedDevice?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -110,7 +109,7 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
     Text("Связанные устройства", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(ZenithDimens.paddingS))
     if (state.paired.isEmpty()) {
-        Text("Пока нет. Свяжите устройство кодом ниже.", color = ZenithOnSurfaceVariant)
+        Text("Пока нет. Свяжите устройство кодом в блоке «Связать устройство» выше.", color = ZenithOnSurfaceVariant)
     }
     for (d in state.paired) {
         val nearby = peers.any { it.deviceId == d.id }
@@ -192,75 +191,18 @@ fun NearbyDevicesSection(vm: LocalSyncViewModel) {
                 Text(p.name, color = ZenithOnSurface)
                 Text(typeName(p.type), color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            Button(onClick = { codeTarget = CodeTarget(p, null) }) { Text("Связать") }
         }
     }
     Spacer(Modifier.height(ZenithDimens.paddingM))
 
-    // ---- код на этом устройстве
-    Text("Связать с другим устройством", color = ZenithOnSurface, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(ZenithDimens.paddingS))
-    val code = state.code
-    if (code != null) {
-        Text(code, color = MaterialTheme.colorScheme.primary, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+    if (unpaired.isNotEmpty()) {
         Text(
-            "Введите этот код на другом устройстве. Истекает через ${state.codeSecondsLeft / 60}:${(state.codeSecondsLeft % 60).toString().padStart(2, '0')}",
+            "Чтобы связать найденное устройство, введите его код в блоке «Связать устройство» выше.",
             color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
         )
-        TextButton(onClick = { vm.hideCode() }) { Text("Скрыть код") }
-    } else {
-        Button(onClick = { vm.showCode() }, enabled = state.running) { Text("Показать код") }
-        Text(
-            "Код одноразовый: 8 букв, действует 5 минут.",
-            color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
-        )
-    }
-    Spacer(Modifier.height(ZenithDimens.paddingM))
-    Text("Устройство не находится? Введите его адрес вручную:", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    OutlinedTextField(
-        value = manualAddress, onValueChange = { if (it.length <= 60) manualAddress = it },
-        label = { Text("Адрес, например 192.168.1.5") }, singleLine = true
-    )
-    Spacer(Modifier.height(ZenithDimens.paddingS))
-    OutlinedButton(onClick = { codeTarget = CodeTarget(null, manualAddress) }, enabled = manualAddress.isNotBlank()) {
-        Text("Связать по адресу")
     }
 
     // ---------------------------------------------------------------- диалоги
-
-    codeTarget?.let { target ->
-        var text by remember(target) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { codeTarget = null },
-            title = { Text("Код с другого устройства") },
-            text = {
-                Column {
-                    Text("Введите код, показанный на «${target.peer?.name ?: target.address}» (8 букв).")
-                    Spacer(Modifier.height(ZenithDimens.paddingS))
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = {
-                            val cleaned = it.uppercase().filter { c -> c.isLetter() || c == '-' }
-                            if (cleaned.length <= 9) text = cleaned
-                        },
-                        label = { Text("Например KFMQ-TNDT") },
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = text.isNotBlank(),
-                    onClick = {
-                        if (target.peer != null) vm.pairWithPeer(target.peer, text) else vm.pairManual(target.address.orEmpty(), text)
-                        codeTarget = null
-                    }
-                ) { Text("Связать") }
-            },
-            dismissButton = { TextButton(onClick = { codeTarget = null }) { Text("Отмена") } }
-        )
-    }
 
     PairingDialogs(pair, vm)
 

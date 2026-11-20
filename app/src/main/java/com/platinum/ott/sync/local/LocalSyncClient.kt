@@ -48,6 +48,12 @@ class LocalSyncClient(
 
     // ---------------------------------------------------------------- связывание
 
+    /** Показывает ли устройство по адресу сейчас код связывания (запрос без секретов, попытки не расходует). */
+    suspend fun probeCode(endpoint: Endpoint): Result<Boolean> = guarded {
+        val resp = transport.post(endpoint, LocalProto.PATH_PAIR_PROBE, "{}")
+        if (resp.status != 200) false else gson.fromJson(resp.body, ProbeReply::class.java)?.code == true
+    }
+
     /** Шаг 1: ввод кода. После успеха нужно показать sas и спросить пользователя. */
     suspend fun pairInit(endpoint: Endpoint, codeInput: String): Result<ClientPairSession> = guarded {
         val code = CodeAlphabet.normalize(codeInput)
@@ -207,3 +213,5 @@ class LocalSyncClient(
         Result.failure(LocalSyncException(e.message ?: e.javaClass.simpleName))
     }
 }
+
+private class ProbeReply(val v: Int = 0, val code: Boolean = false)

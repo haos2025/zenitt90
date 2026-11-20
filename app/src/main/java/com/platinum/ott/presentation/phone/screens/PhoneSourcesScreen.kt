@@ -4,6 +4,7 @@ import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -173,12 +174,22 @@ private fun PhoneSourceCard(
 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.label, style = MaterialTheme.typography.titleMedium)
+                    // Название обрезается многоточием, а бейдж типа не сжимается: раньше при длинном названии и
+                    // четырёх элементах справа (переключатель и три иконки) бейдж «M3U» превращался в столбик букв.
+                    Text(
+                        item.label, style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                     Text(
                         if (item.type == "m3u") "M3U" else "Xtream",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, softWrap = false,
+                        modifier = Modifier
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
                 Text(
@@ -198,13 +209,17 @@ private fun PhoneSourceCard(
             } else {
                 IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Обновить") }
             }
-            if (item.isFileSource) {
-                IconButton(onClick = onReimportFile) { Icon(Icons.Default.UploadFile, "Переимпортировать файл") }
-            }
 
             Box {
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Действия") }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (item.isFileSource) {
+                        DropdownMenuItem(
+                            text = { Text("Переимпортировать файл") },
+                            onClick = { showMenu = false; onReimportFile() },
+                            leadingIcon = { Icon(Icons.Default.UploadFile, null) }
+                        )
+                    }
                     DropdownMenuItem(text = { Text("Изменить название") }, onClick = { showMenu = false; onRename() })
                     DropdownMenuItem(text = { Text("Приоритет вверх") }, onClick = { showMenu = false; onMoveUp() }, enabled = !item.isFirst)
                     DropdownMenuItem(text = { Text("Приоритет вниз") }, onClick = { showMenu = false; onMoveDown() }, enabled = !item.isLast)

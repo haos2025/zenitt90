@@ -139,6 +139,7 @@ class SettingsViewModel @Inject constructor(
     fun setShowBuffered(enabled: Boolean) { interfacePreferences.showBuffered = enabled; refreshOverlay() }
     fun setLiveArrowMode(mode: com.platinum.ott.core.LiveArrowMode) { interfacePreferences.liveArrowMode = mode; refreshOverlay() }
     fun setBackClosesAll(enabled: Boolean) { interfacePreferences.backClosesAll = enabled; refreshOverlay() }
+    fun setAutoPlayNext(enabled: Boolean) { interfacePreferences.autoPlayNextEpisode = enabled; refreshOverlay() }
     private fun refreshOverlay() { _playerOverlay.value = interfacePreferences.playerOverlaySettings() }
 
     // PROMPT_SETTINGS_UPGRADE.md п.5 — секции "Источники"/"Синхронизация"

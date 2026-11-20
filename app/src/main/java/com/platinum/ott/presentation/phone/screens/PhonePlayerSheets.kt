@@ -5,6 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.FilterChip
+import com.platinum.ott.data.repository.ChannelCategoryFilter
+import com.platinum.ott.data.repository.ChannelNameMatcher
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -38,6 +44,10 @@ import com.platinum.ott.ui.theme.ZenithShapeSmall
 fun PhoneChannelsSheet(
     channels: List<ChannelUiItem>?,
     currentId: String,
+    activeCategory: String = ChannelCategoryFilter.ALL,
+    favorites: Set<String> = emptySet(),
+    categoryOrder: List<String> = emptyList(),
+    onCategory: (String) -> Unit = {},
     nowPlaying: suspend (String) -> Pair<String, Float>? = { null },
     onPick: (ChannelUiItem) -> Unit,
     onDismiss: () -> Unit
@@ -50,6 +60,18 @@ fun PhoneChannelsSheet(
                 return@Column
             }
             var query by remember { mutableStateOf("") }
+            // Категории: те же, что на экране «Каналы». Выбор чипа сразу становится категорией переключения (CH+/CH−).
+            val categories = remember(channels, categoryOrder) { ChannelCategoryFilter.categoriesOf(channels, categoryOrder) }
+            var viewCategory by remember { mutableStateOf(ChannelCategoryFilter.sheetStartCategory(activeCategory, channels, currentId, favorites)) }
+            val shown = ChannelCategoryFilter.resolve(viewCategory, categories)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS), modifier = Modifier.fillMaxWidth()) {
+                item("all") { FilterChip(selected = shown == ChannelCategoryFilter.ALL, onClick = { viewCategory = ChannelCategoryFilter.ALL; onCategory(ChannelCategoryFilter.ALL) }, label = { Text("Все", maxLines = 1) }) }
+                item("fav") { FilterChip(selected = shown == ChannelCategoryFilter.FAV, onClick = { viewCategory = ChannelCategoryFilter.FAV; onCategory(ChannelCategoryFilter.FAV) }, label = { Text("★ Избранные", maxLines = 1) }) }
+                items(categories, key = { "c_" + it.name }) { c ->
+                    FilterChip(selected = shown == c.name, onClick = { viewCategory = c.name; onCategory(c.name) }, label = { Text(c.name, maxLines = 1) })
+                }
+            }
+            Spacer(Modifier.height(ZenithDimens.paddingS))
             BasicTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -64,11 +86,20 @@ fun PhoneChannelsSheet(
                 }
             )
             Spacer(Modifier.height(ZenithDimens.paddingS))
-            val list = remember(channels, query) {
-                channels.sortedBy { it.channelNumber }.filter { query.isBlank() || it.canonicalName.contains(query, ignoreCase = true) }
+            // Поиск понимает кириллицу и латиницу («sts» находит «СТС») и работает внутри выбранной категории.
+            val list = remember(channels, query, shown, favorites) {
+                val inCategory = channels.filter { ChannelCategoryFilter.matches(shown, favorites, it) }
+                inCategory.sortedBy { it.channelNumber }.filter { ChannelNameMatcher.matchesQuery(it.canonicalName, query) }
             }
-            val startIndex = remember(list) { list.indexOfFirst { it.id == currentId }.coerceAtLeast(0) }
-            val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
+            if (list.isEmpty()) {
+                Text(
+                    if (shown == ChannelCategoryFilter.FAV && query.isBlank()) "Избранных каналов пока нет" else "Ничего не найдено",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(vertical = ZenithDimens.paddingL)
+                )
+            }
+            // Список открывается на текущем канале; при смене категории — снова на нём (или сначала, если его там нет).
+            val listState = remember(shown) { LazyListState(firstVisibleItemIndex = list.indexOfFirst { it.id == currentId }.coerceAtLeast(0)) }
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp), contentPadding = PaddingValues(bottom = ZenithDimens.paddingL)) {
                 itemsIndexed(list, key = { i, c -> "${i}_${c.id}" }) { _, ch ->
                     val current = ch.id == currentId

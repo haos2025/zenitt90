@@ -29,6 +29,8 @@ object LocalProto {
     const val SERVICE_TYPE = "_zenith._tcp."
     const val PATH_PAIR_INIT = "/zl/v2/pair/init"
     const val PATH_PAIR_STATE = "/zl/v2/pair/state"
+    /** Без секретов: показывает ли устройство сейчас код связывания. Попытки ввода кода не расходует. */
+    const val PATH_PAIR_PROBE = "/zl/v2/pair/probe"
     const val PATH_OFFER = "/zl/v2/offer"
     const val PATH_OFFER_STATUS = "/zl/v2/offer/status"
     const val PATH_PUSH = "/zl/v2/push"

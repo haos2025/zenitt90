@@ -43,9 +43,12 @@ class LocalSyncEngine(
 
     // ---------------------------------------------------------------- управление из интерфейса
 
-    /** Показать новый код связывания (прежний гаснет). */
-    fun showCode(): ActiveCode {
-        val code = ActiveCode(CodeAlphabet.generate(), clock() + ActiveCode.TTL_MS)
+    /**
+     * Показать новый код связывания (прежний гаснет). [external] — код, уже выданный сервером: тогда один и тот же
+     * код работает и через сервер, и по Wi-Fi. Не годится по формату — генерируем свой.
+     */
+    fun showCode(external: String? = null): ActiveCode {
+        val code = ActiveCode(external?.let { CodeAlphabet.normalize(it) } ?: CodeAlphabet.generate(), clock() + ActiveCode.TTL_MS)
         synchronized(lock) { activeCode = code }
         return code
     }
@@ -116,6 +119,7 @@ class LocalSyncEngine(
             when (path) {
                 LocalProto.PATH_PAIR_INIT -> pairInit(body)
                 LocalProto.PATH_PAIR_STATE -> pairState(body)
+                LocalProto.PATH_PAIR_PROBE -> probe()
                 LocalProto.PATH_OFFER, LocalProto.PATH_OFFER_STATUS, LocalProto.PATH_PUSH,
                 LocalProto.PATH_INPUT_INFO, LocalProto.PATH_INPUT -> authed(path, body)
                 else -> err(404, "not_found", "Неизвестный запрос")
@@ -152,6 +156,15 @@ class LocalSyncEngine(
     }
 
     // ---------------------------------------------------------------- связывание
+
+    /**
+     * «Показан ли код?» Вводящее устройство спрашивает это у каждого найденного рядом, чтобы пробовать код только на
+     * тех, кто его показывает: чужие устройства не получают неверных попыток и не гасят свой код. Секретов в ответе нет.
+     */
+    private fun probe(): HttpReply {
+        val shown = synchronized(lock) { activeCode?.isAlive(clock()) == true }
+        return HttpReply(200, gson.toJson(mapOf("v" to LocalProto.VERSION, "code" to shown)))
+    }
 
     private fun pairInit(body: String): HttpReply {
         val req = gson.fromJson(body, PairInit::class.java) ?: return err(400, "bad_json", "Пустой запрос")

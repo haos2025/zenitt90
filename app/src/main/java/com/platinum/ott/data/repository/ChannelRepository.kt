@@ -118,22 +118,16 @@ class ChannelRepository(
     // getSubscribedByNumber() выше — переиспользует toUiItems(), не строит
     // ChannelUiItem вручную.
     //
-    // filter — ограничение переключения выбранной категорией (см. PlayerViewModel.zap()). Применяется,
-    // только если текущий канал сам проходит фильтр: канал, открытый из истории или по ссылке и не
-    // входящий в выбранную категорию, листается по всем видимым, а не «застревает».
+    // filter — ограничение переключения выбранной категорией (см. PlayerViewModel.zap()). Если текущего канала
+    // нет в категории (открыт из истории, из шторки другой категории или номером), переключение идёт к ближайшему
+    // по номеру каналу этой категории, а не по всем каналам. Логика — в ChannelCategoryFilter.adjacent().
     suspend fun getAdjacentSubscribed(
         currentChannelId: String,
         forward: Boolean,
         filter: (ChannelUiItem) -> Boolean = { true }
     ): ChannelUiItem? = withContext(Dispatchers.IO) {
         val all = toUiItems(visibleEntities()).sortedBy { it.channelNumber }
-        val current = all.firstOrNull { it.id == currentChannelId }
-        val sorted = if (current != null && filter(current)) all.filter(filter) else all
-        if (sorted.isEmpty()) return@withContext null
-        val currentIndex = sorted.indexOfFirst { it.id == currentChannelId }
-        if (currentIndex == -1) return@withContext sorted.firstOrNull()
-        val nextIndex = if (forward) (currentIndex + 1) % sorted.size else (currentIndex - 1 + sorted.size) % sorted.size
-        sorted[nextIndex]
+        ChannelCategoryFilter.adjacent(all, currentChannelId, forward, filter)
     }
 
     suspend fun getById(channelId: String): ChannelUiItem? = withContext(Dispatchers.IO) {

@@ -16,7 +16,9 @@ data class PlayerOverlaySettings(
     /** Как стрелки пульта ведут себя в прямом эфире (только ТВ). */
     val liveArrowMode: LiveArrowMode = LiveArrowMode.CLASSIC,
     /** true — «Назад» в окне оверлея закрывает окно И оверлей одним нажатием; false — по шагам. */
-    val backClosesAll: Boolean = true
+    val backClosesAll: Boolean = true,
+    /** После окончания серии сама запускать следующую (с обратным отсчётом и кнопкой «Отмена»). */
+    val autoPlayNext: Boolean = true
 )
 
 /**

@@ -1,5 +1,6 @@
 package com.platinum.ott.presentation.screens.player
 
+import com.platinum.ott.data.repository.ChannelCategoryFilter
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -80,8 +81,13 @@ data class ZapBannerInfo(
     val channelNumber: Int,
     val currentProgramTitle: String?,
     val currentProgramProgress: Float?,
-    val nextProgramTitle: String?
+    val nextProgramTitle: String?,
+    // «Новости · 3 из 12» — категория переключения и положение канала в ней (null — категория «Все» или канала в ней нет).
+    val categoryLabel: String? = null
 )
+
+/** Плашка «Следующая серия через N с» после окончания серии. */
+data class AutoNextInfo(val episodeId: String, val title: String, val secondsLeft: Int)
 
 sealed interface PlayerUiState {
     object Loading : PlayerUiState
@@ -291,10 +297,55 @@ class PlayerViewModel @Inject constructor(
         // РЕДИЗАЙН (заппинг) — сколько показывать мини-EPG баннер после
         // переключения канала, если не пришло новое переключение раньше.
         const val ZAP_BANNER_DURATION_MS = 4000L
+        // Автозапуск следующей серии: сколько секунд показывать отсчёт.
+        const val AUTO_NEXT_SECONDS = 5
+    }
+
+    // ---- Автовоспроизведение следующей серии ----
+    private val _autoNext = MutableStateFlow<AutoNextInfo?>(null)
+    val autoNext: StateFlow<AutoNextInfo?> = _autoNext
+    private var autoNextJob: Job? = null
+
+    /** Вызывается, когда серия доиграла до конца: если следующая есть и настройка включена — отсчёт и запуск. */
+    private fun startAutoNext() {
+        if (!interfacePreferences.autoPlayNextEpisode) return
+        if (currentMovieId.startsWith("ch_")) return
+        val ready = _uiState.value as? PlayerUiState.Ready ?: return
+        val nextId = ready.nextEpisodeId ?: return
+        autoNextJob?.cancel()
+        autoNextJob = viewModelScope.launch {
+            var left = AUTO_NEXT_SECONDS
+            while (left > 0) {
+                _autoNext.value = AutoNextInfo(nextId, ready.nextEpisodeTitle ?: "Следующая серия", left)
+                delay(1000)
+                left--
+            }
+            _autoNext.value = null
+            loadMovie(nextId)
+        }
+    }
+
+    /** «Отмена» на плашке (и любой ручной переход) — остаёмся на концовке текущей серии. */
+    fun cancelAutoNext() {
+        autoNextJob?.cancel()
+        autoNextJob = null
+        _autoNext.value = null
+    }
+
+    /** «Смотреть сразу» на плашке. */
+    fun playNextNow() {
+        val id = _autoNext.value?.episodeId
+        cancelAutoNext()
+        if (id != null) loadMovie(id) else playNextEpisode()
     }
 
     init {
         exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // Конец серии — запускаем отсчёт; любое другое состояние (перемотали назад, начали заново) его отменяет.
+                if (playbackState == Player.STATE_ENDED) startAutoNext() else cancelAutoNext()
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
                 // Сохраняем сразу на паузу/остановку — это ловит выход
@@ -543,6 +594,8 @@ class PlayerViewModel @Inject constructor(
             if (request == null) _uiState.value = PlayerUiState.Error("Нет ссылки для воспроизведения") else loadDirect(request)
             return
         }
+        // Любой переход (ручной, из списка серий, автозапуск) гасит отсчёт автозапуска.
+        autoNextJob?.cancel(); autoNextJob = null; _autoNext.value = null
         currentMovieId = movieId
         historyAutosaveJob?.cancel()
         // Новый фильм — попытки восстановления с предыдущего не должны
@@ -735,23 +788,42 @@ class PlayerViewModel @Inject constructor(
     fun zapToNextChannel() = zap(forward = true)
     fun zapToPreviousChannel() = zap(forward = false)
 
-    // Переключение стрелками/CH+/CH− идёт только внутри категории, выбранной на экране «Каналы»
-    // (там же она и запоминается: «Все каналы», «★ Избранные» или группа). Номером канала (zapToChannelNumber)
+    // Переключение стрелками/CH+/CH− идёт только внутри «категории переключения»: «Все каналы», «★ Избранные» или
+    // группа. Она общая с экраном «Каналы» (хранится в тех же настройках, что и последняя выбранная там категория):
+    // выбрали в шторке плеера — экран «Каналы» откроется в ней, и наоборот. Номером канала (zapToChannelNumber)
     // по-прежнему можно перейти на любой.
-    private fun selectedCategoryFilter(): (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean {
+    private fun channelPrefs(): android.content.SharedPreferences {
         val app = getApplication<Application>()
-        val prefsName = if (com.platinum.ott.core.platform.isTV(app)) "tv_channels" else "phone_channels"
-        val prefs = app.getSharedPreferences(prefsName, android.content.Context.MODE_PRIVATE)
-        val raw = prefs.getString("last_category", "__all__") ?: "__all__"
-        val favs = prefs.getStringSet("favorite_ids", emptySet()).orEmpty().toSet()
-        val filter: (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean = { ch ->
-            when (raw) {
-                "__all__" -> true
-                "__fav__" -> ch.id in favs
-                else -> (ch.category?.trim()?.ifBlank { null } ?: "Без категории") == raw
-            }
-        }
-        return filter
+        val name = if (com.platinum.ott.core.platform.isTV(app)) ChannelCategoryFilter.PREFS_TV else ChannelCategoryFilter.PREFS_PHONE
+        return app.getSharedPreferences(name, android.content.Context.MODE_PRIVATE)
+    }
+
+    private val _zapCategory = MutableStateFlow(channelPrefs().getString(ChannelCategoryFilter.KEY_CATEGORY, ChannelCategoryFilter.ALL) ?: ChannelCategoryFilter.ALL)
+    val zapCategory: StateFlow<String> = _zapCategory
+
+    fun setZapCategory(raw: String) {
+        if (_zapCategory.value == raw) return
+        _zapCategory.value = raw
+        channelPrefs().edit().putString(ChannelCategoryFilter.KEY_CATEGORY, raw).apply()
+    }
+
+    /** Избранные каналы (локально на устройстве) — читаем каждый раз: пользователь мог снять звезду. */
+    fun favoriteChannelIds(): Set<String> =
+        channelPrefs().getStringSet(ChannelCategoryFilter.KEY_FAVS, emptySet()).orEmpty().toSet()
+
+    /** Порядок категорий, заданный пользователем вручную (для чипов в шторке). */
+    fun channelCategoryOrder(): List<String> = channelRepository.categoryOrder()
+
+    private fun selectedCategoryFilter(): (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean =
+        ChannelCategoryFilter.predicate(_zapCategory.value, favoriteChannelIds())
+
+    /** Подпись для баннера: «Новости · 3 из 12». Для «Все каналы» подпись не нужна. */
+    private suspend fun zapCategoryLabel(channelId: String): String? {
+        val raw = _zapCategory.value
+        if (raw == ChannelCategoryFilter.ALL) return null
+        val all = channelRepository.getSubscribed().sortedBy { it.channelNumber }
+        val (pos, total) = ChannelCategoryFilter.positionIn(all, channelId, selectedCategoryFilter()) ?: return null
+        return "${ChannelCategoryFilter.label(raw)} · $pos из $total"
     }
 
     private fun zap(forward: Boolean) {
@@ -844,7 +916,8 @@ class PlayerViewModel @Inject constructor(
                 channelNumber = channel.channelNumber,
                 currentProgramTitle = current?.title,
                 currentProgramProgress = progress,
-                nextProgramTitle = next?.title
+                nextProgramTitle = next?.title,
+                categoryLabel = runCatching { zapCategoryLabel(channel.id) }.getOrNull()
             )
             delay(ZAP_BANNER_DURATION_MS)
             _zapBanner.value = null

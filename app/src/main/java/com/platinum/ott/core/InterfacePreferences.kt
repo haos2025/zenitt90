@@ -94,8 +94,13 @@ class InterfacePreferences(context: Context) {
         get() = prefs.getBoolean("player_back_closes_all", true)
         set(value) = prefs.edit().putBoolean("player_back_closes_all", value).apply()
 
+    /** Автовоспроизведение следующей серии по окончании текущей. */
+    var autoPlayNextEpisode: Boolean
+        get() = prefs.getBoolean("player_auto_play_next", true)
+        set(value) = prefs.edit().putBoolean("player_auto_play_next", value).apply()
+
     fun playerOverlaySettings() = PlayerOverlaySettings(
         controlsHideDelayMs, showProgressStrip, progressStripDp, keepControlsWhenPaused, showBuffered,
-        liveArrowMode, backClosesAll
+        liveArrowMode, backClosesAll, autoPlayNextEpisode
     )
 }

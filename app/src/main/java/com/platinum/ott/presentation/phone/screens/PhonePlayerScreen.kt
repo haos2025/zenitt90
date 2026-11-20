@@ -119,6 +119,10 @@ fun PhonePlayerScreen(
     val holdForPause = overlaySettings.keepControlsWhenPaused && !isPlaying
     // Баннер переключения канала (как на TV): номер, имя, программа сейчас.
     val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
+    // Категория переключения каналов (общая с экраном «Каналы»): выбирается чипами в списке каналов.
+    val zapCategory by viewModel.zapCategory.collectAsStateWithLifecycle()
+    // Плашка «Следующая серия через N с» после конца серии.
+    val autoNext by viewModel.autoNext.collectAsStateWithLifecycle()
     val isLive = movieId.startsWith("ch_")
     // Списки поверх плеера: каналы (эфир) / серии (сериал).
     var showList by remember { mutableStateOf(false) }
@@ -382,6 +386,10 @@ fun PhonePlayerScreen(
                 if (showList) {
                     if (isLive) PhoneChannelsSheet(
                         channels = channelsList, currentId = viewModel.currentId,
+                        activeCategory = zapCategory,
+                        favorites = remember { viewModel.favoriteChannelIds() },
+                        categoryOrder = remember { viewModel.channelCategoryOrder() },
+                        onCategory = { viewModel.setZapCategory(it); lastInteraction = System.currentTimeMillis() },
                         nowPlaying = { id -> viewModel.nowPlaying(id) },
                         onPick = { c -> showList = false; viewModel.switchToChannel(c) },
                         onDismiss = { showList = false }
@@ -390,6 +398,25 @@ fun PhonePlayerScreen(
                         onPick = { m -> showList = false; viewModel.playEpisode(m.id) },
                         onDismiss = { showList = false }
                     )
+                }
+                autoNext?.let { info ->
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = ZenithDimens.paddingXL, start = ZenithDimens.paddingM, end = ZenithDimens.paddingM)
+                            .fillMaxWidth()
+                            .clip(ZenithShapeMedium)
+                            .background(com.platinum.ott.ui.theme.ZenithSurface.copy(alpha = 0.95f))
+                            .padding(ZenithDimens.paddingM)
+                    ) {
+                        Text("Следующая серия через ${info.secondsLeft} с", color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium)
+                        Text(info.title, color = ZenithOnSurface.copy(alpha = 0.75f), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(ZenithDimens.paddingS))
+                        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+                            androidx.compose.material3.Button(onClick = { viewModel.playNextNow() }) { Text("Смотреть сразу") }
+                            androidx.compose.material3.OutlinedButton(onClick = { viewModel.cancelAutoNext() }) { Text("Отмена") }
+                        }
+                    }
                 }
                 zapBannerInfo?.let { info ->
                     Column(
@@ -401,6 +428,9 @@ fun PhonePlayerScreen(
                             .padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingS)
                     ) {
                         Text("${info.channelNumber} · ${info.channelName}", color = ZenithOnSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        info.categoryLabel?.let {
+                            Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
                         info.currentProgramTitle?.let {
                             Text(it, color = ZenithOnSurface.copy(alpha = 0.75f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         }

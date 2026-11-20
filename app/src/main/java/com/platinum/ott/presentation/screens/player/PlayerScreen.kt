@@ -129,6 +129,8 @@ fun PlayerScreen(
     // этот — результат уже СОСТОЯВШЕГОСЯ переключения (стрелками или по
     // номеру), с названием канала и текущей программой из EPG.
     val zapBannerInfo by viewModel.zapBanner.collectAsStateWithLifecycle()
+    // Плашка «Следующая серия через N с» (после конца серии): OK — смотреть сразу, Назад — отмена.
+    val autoNext by viewModel.autoNext.collectAsStateWithLifecycle()
     val audioIssue by viewModel.audioIssue.collectAsStateWithLifecycle()
 
     // Растущий прогресс-бар (PlayerController.ProgressBar, isSeekActive) —
@@ -261,6 +263,7 @@ fun PlayerScreen(
         val closeAll = overlaySettings.backClosesAll
         fun afterWindowClosed() { selectedAction = null; if (closeAll) controlsVisible = false else touchControls() }
         when {
+            autoNext != null -> viewModel.cancelAutoNext()
             uiState !is PlayerUiState.Ready -> onBackPressed()
             showPhoneInput -> { showPhoneInput = false; afterWindowClosed() }
             modal != PlayerModal.NONE -> { modal = PlayerModal.NONE; afterWindowClosed() }
@@ -279,6 +282,14 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // Пока идёт отсчёт автозапуска: OK — следующая серия сразу, Назад — отмена (остаёмся на этой серии).
+                if (autoNext != null) {
+                    if (event.key == Key.Back) { if (event.type == KeyEventType.KeyDown) viewModel.cancelAutoNext(); return@onPreviewKeyEvent true }
+                    if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                        if (event.type == KeyEventType.KeyDown) viewModel.playNextNow()
+                        return@onPreviewKeyEvent true
+                    }
+                }
                 // «Назад» в окне (меню/каналы/серии/программа/QR) закрывает его сразу, до того как
                 // Compose успеет сначала снять фокус с элемента (из-за этого было два нажатия).
                 if (event.key == Key.Back && (showPhoneInput || modal != PlayerModal.NONE || menuOpen)) {
@@ -595,6 +606,27 @@ fun PlayerScreen(
                     .padding(horizontal = ZenithDimens.paddingL, vertical = ZenithDimens.paddingSM)
             ) {
                 Text(text = "Канал: $zapBuffer", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+            }
+        }
+        autoNext?.let { info ->
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(ZenithDimens.paddingL)
+                    .width(420.dp)
+                    .clip(ZenithShapeMedium)
+                    .background(ZenithSurface.copy(alpha = 0.95f))
+                    .padding(ZenithDimens.paddingM)
+            ) {
+                Text("Следующая серия через ${info.secondsLeft} с", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+                Text(info.title, style = MaterialTheme.typography.bodyMedium, color = ZenithOnSurface.copy(alpha = 0.75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+                LinearProgressIndicator(
+                    progress = { 1f - (info.secondsLeft - 1) / 5f },
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+                Text("OK — смотреть сразу · Назад — отмена", style = MaterialTheme.typography.bodySmall, color = ZenithOnSurface.copy(alpha = 0.6f))
             }
         }
         // РЕДИЗАЙН (заппинг) — сам баннер переключения, с логотипом/номером,

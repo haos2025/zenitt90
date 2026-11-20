@@ -214,6 +214,10 @@ private fun CategoryPage(
                     viewModel.setKeepControlsWhenPaused(!overlay.keepControlsWhenPaused)
                 }
                 SettingsDivider()
+                CycleSetting("Следующая серия сама", if (overlay.autoPlayNext) "Вкл" else "Выкл") {
+                    viewModel.setAutoPlayNext(!overlay.autoPlayNext)
+                }
+                SettingsDivider()
                 CycleSetting("Полоска прогресса", if (overlay.showProgressStrip) "Вкл" else "Выкл") {
                     viewModel.setShowProgressStrip(!overlay.showProgressStrip)
                 }

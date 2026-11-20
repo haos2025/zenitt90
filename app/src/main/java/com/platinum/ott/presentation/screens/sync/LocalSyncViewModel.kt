@@ -1,5 +1,7 @@
 package com.platinum.ott.presentation.screens.sync
 
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.platinum.ott.core.SessionGraph
@@ -94,6 +96,11 @@ class LocalSyncViewModel @Inject constructor(
 
     private val _input = MutableStateFlow<InputUi>(InputUi.None)
     val input: StateFlow<InputUi> = _input
+
+    /** Адрес для ручного ввода (если устройство не находится само): общий для связывания, отправки и «ввода на устройстве». */
+    private val _manualAddress = MutableStateFlow("")
+    val manualAddress: StateFlow<String> = _manualAddress
+    fun setManualAddress(value: String) { if (value.length <= 60) _manualAddress.value = value }
 
     private var inputId: String? = null
     private var inputCallback: ((String) -> Unit)? = null
@@ -227,12 +234,16 @@ class LocalSyncViewModel @Inject constructor(
 
     // ---------------------------------------------------------------- код на этом устройстве
 
-    fun showCode() {
+    /**
+     * Показать код для связывания по Wi-Fi. [external] — код, выданный сервером (один код на оба способа).
+     * Возвращает показанный код (8 букв без дефиса) или null, если приём не запущен.
+     */
+    fun showCode(external: String? = null): String? {
         val engine = repo.engine() ?: run {
             _state.value = _state.value.copy(notice = "Приём не запущен. Проверьте подключение к Wi-Fi.")
-            return
+            return null
         }
-        val code = engine.showCode()
+        val code = engine.showCode(external)
         codeJob?.cancel()
         codeJob = viewModelScope.launch {
             while (engine.currentCode() === code) {
@@ -243,6 +254,20 @@ class LocalSyncViewModel @Inject constructor(
             }
             _state.value = _state.value.copy(code = null)
         }
+        return code.code
+    }
+
+    /** Показан ли ещё код на этом устройстве (гаснет по таймеру, после 5 неверных попыток и после связывания). */
+    fun wifiCodeAlive(): Boolean = repo.engine()?.currentCode() != null
+
+    /**
+     * Найденные рядом устройства, которые сейчас показывают код. Спрашиваем каждое запросом без секретов
+     * (попытки ввода кода не расходуются) — код пробуется только на тех, кто его действительно показывает.
+     */
+    suspend fun codePeers(): List<NearbyPeer> = kotlinx.coroutines.coroutineScope {
+        peers.value.map { p ->
+            async { p to (repo.client().probeCode(Endpoint(p.host, p.port)).getOrDefault(false)) }
+        }.awaitAll().filter { it.second }.map { it.first }
     }
 
     fun hideCode() {

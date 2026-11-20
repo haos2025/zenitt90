@@ -46,6 +46,10 @@ fun PhoneHistoryScreen(navController: NavHostController) {
 
 val viewModel: com.platinum.ott.presentation.screens.history.HistoryViewModel = hiltViewModel()
 val history by viewModel.history.collectAsState(initial = emptyList())
+// Подписи с данными о сериях (сезон, серия, сколько осталось до конца сезона и сколько сезонов дальше).
+// Пока они считаются, действует простая подпись.
+val loadedItems by viewModel.items.collectAsState(initial = emptyList())
+val subtitles = remember(loadedItems) { loadedItems.associate { it.entry.contentId to it.subtitle } }
 var showClearAllConfirm by remember { mutableStateOf(false) }
 var pendingDelete by remember { mutableStateOf<com.platinum.ott.data.local.entity.WatchHistoryEntity?>(null) }
 
@@ -148,7 +152,7 @@ Scaffold(
                         // Раньше здесь был только прогресс-бар без текста — на ТВ
                         // процент показывается, на телефоне не было вообще.
                         Text(
-                            com.platinum.ott.presentation.screens.history.historySubtitle(entry),
+                            subtitles[entry.contentId] ?: com.platinum.ott.presentation.screens.history.historySubtitle(entry),
                             color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall
                         )
                         LinearProgressIndicator({ p })

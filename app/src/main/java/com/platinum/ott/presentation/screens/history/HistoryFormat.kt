@@ -10,10 +10,14 @@ enum class HistoryKind(val label: String) { MOVIE("Фильмы"), SERIES("Се�
 data class HistoryItem(val entry: WatchHistoryEntity, val kind: HistoryKind, val subtitle: String)
 
 /**
- * Где остановились в сериале: сезон и серия, сколько серий в сезоне, сколько всего сезонов
- * и сколько серий осталось после текущей.
+ * Где остановились в сериале: сезон и серия, сколько серий в сезоне, сколько всего сезонов,
+ * сколько серий осталось после текущей во всём сериале ([episodesLeft]), сколько — до конца текущего сезона
+ * ([episodesLeftInSeason]) и сколько сезонов идёт после текущего ([seasonsLeft]).
  */
-data class SeriesProgress(val season: Int?, val episode: Int?, val episodesInSeason: Int, val seasons: Int, val episodesLeft: Int)
+data class SeriesProgress(
+    val season: Int?, val episode: Int?, val episodesInSeason: Int, val seasons: Int,
+    val episodesLeft: Int, val episodesLeftInSeason: Int = episodesLeft, val seasonsLeft: Int = 0
+)
 
 /**
  * Тип по самой записи, без обращений к базе: у серий есть seriesId, у каналов id начинается с «ch_»
@@ -49,6 +53,17 @@ private fun pluralEpisodes(n: Int): String {
     }
 }
 
+private fun pluralSeasons(n: Int): String {
+    val mod100 = n % 100
+    val mod10 = n % 10
+    return when {
+        mod100 in 11..14 -> "сезонов"
+        mod10 == 1 -> "сезон"
+        mod10 in 2..4 -> "сезона"
+        else -> "сезонов"
+    }
+}
+
 /** Подпись записи истории: «Просмотрено» или «Осталось 1 ч 12 мин» (без процентов). Общая для ТВ и телефона. */
 fun historySubtitle(entry: WatchHistoryEntity): String {
     if (entry.completed) return "Просмотрено"
@@ -57,7 +72,7 @@ fun historySubtitle(entry: WatchHistoryEntity): String {
 }
 
 /**
- * Подпись для сериала: «Сезон 2 · серия 5 из 10 · осталось 23 мин» и второй строкой «Дальше ещё 5 серий · сезонов: 3».
+ * Подпись для сериала: «Сезон 2 · серия 5 из 10 · осталось 23 мин» и второй строкой «До конца сезона: 5 серий · дальше: 2 сезона».
  * Если по базе серий найти не удалось ([series] == null) — обычная подпись.
  */
 fun historySubtitle(entry: WatchHistoryEntity, series: SeriesProgress?): String {
@@ -83,10 +98,17 @@ fun historySubtitle(entry: WatchHistoryEntity, series: SeriesProgress?): String 
         }
     }
     if (first.isEmpty()) return historySubtitle(entry)
-    val second = buildString {
-        if (series.episodesLeft > 0) append("Дальше ещё ${series.episodesLeft} ${pluralEpisodes(series.episodesLeft)}")
-        else append("Последняя серия")
-        if (series.seasons > 1) append(" · сезонов: ${series.seasons}")
+    // Вторая строка: сколько серий до конца сезона и сколько сезонов дальше.
+    // Число стоит после двоеточия, поэтому склонять «осталось» не нужно.
+    val second = when {
+        series.episodesLeftInSeason > 0 && series.seasonsLeft > 0 ->
+            "До конца сезона: ${series.episodesLeftInSeason} ${pluralEpisodes(series.episodesLeftInSeason)} · дальше: ${series.seasonsLeft} ${pluralSeasons(series.seasonsLeft)}"
+        series.episodesLeftInSeason > 0 ->
+            "До конца сезона: ${series.episodesLeftInSeason} ${pluralEpisodes(series.episodesLeftInSeason)}" +
+                (if (series.seasons > 1) " · последний сезон" else "")
+        series.seasonsLeft > 0 ->
+            "Сезон закончен · дальше: ${series.seasonsLeft} ${pluralSeasons(series.seasonsLeft)}"
+        else -> "Последняя серия сериала"
     }
     return first + "\n" + second
 }
@@ -98,12 +120,18 @@ fun seriesProgressOf(episodes: List<Movie>, currentId: String): SeriesProgress? 
     val current = episodes[index]
     val season = current.seasonNumber
     val inSeason = if (season != null) episodes.count { it.seasonNumber == season } else episodes.size
-    val seasons = episodes.mapNotNull { it.seasonNumber }.distinct().size
+    val seasonNumbers = episodes.mapNotNull { it.seasonNumber }.distinct()
+    val seasons = seasonNumbers.size
+    // Серий после текущей в этом же сезоне и сезонов с номером больше текущего.
+    val leftInSeason = if (season != null) episodes.drop(index + 1).count { it.seasonNumber == season } else episodes.size - (index + 1)
+    val seasonsLeft = if (season != null) seasonNumbers.count { it > season } else 0
     return SeriesProgress(
         season = season,
         episode = current.episodeNumber ?: (index + 1),
         episodesInSeason = inSeason,
         seasons = seasons,
-        episodesLeft = episodes.size - (index + 1)
+        episodesLeft = episodes.size - (index + 1),
+        episodesLeftInSeason = leftInSeason,
+        seasonsLeft = seasonsLeft
     )
 }
