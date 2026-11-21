@@ -212,8 +212,8 @@ fun PhoneChannelsBrowseScreen(
                         contentPadding = PaddingValues(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingXS),
                         horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
                     ) {
-                        item("all") { CategoryChip("Все", selectedCategory == ChannelCategoryFilter.ALL) { selectedCategoryRaw = ChannelCategoryFilter.ALL } }
-                        if (!editMode) item("fav") { CategoryChip("★ Избранные", selectedCategory == ChannelCategoryFilter.FAV) { selectedCategoryRaw = ChannelCategoryFilter.FAV } }
+                        item("all") { CategoryChip("Все", selectedCategory == ChannelCategoryFilter.ALL, onClick = { selectedCategoryRaw = ChannelCategoryFilter.ALL }) }
+                        if (!editMode) item("fav") { CategoryChip("★ Избранные", selectedCategory == ChannelCategoryFilter.FAV, onClick = { selectedCategoryRaw = ChannelCategoryFilter.FAV }) }
                         items(categories, key = { "c_" + it.name }) { c ->
                             CategoryChip(
                                 title = if (editMode && c.allHidden) "${c.name} (скрыта)" else c.name,

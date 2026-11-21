@@ -122,12 +122,12 @@ internal fun PhoneChannelEditorSheet(
 
             EditorAction(Icons.Default.PlayArrow, "Смотреть", null, onPlay)
             EditorAction(Icons.Default.Edit, "Название и регион", null, onRename)
-            EditorAction(Icons.Default.Category, "Категория", ChannelCategoryFilter.categoryOf(channel)) { showCategoryPicker = true }
+            EditorAction(Icons.Default.Category, "Категория", ChannelCategoryFilter.categoryOf(channel), onClick = { showCategoryPicker = true })
             EditorAction(
                 if (channel.isHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                 if (channel.isHidden) "Показывать канал" else "Скрыть канал", null, onToggleHidden
             )
-            EditorAction(Icons.Default.MergeType, "Объединить с похожим…", "Если один и тот же канал записан по-разному (СТС / STS)") { showMerge = true }
+            EditorAction(Icons.Default.MergeType, "Объединить с похожим…", "Если один и тот же канал записан по-разному (СТС / STS)", onClick = { showMerge = true })
             EditorAction(Icons.Default.Refresh, "Проверить сейчас", null, onCheck)
             EditorAction(Icons.Default.Delete, "Удалить канал", null, onDelete, danger = true)
             Spacer(Modifier.height(ZenithDimens.paddingL))
