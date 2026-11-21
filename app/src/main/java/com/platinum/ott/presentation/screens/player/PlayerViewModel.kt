@@ -473,6 +473,13 @@ class PlayerViewModel @Inject constructor(
                         }
                     }
                 }
+                // «Субтитры по умолчанию»: если плеер сам ничего не выбрал — берём лучшую дорожку (один раз на загрузку).
+                if (subtitlePrefs.getShowByDefault() && !subsUserOff && !subsAutoPicked &&
+                    subtitles.isNotEmpty() && subtitles.none { it.isSelected }
+                ) {
+                    subsAutoPicked = true
+                    selectSubtitleTrack(autoPickSubtitle(subtitles))
+                }
                 _uiState.value = current.copy(
                     // Одна дорожка — выбирать не из чего: список пуст, меню покажет «Только одна дорожка».
                     audioTracks = if (audio.size > 1) audio else emptyList(),
@@ -579,9 +586,7 @@ class PlayerViewModel @Inject constructor(
                 externalSubtitleLanguage = "ru"
                 externalSubtitleMimeType = if (request.subtitleUrl?.substringBefore('?')?.endsWith(".vtt", ignoreCase = true) == true)
                     MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
-                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, request.subtitleUrl == null && !subtitlePrefs.getShowByDefault())
-                    .build()
+                applySubtitleDefault(forceOn = request.subtitleUrl != null)
                 playVariant(variant, request.startPositionMs)
                 _uiState.value = PlayerUiState.Ready(listOf(variant), variant, currentTitle)
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
@@ -699,9 +704,7 @@ class PlayerViewModel @Inject constructor(
                 // если явно не выбрать трек через selectSubtitleTrack()), но
                 // явно РАЗРЕШАЕТ или ЗАПРЕЩАЕТ тип трека — реальный переключатель,
                 // а не фиктивный, как было убрано из настроек раньше.
-                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlePrefs.getShowByDefault())
-                    .build()
+                applySubtitleDefault(forceOn = false)
                 playVariant(initial, resumePositionMs)
 
                 // "Следующий/предыдущий эпизод" вместо перемотки в панели
@@ -989,12 +992,53 @@ class PlayerViewModel @Inject constructor(
         _uiState.value = current.copy(playbackSpeed = speed)
     }
 
+    // «Субтитры по умолчанию». Раньше настройка только СНИМАЛА запрет на тип дорожки
+    // (setTrackTypeDisabled(false)), а сама дорожка выбиралась стандартным
+    // DefaultTrackSelector: он берёт субтитры лишь если язык совпал с предпочитаемым
+    // (у него это язык из системных «Субтитров», которые у большинства выключены) или у
+    // дорожки стоит флаг DEFAULT/FORCED. Обычная дорожка «Русский» без флага оставалась
+    // невыбранной — выглядело так, будто переключатель не работает.
+    // Теперь при включённой настройке: предпочитаем русский и язык устройства, берём
+    // дорожки без указанного языка, а если плеер всё равно ничего не выбрал —
+    // onTracksChanged сам выбирает лучшую (см. autoPickSubtitle).
+    private var subsUserOff = false
+    private var subsAutoPicked = false
+    private fun applySubtitleDefault(forceOn: Boolean) {
+        subsUserOff = false
+        subsAutoPicked = false
+        val on = subtitlePrefs.getShowByDefault()
+        val builder = exoPlayer.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !(on || forceOn))
+        if (on) {
+            val device = java.util.Locale.getDefault().language
+            val langs = linkedSetOf("ru", "rus")
+            if (device.isNotBlank()) langs += device
+            builder.setPreferredTextLanguages(*langs.toTypedArray())
+                .setSelectUndeterminedTextLanguage(true)
+        }
+        exoPlayer.trackSelectionParameters = builder.build()
+    }
+
+    /** Лучшая дорожка субтитров для «по умолчанию»: русская → с флагом DEFAULT → язык устройства → первая. */
+    private fun autoPickSubtitle(options: List<TrackOption>): TrackOption {
+        fun fmt(o: TrackOption) = o.trackGroup.getFormat(o.trackIndexInGroup)
+        fun lang(o: TrackOption) = fmt(o).language?.lowercase().orEmpty()
+        val device = java.util.Locale.getDefault().language.lowercase()
+        return options.firstOrNull { lang(it).startsWith("ru") }
+            ?: options.firstOrNull { (fmt(it).selectionFlags and C.SELECTION_FLAG_DEFAULT) != 0 }
+            ?: options.firstOrNull { device.isNotBlank() && lang(it).startsWith(device) }
+            ?: options.first()
+    }
+
     fun selectAudioTrack(option: TrackOption) {
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .setOverrideForType(TrackSelectionOverride(option.trackGroup, option.trackIndexInGroup))
             .build()
     }
     fun selectSubtitleTrack(option: TrackOption) {
+        subsUserOff = false
+        subsAutoPicked = true
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .setOverrideForType(TrackSelectionOverride(option.trackGroup, option.trackIndexInGroup))
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -1006,6 +1050,7 @@ class PlayerViewModel @Inject constructor(
     fun disableSubtitles() {
         // «Выключены» выключает и автосубтитры (раньше они продолжали генерироваться и рисоваться).
         subtitleOrchestrator.stop()
+        subsUserOff = true
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)

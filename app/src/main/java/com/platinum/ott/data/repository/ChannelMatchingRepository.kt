@@ -156,7 +156,7 @@ class ChannelMatchingRepository(
                     id = channelId,
                     canonicalName = candidate.name,
                     tvgId = candidate.tvgId,
-                    logo = candidate.logo,
+                    logo = cleanChannelLogo(candidate.logo),
                     category = candidate.category,
                     isSubscribed = true,
                     // PROMPT_EPG.md, подзадача 6 — явный tvg-chno/num, если
@@ -172,7 +172,7 @@ class ChannelMatchingRepository(
         } else {
             channelDao.upsert(
                 existing.copy(
-                    logo = candidate.logo ?: existing.logo,
+                    logo = cleanChannelLogo(candidate.logo) ?: cleanChannelLogo(existing.logo),
                     category = if (userEdits?.isCategoryLocked(channelId) == true) existing.category
                         else candidate.category ?: existing.category,
                     // Обновляем, только если источник явно прислал номер И

@@ -201,7 +201,7 @@ object XtreamVodClient {
                 XtreamLiveStreamInfo(
                     streamId = item.streamId,
                     name = item.name,
-                    logo = item.streamIcon,
+                    logo = item.streamIcon?.trim()?.ifBlank { null },
                     categoryName = categories[item.categoryId],
                     tvgId = item.epgChannelId?.ifBlank { null },
                     streamUrl = "$base/live/$username/$password/${item.streamId}.$LIVE_EXTENSION",

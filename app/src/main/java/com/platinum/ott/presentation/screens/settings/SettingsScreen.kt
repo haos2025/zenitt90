@@ -201,8 +201,7 @@ private fun CategoryPage(
                 SettingsDivider()
                 CycleSetting("Субтитры по умолчанию", if (subsByDefault) "Вкл" else "Выкл") { viewModel.setSubsByDefault(!subsByDefault) }
             }
-        }
-        SettingsCategory.PLAYER -> {
+            Spacer(Modifier.height(ZenithDimens.paddingM))
             val overlay by viewModel.playerOverlay.collectAsState()
             val hideDelay = overlay.hideDelayMs ?: 0
             SettingsCard {

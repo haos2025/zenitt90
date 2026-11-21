@@ -6,6 +6,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * Приводит адрес логотипа к виду, который умеет грузить Coil: пустая/пробельная строка → null
+ * (раньше "" считалась «логотип есть», рисовался пустой квадрат вместо инициалов, и пустое значение
+ * ещё и мешало подставить логотип из другого источника), "//host/x.png" → https, ссылка без схемы
+ * и не http(s) → null.
+ */
+internal fun cleanChannelLogo(raw: String?): String? {
+    val v = raw?.trim().orEmpty()
+    if (v.isEmpty() || v.equals("null", ignoreCase = true)) return null
+    return when {
+        v.startsWith("http://", ignoreCase = true) || v.startsWith("https://", ignoreCase = true) -> v
+        v.startsWith("//") -> "https:$v"
+        else -> null
+    }
+}
+
+/**
  * Читающая/управляющая сторона Channel/ChannelStream — отдельно от
  * ChannelMatchingRepository (тот только пишет из PlaylistSourceRepository.refresh(),
  * не знает про UI). Тот же принцип разделения, что уже есть в проекте между
@@ -85,7 +101,7 @@ class ChannelRepository(
             ChannelUiItem(
                 id = channel.id,
                 canonicalName = channel.canonicalName,
-                logo = channel.logo,
+                logo = cleanChannelLogo(channel.logo),
                 category = channel.category,
                 regionHint = channel.regionHint,
                 isHidden = hiddenStore.isChannelHidden(channel.id),

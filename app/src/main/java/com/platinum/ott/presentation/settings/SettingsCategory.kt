@@ -6,7 +6,6 @@ import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material.icons.outlined.Source
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -16,11 +15,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * на ТВ (две панели) и на телефоне (список → страница).
  *
  * Порядок — от частого к редкому. [id] идёт в маршрут телефона (`settings_page/{id}`),
- * поэтому не менять уже выпущенные значения.
+ * поэтому не менять уже выпущенные значения. Бывший раздел «Плеер» (id "player") влит в
+ * «Воспроизведение»; старый id безопасно падает на PLAYBACK через [fromId].
  */
 enum class SettingsCategory(val id: String, val title: String, val subtitle: String, val icon: ImageVector) {
-    PLAYBACK("playback", "Воспроизведение", "Качество, субтитры", Icons.Outlined.PlayCircle),
-    PLAYER("player", "Плеер", "Управление, полоска прогресса, пульт", Icons.Outlined.SmartDisplay),
+    PLAYBACK("playback", "Воспроизведение", "Качество, субтитры, плеер, пульт", Icons.Outlined.PlayCircle),
     APPEARANCE("appearance", "Внешний вид", "Оформление интерфейса", Icons.Outlined.Palette),
     NETWORK("network", "Сеть и данные", "Таймаут, мобильные данные, кэш", Icons.Outlined.Wifi),
     NOTIFICATIONS("notifications", "Уведомления", "Новые серии", Icons.Outlined.Notifications),

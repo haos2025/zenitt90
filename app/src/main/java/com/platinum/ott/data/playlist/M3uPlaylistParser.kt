@@ -48,6 +48,16 @@ object M3uPlaylistParser {
     private val DURATION_REGEX = Regex("^#EXTINF:\\s*(-?\\d+(?:\\.\\d+)?)")
     private val YEAR_REGEX = Regex("\\((\\d{4})\\)")
     private val ATTR_REGEX = Regex("(tvg-id|tvg-logo|group-title|catchup|catchup-days|catchup-source|tvg-chno)=\"([^\"]*)\"")
+    // Логотип: в «живых» плейлистах встречаются tvg-logo='..' (одинарные кавычки), tvg-logo=http://.. (без кавычек)
+    // и просто logo="..". ATTR_REGEX знает только двойные кавычки, поэтому такие логотипы терялись.
+    private val LOGO_REGEX = Regex("(?<![\\w-])(?:tvg-logo|logo)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\",]+))", RegexOption.IGNORE_CASE)
+    private fun extractLogo(line: String): String? {
+        for (m in LOGO_REGEX.findAll(line)) {
+            val v = (m.groups[1]?.value ?: m.groups[2]?.value ?: m.groups[3]?.value)?.trim().orEmpty()
+            if (v.isNotEmpty()) return v
+        }
+        return null
+    }
     private val VLCOPT_REGEX = Regex("#EXTVLCOPT:(http-user-agent|http-referrer)=(.*)", RegexOption.IGNORE_CASE)
     // PROMPT_EPG.md, подзадача 2 — стандартный атрибут шапки плейлиста
     // (строка "#EXTM3U url-tvg="http://...""), не строки #EXTINF, поэтому
@@ -142,7 +152,7 @@ object M3uPlaylistParser {
                             id = "m3u_" + stableKey.hashCode().toUInt().toString(16),
                             title = title,
                             year = year,
-                            poster = attrs["tvg-logo"],
+                            poster = extractLogo(line),
                             genre = attrs["group-title"]?.ifBlank { null } ?: "Мой плейлист",
                             streamUrl = url,
                             userAgent = userAgent,

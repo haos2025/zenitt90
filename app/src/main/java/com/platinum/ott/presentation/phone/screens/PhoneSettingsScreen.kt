@@ -102,8 +102,7 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
                     Switch(checked = subsByDefault, onCheckedChange = { viewModel.setSubsByDefault(it) })
                 }
             }
-        }
-        SettingsCategory.PLAYER -> {
+            Spacer(Modifier.height(ZenithDimens.paddingM))
             val overlay by viewModel.playerOverlay.collectAsState()
             var delayMenu by remember { mutableStateOf(false) }
             SettingsCard {
