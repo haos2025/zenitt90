@@ -51,6 +51,12 @@ class ChannelMatchingRepository(
     // Каналы с ручной сменой категории/номера обновление источника не перезаписывает (см. ChannelUserEditsStore).
     private val userEdits: ChannelUserEditsStore? = null
 ) {
+    /** Проставить логотип из XMLTV, если у канала его нет. true — логотип записан. */
+    suspend fun setLogoIfEmpty(channelId: String, rawLogo: String): Boolean {
+        val clean = cleanChannelLogo(rawLogo) ?: return false
+        return channelDao.setLogoIfEmpty(channelId, clean) > 0
+    }
+
     /** Все каналы (для сопоставления EPG по названию). */
     suspend fun allChannels(): List<com.platinum.ott.data.local.entity.ChannelEntity> = channelDao.getAll()
 

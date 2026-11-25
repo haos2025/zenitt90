@@ -45,7 +45,7 @@ import com.platinum.ott.ui.theme.*
 enum class OverlayAction { PREV, PLAY, NEXT, EPISODES, CHANNELS, PROGRAM, LIVE, SUBTITLES, AUDIO, QUALITY, SPEED }
 
 /** Какие кнопки есть у данного типа воспроизведения (список один и тот же для рисования и для обработки пульта). */
-fun overlayActions(kind: PlayerKind, hasPrev: Boolean, hasNext: Boolean, hasAudioChoice: Boolean = true): List<OverlayAction> = buildList {
+fun overlayActions(kind: PlayerKind, hasPrev: Boolean, hasNext: Boolean, hasAudioChoice: Boolean = true, hasSubtitleChoice: Boolean = true): List<OverlayAction> = buildList {
     if (kind == PlayerKind.SERIES && hasPrev) add(OverlayAction.PREV)
     add(OverlayAction.PLAY)
     if (kind == PlayerKind.SERIES && hasNext) add(OverlayAction.NEXT)
@@ -55,7 +55,9 @@ fun overlayActions(kind: PlayerKind, hasPrev: Boolean, hasNext: Boolean, hasAudi
         PlayerKind.CATCHUP -> { add(OverlayAction.LIVE); add(OverlayAction.CHANNELS); add(OverlayAction.PROGRAM) }
         PlayerKind.MOVIE -> {}
     }
-    add(OverlayAction.SUBTITLES); if (hasAudioChoice) add(OverlayAction.AUDIO); add(OverlayAction.QUALITY)
+    // В прямом эфире без дорожек субтитров пункт бесполезен — не показываем (и не даём ему фокус).
+    if (hasSubtitleChoice || kind != PlayerKind.LIVE) add(OverlayAction.SUBTITLES)
+    if (hasAudioChoice) add(OverlayAction.AUDIO); add(OverlayAction.QUALITY)
     if (kind != PlayerKind.LIVE) add(OverlayAction.SPEED)
 }
 
@@ -90,6 +92,7 @@ fun PlayerController(
     hasPreviousEpisode: Boolean = false,
     // Есть ли из чего выбирать аудиодорожку: при одной дорожке кнопка скрыта.
     hasAudioChoice: Boolean = true,
+    hasSubtitleChoice: Boolean = true,
     liveInfo: ZapBannerInfo? = null,
     // Растёт ли сейчас прогресс-бар — управляется снаружи (PlayerScreen).
     isSeekActive: Boolean = false,
@@ -100,7 +103,7 @@ fun PlayerController(
     modifier: Modifier = Modifier
 ) {
     val isLive = kind == PlayerKind.LIVE
-    val actions = overlayActions(kind, hasPreviousEpisode, hasNextEpisode, hasAudioChoice)
+    val actions = overlayActions(kind, hasPreviousEpisode, hasNextEpisode, hasAudioChoice, hasSubtitleChoice)
     val videoSelected = selected == null
 
     AnimatedVisibility(

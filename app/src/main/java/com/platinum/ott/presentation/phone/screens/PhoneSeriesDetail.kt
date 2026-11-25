@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.phone.screens
 
 import android.widget.Toast
+import com.platinum.ott.presentation.components.episodeDisplayTitle
+import com.platinum.ott.presentation.components.PhoneFavoritePill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -190,13 +192,13 @@ fun PhoneSeriesDetail(
                         ResumeKind.START -> "Смотреть ${episodeLabel(r.episode)}"
                     }
                     Button(onClick = { play(r.episode) }, modifier = Modifier.weight(1f)) { Text(label, maxLines = 1) }
-                    OutlinedButton(onClick = {
+                    PhoneFavoritePill(isFavorite = state.isFavorite, onClick = {
                         when {
                             state.isFavorite -> viewModel.removeFavorite(seriesId)
                             folders.isEmpty() -> viewModel.addFavorite(seriesId, state.movie.title, state.movie.poster, null)
                             else -> showAddFavoriteDialog = true
                         }
-                    }) { Text(if (state.isFavorite) "♥" else "♡") }
+                    })
                 }
             }
         }
@@ -316,7 +318,7 @@ private fun PhoneEpisodeRow(ep: Movie, hist: com.platinum.ott.data.local.entity.
     ) {
         if (compact) {
             Text(ep.episodeNumber?.let { "$it." } ?: "•", color = ZenithOnSurfaceVariant, modifier = Modifier.width(44.dp), maxLines = 1)
-            Text(ep.title, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(episodeDisplayTitle(ep), color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (completed) Icon(Icons.Default.CheckCircle, "Просмотрено", tint = accent, modifier = Modifier.size(18.dp))
             else if (progress != null) Text("${(progress * 100).toInt()}%", color = accent, style = MaterialTheme.typography.labelMedium)
         } else {
@@ -344,7 +346,7 @@ private fun PhoneEpisodeRow(ep: Movie, hist: com.platinum.ott.data.local.entity.
                         Icon(Icons.Default.CheckCircle, "Просмотрено", tint = accent, modifier = Modifier.size(14.dp))
                     }
                 }
-                Text(ep.title, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(episodeDisplayTitle(ep), color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (ep.description.isNotBlank()) {
                     Text(ep.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }

@@ -255,7 +255,7 @@ private fun ColumnScope.PhoneSearchResults(results: List<EpgSearchResult>, onRes
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (result.channel.logo != null) {
-                    AsyncImage(model = result.channel.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(32.dp))
+                    com.platinum.ott.presentation.components.ChannelLogoImage(model = result.channel.logo, name = result.channel.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.size(32.dp))
                     Spacer(Modifier.width(ZenithDimens.paddingS))
                 }
                 Column(Modifier.weight(1f)) {
@@ -304,7 +304,7 @@ private fun PhoneEpgChannelRowView(row: EpgChannelRow, onProgramClick: (EpgSlot.
                 contentAlignment = Alignment.Center
             ) {
                 if (row.channel.logo != null) {
-                    AsyncImage(model = row.channel.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(2.dp))
+                    com.platinum.ott.presentation.components.ChannelLogoImage(model = row.channel.logo, name = row.channel.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(2.dp))
                 }
             }
             Spacer(Modifier.width(ZenithDimens.paddingXS))

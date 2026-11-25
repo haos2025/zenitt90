@@ -112,7 +112,7 @@ fun PhoneChannelsSheet(
                     ) {
                         Text("${ch.channelNumber}", color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(32.dp))
                         Box(Modifier.size(40.dp).clip(CircleShape).background(ZenithOnSurface.copy(alpha = 0.08f)), Alignment.Center) {
-                            if (ch.logo != null) AsyncImage(model = ch.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.75f))
+                            if (ch.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = ch.logo, name = ch.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.75f))
                             else Text(ch.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.labelMedium)
                         }
                         Spacer(Modifier.width(ZenithDimens.paddingM))

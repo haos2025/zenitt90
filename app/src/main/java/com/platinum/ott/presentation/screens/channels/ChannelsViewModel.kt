@@ -20,8 +20,13 @@ sealed interface ChannelsUiState {
 
 @HiltViewModel
 class ChannelsViewModel @Inject constructor(
-    private val sessionGraph: SessionGraph
+    private val sessionGraph: SessionGraph,
+    private val interfacePreferences: com.platinum.ott.core.InterfacePreferences
 ) : ViewModel() {
+    /** Форма карточек каналов на ТВ — настройка живёт в «Меню каналов» (бывший «Внешний вид → Карточки: Каналы»). */
+    fun setChannelCardStyle(style: com.platinum.ott.ui.theme.CardStyle) =
+        interfacePreferences.setCardStyle(com.platinum.ott.ui.theme.CardSection.CHANNELS, style)
+
     private val repository: ChannelRepository get() = sessionGraph.channelRepository
     private val healthChecker: ChannelHealthChecker get() = sessionGraph.channelHealthChecker
 

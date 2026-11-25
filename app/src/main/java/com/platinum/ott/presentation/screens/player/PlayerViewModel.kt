@@ -239,6 +239,17 @@ class PlayerViewModel @Inject constructor(
         // не осталось.
         ExoPlayer.Builder(application, renderersFactory).build()
     }
+
+    // Сессия мультимедиа: по ней Android TV понимает, что идёт воспроизведение, и не включает заставку
+    // (одного флага экрана на части приставок мало). Уведомления и сервис не создаются. Идентификатор
+    // уникален на экземпляр — две сессии с одним id система не допускает.
+    private val mediaSession: androidx.media3.session.MediaSession? = try {
+        androidx.media3.session.MediaSession.Builder(application, exoPlayer)
+            .setId("zenith_player_" + System.identityHashCode(this))
+            .build()
+    } catch (_: Exception) {
+        null
+    }
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
 
@@ -817,6 +828,11 @@ class PlayerViewModel @Inject constructor(
     /** Порядок категорий, заданный пользователем вручную (для чипов в шторке). */
     fun channelCategoryOrder(): List<String> = channelRepository.categoryOrder()
 
+    /** Переставить канал при просмотре (список каналов в плеере): [viewIds] — показанный сейчас список. */
+    fun reorderChannel(viewIds: List<String>, channelId: String, newIndex: Int) {
+        viewModelScope.launch { runCatching { channelRepository.reorder(viewIds, channelId, newIndex) } }
+    }
+
     private fun selectedCategoryFilter(): (com.platinum.ott.data.repository.ChannelUiItem) -> Boolean =
         ChannelCategoryFilter.predicate(_zapCategory.value, favoriteChannelIds())
 
@@ -1202,6 +1218,7 @@ class PlayerViewModel @Inject constructor(
         // нём, но _state/_cues без явного stop() остались бы в "зависшем"
         // состоянии до следующего loadMovie()).
         subtitleOrchestrator.stop()
+        try { mediaSession?.release() } catch (_: Exception) {}
         exoPlayer.release()
     }
 }

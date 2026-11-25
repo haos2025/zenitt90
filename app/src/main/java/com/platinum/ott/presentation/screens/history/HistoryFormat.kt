@@ -71,6 +71,13 @@ fun historySubtitle(entry: WatchHistoryEntity): String {
     return "Осталось " + formatTimeLeft(entry.durationMs - entry.positionMs)
 }
 
+/** Короткая подпись под карточкой (постер/широкая): «Осталось 23 мин», «Просмотрено», у начатого без длительности — null. */
+fun historyShortLeft(entry: WatchHistoryEntity): String? = when {
+    entry.completed -> "Просмотрено"
+    entry.durationMs > 0 -> "Осталось " + formatTimeLeft(entry.durationMs - entry.positionMs)
+    else -> null
+}
+
 /**
  * Подпись для сериала: «Сезон 2 · серия 5 из 10 · осталось 23 мин» и второй строкой «До конца сезона: 5 серий · дальше: 2 сезона».
  * Если по базе серий найти не удалось ([series] == null) — обычная подпись.

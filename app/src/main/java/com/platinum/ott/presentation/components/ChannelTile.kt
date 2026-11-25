@@ -62,8 +62,7 @@ fun ChannelTile(item: ChannelUiItem, onClick: () -> Unit, modifier: Modifier = M
             Column(Modifier.fillMaxSize().padding(ZenithDimens.paddingS), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     if (item.logo != null) {
-                        AsyncImage(
-                            model = item.logo, contentDescription = null, contentScale = ContentScale.Fit,
+                        com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(0.75f)
                         )
                     } else {

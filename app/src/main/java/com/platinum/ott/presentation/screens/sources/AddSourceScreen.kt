@@ -148,6 +148,12 @@ fun AddSourceScreen(
                 Text("⚠ ${(uiState as AddSourceUiState.Error).message}", color = MaterialTheme.colorScheme.error)
             }
 
+            if (uiState is AddSourceUiState.Loading) {
+                val step by viewModel.progress.collectAsStateWithLifecycle()
+                androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = ZenithDimens.paddingXS), color = MaterialTheme.colorScheme.primary, trackColor = Color.White.copy(alpha = 0.12f))
+                Text(step ?: "Проверяю ссылку…", color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(ZenithDimens.paddingS))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = onDone) { Text("Отмена") }
                 Button(
@@ -164,7 +170,7 @@ fun AddSourceScreen(
                     enabled = uiState !is AddSourceUiState.Loading,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (uiState is AddSourceUiState.Loading) "Проверка..." else "Добавить")
+                    Text(if (uiState is AddSourceUiState.Loading) "Загрузка…" else "Добавить")
                 }
             }
         }

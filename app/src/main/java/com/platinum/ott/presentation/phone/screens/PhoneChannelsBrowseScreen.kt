@@ -423,7 +423,7 @@ private fun EditChannelRow(item: ChannelUiItem, highlight: Boolean, onClick: () 
     ) {
         Text("${item.channelNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.width(34.dp))
         Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
-            if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+            if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
             else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(3.dp).size(8.dp).clip(CircleShape).background(
@@ -489,7 +489,7 @@ private fun ChannelRow(
             if (style == CardStyle.WIDE) {
                 Row(tileModifier, verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.width(72.dp).height(46.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
-                        if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
+                        if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
                         else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                     Spacer(Modifier.width(ZenithDimens.paddingS))
@@ -506,7 +506,7 @@ private fun ChannelRow(
             } else {
                 Column(tileModifier) {
                     Box(Modifier.fillMaxWidth().aspectRatio(1.6f).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
-                        if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+                        if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                         else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         if (isFavorite) Icon(Icons.Filled.Star, "В избранном", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(16.dp))
                     }
@@ -527,7 +527,7 @@ private fun ChannelRow(
         ) {
             Text("${item.channelNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.width(34.dp))
             Box(Modifier.size(46.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f)), Alignment.Center) {
-                if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+                if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
             Spacer(Modifier.width(ZenithDimens.paddingM))

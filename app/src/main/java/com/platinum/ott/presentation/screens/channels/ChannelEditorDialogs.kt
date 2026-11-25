@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.OpenWith
+import com.platinum.ott.ui.theme.titleFor
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -73,6 +75,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.platform.safeRequestFocus
+import com.platinum.ott.core.platform.swallowOpeningKeyRelease
 import com.platinum.ott.data.repository.ChannelNameMatcher
 import com.platinum.ott.data.repository.ChannelUiItem
 import com.platinum.ott.ui.theme.ZenithError
@@ -87,17 +90,6 @@ import com.platinum.ott.ui.theme.ZenithSurface
  * ввод текста). Все собраны на одной основе [TvModal]: крупный текст, толстая рамка у фокуса, ячейки лежат
  * в сетке с адаптивной шириной (GridCells.Adaptive) — на узком окне одна колонка, на широком несколько.
  */
-
-/** Раскладка экрана «Каналы» на ТВ. */
-internal enum class ChannelsLayout(val label: String, val hint: String) {
-    THREE("2 окна: категории и каналы + сведения", "слева категории и каналы, справа сведения"),
-    CATS_CHANNELS("2 окна: категории + каналы", "сведения о передаче — в плитке канала"),
-    CHANNELS_DETAILS("2 окна: каналы + сведения", "категории — полоской сверху");
-
-    companion object {
-        fun from(name: String?): ChannelsLayout = entries.firstOrNull { it.name == name } ?: THREE
-    }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Основа
@@ -120,6 +112,7 @@ internal fun TvModal(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
+                .swallowOpeningKeyRelease()
                 .fillMaxWidth(0.86f)
                 .widthIn(max = 780.dp)
                 .heightIn(max = 480.dp)
@@ -230,12 +223,12 @@ internal fun ChannelsMenuDialog(
     editMode: Boolean,
     isChecking: Boolean,
     epgBusy: Boolean,
-    layout: ChannelsLayout,
+    cardStyle: com.platinum.ott.ui.theme.CardStyle,
     onCheckAll: () -> Unit,
     onRefreshEpg: () -> Unit,
     onToggleEdit: () -> Unit,
     onOpenSources: () -> Unit,
-    onLayout: (ChannelsLayout) -> Unit,
+    onCardStyle: (com.platinum.ott.ui.theme.CardStyle) -> Unit,
     onDismiss: () -> Unit
 ) {
     TvModal(title = "Меню каналов", onDismiss = onDismiss, minCell = 320.dp) { first ->
@@ -276,15 +269,19 @@ internal fun ChannelsMenuDialog(
                 hint = "Плейлисты и панели"
             )
         }
-        sectionTitle("Раскладка")
-        ChannelsLayout.entries.forEach { mode ->
+        sectionTitle("Вид карточек каналов")
+        com.platinum.ott.ui.theme.CardStyle.entries.forEach { st ->
             item {
                 TvActionCell(
-                    mode.label,
-                    onClick = { onLayout(mode); onDismiss() },
+                    st.titleFor(com.platinum.ott.ui.theme.CardSection.CHANNELS),
+                    onClick = { onCardStyle(st); onDismiss() },
                     icon = Icons.Default.Tv,
-                    hint = mode.hint,
-                    selected = mode == layout
+                    hint = when (st) {
+                        com.platinum.ott.ui.theme.CardStyle.POSTER -> "Логотип сверху, название и передача снизу"
+                        com.platinum.ott.ui.theme.CardStyle.WIDE -> "Логотип слева, справа название и передача"
+                        com.platinum.ott.ui.theme.CardStyle.LIST -> "Строка с номером канала"
+                    },
+                    selected = st == cardStyle
                 )
             }
         }
@@ -323,6 +320,7 @@ internal fun ChannelEditorDialog(
     onDown: () -> Unit,
     onTop: () -> Unit,
     onBottom: () -> Unit,
+    onGrab: () -> Unit,
     onToPosition: () -> Unit,
     onSetNumber: () -> Unit,
     onCategory: () -> Unit,
@@ -340,7 +338,7 @@ internal fun ChannelEditorDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(64.dp).clip(ZenithShapeMedium).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
                     if (channel.logo != null) {
-                        AsyncImage(model = channel.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(52.dp))
+                        com.platinum.ott.presentation.components.ChannelLogoImage(model = channel.logo, name = channel.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.size(52.dp))
                     } else {
                         Text(channel.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.titleMedium)
                     }
@@ -388,6 +386,12 @@ internal fun ChannelEditorDialog(
         }
 
         sectionTitle("Перемещение")
+        item {
+            TvActionCell(
+                "Переместить стрелками", onClick = onGrab, icon = Icons.Default.OpenWith,
+                hint = "Канал двигается в списке — видно, куда он встаёт", enabled = total > 1
+            )
+        }
         item { TvActionCell("Выше на 1", onClick = onUp, icon = Icons.Default.KeyboardArrowUp, enabled = canUp) }
         item { TvActionCell("Ниже на 1", onClick = onDown, icon = Icons.Default.KeyboardArrowDown, enabled = canDown) }
         item { TvActionCell("В начало списка", onClick = onTop, icon = Icons.Default.VerticalAlignTop, enabled = canUp) }

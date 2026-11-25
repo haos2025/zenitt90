@@ -2,7 +2,6 @@ package com.platinum.ott.presentation.settings
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -21,13 +20,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 enum class SettingsCategory(val id: String, val title: String, val subtitle: String, val icon: ImageVector) {
     PLAYBACK("playback", "Воспроизведение", "Качество, субтитры, плеер, пульт", Icons.Outlined.PlayCircle),
     APPEARANCE("appearance", "Внешний вид", "Оформление интерфейса", Icons.Outlined.Palette),
-    NETWORK("network", "Сеть и данные", "Таймаут, мобильные данные, кэш", Icons.Outlined.Wifi),
+    NETWORK("network", "Сеть и данные", "Таймаут, мобильные данные, кэш, устройства", Icons.Outlined.Wifi),
     NOTIFICATIONS("notifications", "Уведомления", "Новые серии", Icons.Outlined.Notifications),
     SOURCES("sources", "Источники", "Плейлисты, плагины, телепрограмма", Icons.Outlined.Source),
-    DEVICES("devices", "Устройства", "Мои устройства, синхронизация", Icons.Outlined.Devices),
     MAINTENANCE("maintenance", "Обслуживание", "Парсеры, о приложении", Icons.Outlined.Build);
 
     companion object {
-        fun fromId(id: String?): SettingsCategory = entries.firstOrNull { it.id == id } ?: PLAYBACK
+        fun fromId(id: String?): SettingsCategory =
+            // Бывший раздел «Устройства» влит в «Сеть и данные».
+            if (id == "devices") NETWORK else entries.firstOrNull { it.id == id } ?: PLAYBACK
     }
 }

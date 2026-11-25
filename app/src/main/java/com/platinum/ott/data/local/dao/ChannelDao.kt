@@ -29,6 +29,10 @@ interface ChannelDao {
     @Query("SELECT MAX(sortOrder) FROM channels")
     suspend fun getMaxSortOrder(): Int?
 
+    /** Логотип из XMLTV <icon> — только если у канала своего нет. */
+    @Query("UPDATE channels SET logo = :logo WHERE id = :id AND (logo IS NULL OR logo = '')")
+    suspend fun setLogoIfEmpty(id: String, logo: String): Int
+
     @Query("UPDATE channels SET isSubscribed = :isSubscribed WHERE id = :id")
     suspend fun setSubscribed(id: String, isSubscribed: Boolean)
 

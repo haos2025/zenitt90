@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.screens.series
 
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.presentation.components.episodeDisplayTitle
+import com.platinum.ott.presentation.components.TvFavoritePill
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -58,9 +60,9 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                     // диалога. Отметка "аниме" убрана с этого экрана — теперь
                     // только в едином меню на карточке в FavoritesScreen
                     // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                    OutlinedButton(scale = OutlinedButtonDefaults.scale(focusedScale = 1f), onClick = {
+                    TvFavoritePill(isFavorite = isFavorite, onClick = {
                         if (isFavorite) viewModel.removeFavorite() else showAddFavoriteDialog = true
-                    }) { Text(if (isFavorite) "♥ В избранном" else "♡ В избранное") }
+                    })
                 }
                 Spacer(Modifier.height(ZenithDimens.paddingM))
                 if (seasons.size > 1) {
@@ -76,7 +78,7 @@ fun SeriesEpisodesScreen(seriesId: String, onBackPressed: () -> Unit, onEpisodeC
                     items(episodesInSeason, key = { it.id }) { ep ->
                         val hist = episodeHistory[ep.id]
                         val progress = hist?.takeIf { it.durationMs > 0 }?.let { it.positionMs.toFloat() / it.durationMs }
-                        EpisodeRow(ep.episodeNumber, ep.title, ep.poster, ep.description, progress, hist?.completed == true, onClick = {
+                        EpisodeRow(ep.episodeNumber, episodeDisplayTitle(ep), ep.poster, ep.description, progress, hist?.completed == true, onClick = {
                             viewModel.onEpisodeSelected(ep.id) { episodeId, variantUrl -> onEpisodeClick(episodeId, variantUrl) }
                         })
                     }

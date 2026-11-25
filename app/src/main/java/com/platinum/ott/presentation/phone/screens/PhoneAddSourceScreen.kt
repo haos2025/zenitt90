@@ -151,7 +151,12 @@ fun PhoneAddSourceScreen(
                 enabled = uiState !is AddSourceUiState.Loading,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = ZenithShapeMedium
-            ) { Text(if (uiState is AddSourceUiState.Loading) "Проверка..." else "Добавить") }
+            ) { Text(if (uiState is AddSourceUiState.Loading) "Загрузка…" else "Добавить") }
+            if (uiState is AddSourceUiState.Loading) {
+                val step by viewModel.progress.collectAsStateWithLifecycle()
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = ZenithDimens.paddingS))
+                Text(step ?: "Проверяю ссылку…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
+            }
         }
     }
 }

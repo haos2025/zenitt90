@@ -163,13 +163,13 @@ fun PhoneDetailScreen(movieId: String, navController: NavHostController, seriesI
                     // диалога. Отметка "аниме" убрана с этого экрана — теперь
                     // только в едином меню на карточке в FavoritesScreen
                     // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                    if (!state.tmdbOnly) OutlinedButton(onClick = {
+                    if (!state.tmdbOnly) com.platinum.ott.presentation.components.PhoneFavoritePill(isFavorite = state.isFavorite, onClick = {
                         when {
                             state.isFavorite -> viewModel.removeFavorite(movieId)
                             folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
                             else -> showAddFavoriteDialog = true
                         }
-                    }) { Text(if (state.isFavorite) "♥" else "♡") }
+                    })
                 }
                 // Карусель актёров (п.4) — как на TV, не рисуется, если пусто.
                 if (state.metadata?.cast?.isNotEmpty() == true) {

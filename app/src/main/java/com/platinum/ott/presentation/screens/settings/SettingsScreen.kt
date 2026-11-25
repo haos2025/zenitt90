@@ -65,7 +65,9 @@ private val LocalRowFocus = compositionLocalOf { RowFocusHost(null, {}, {}) }
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsScreen(navController: NavHostController, onCacheManagementClick: () -> Unit, onForceOtaUpdateClick: () -> Unit, onPluginsClick: () -> Unit = {}, onSyncClick: () -> Unit = {}, onSourcesClick: () -> Unit = {}, onEpgClick: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
-    var selectedId by rememberSaveable { mutableStateOf(SettingsCategory.PLAYBACK.id) }
+    // Последняя открытая категория помним и между заходами на экран (rememberSaveable не переживает уход через боковую панель).
+    var selectedId by rememberSaveable { mutableStateOf(SettingsMemory.lastCategoryId ?: SettingsCategory.PLAYBACK.id) }
+    LaunchedEffect(selectedId) { SettingsMemory.lastCategoryId = selectedId }
     var lastRowKey by rememberSaveable { mutableStateOf<String?>(null) }
     val category = SettingsCategory.fromId(selectedId)
     val categoryRequesters = remember { SettingsCategory.entries.associateWith { FocusRequester() } }
@@ -252,17 +254,36 @@ private fun CategoryPage(
                 com.platinum.ott.presentation.components.MovieCard(title = "Пример карточки", poster = "", year = 2024, onClick = {}, rating = 7.8, progress = 0.4f)
             }
             SettingsCard {
-                CycleSetting("Размер элементов", com.platinum.ott.ui.theme.SIZE_STEP_TITLES[appearance.sizeStep]) { viewModel.cycleSizeStep() }
+                // Как на смартфоне: все варианты на виду, выбор — OK на нужном (а не перебор по кругу).
+                OptionRow("Размер элементов", com.platinum.ott.ui.theme.SIZE_STEP_TITLES, appearance.sizeStep) { viewModel.setSizeStep(it) }
                 SettingsDivider()
-                CycleSetting("Акцентный цвет", appearance.accent.title) { viewModel.cycleAccent() }
+                OptionRow(
+                    "Акцентный цвет",
+                    com.platinum.ott.ui.theme.AccentColor.entries.map { it.title },
+                    com.platinum.ott.ui.theme.AccentColor.entries.indexOf(appearance.accent),
+                    dots = com.platinum.ott.ui.theme.AccentColor.entries.map { it.color }
+                ) { viewModel.setAccent(com.platinum.ott.ui.theme.AccentColor.entries[it]) }
                 SettingsDivider()
-                CycleSetting("Картинки в карточках", appearance.imageScale.title) { viewModel.cycleImageScale() }
+                OptionRow(
+                    "Картинки в карточках",
+                    com.platinum.ott.ui.theme.ImageScaleMode.entries.map { it.title },
+                    com.platinum.ott.ui.theme.ImageScaleMode.entries.indexOf(appearance.imageScale)
+                ) { viewModel.setImageScale(com.platinum.ott.ui.theme.ImageScaleMode.entries[it]) }
                 SettingsDivider()
-                com.platinum.ott.ui.theme.CardSection.entries.forEach { sec ->
-                    CycleSetting("Карточки: ${sec.title}", appearance.styleOf(sec).titleFor(sec)) { viewModel.cycleCardStyle(sec) }
+                // Форма карточек каналов на ТВ настраивается в «Меню» экрана «Каналы».
+                com.platinum.ott.ui.theme.CardSection.entries.filter { it != com.platinum.ott.ui.theme.CardSection.CHANNELS }.forEach { sec ->
+                    OptionRow(
+                        "Карточки: ${sec.title}",
+                        com.platinum.ott.ui.theme.CardStyle.entries.map { it.titleFor(sec) },
+                        com.platinum.ott.ui.theme.CardStyle.entries.indexOf(appearance.styleOf(sec))
+                    ) { viewModel.setCardStyle(sec, com.platinum.ott.ui.theme.CardStyle.entries[it]) }
                     SettingsDivider()
                 }
-                CycleSetting("Раскладка (избранное, история, сериалы)", appearance.tvLayout.title) { viewModel.cycleTvLayout() }
+                OptionRow(
+                    "Раскладка (избранное, история, сериалы)",
+                    com.platinum.ott.ui.theme.TvLayout.entries.map { it.title },
+                    com.platinum.ott.ui.theme.TvLayout.entries.indexOf(appearance.tvLayout)
+                ) { viewModel.setTvLayout(com.platinum.ott.ui.theme.TvLayout.entries[it]) }
                 SettingsDivider()
                 NavRow(
                     if (confirmReset) "Нажмите ещё раз — сбросить" else "Сбросить внешний вид",
@@ -287,6 +308,9 @@ private fun CategoryPage(
                 CycleSetting("Макс. качество на моб. данных", maxMobile) { viewModel.cycleMaxMobileQuality() }
                 SettingsDivider()
                 NavRow("Управление кэшем", "Размер по категориям и очистка", onClick = onCacheManagementClick)
+                SettingsDivider()
+                val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
+                NavRow("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick)
             }
         }
         SettingsCategory.NOTIFICATIONS -> {
@@ -311,10 +335,6 @@ private fun CategoryPage(
                 SettingsDivider()
                 NavRow("Плагины", "Каталог и управление плагинами", onClick = onPluginsClick)
             }
-        }
-        SettingsCategory.DEVICES -> {
-            val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
-            SettingsCard { NavRow("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}", onClick = onSyncClick) }
         }
         SettingsCategory.MAINTENANCE -> {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -373,6 +393,9 @@ private fun formatLastSynced(ms: Long): String {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 14.dp)) { Text(label, color = ZenithOnSurface, modifier = Modifier.weight(1f)); Text(value, color = ZenithOnSurfaceVariant) }
 }
 // Единая обводка фокуса для строк настроек: на светлых/тёмных темах и любом акценте видно, где фокус.
+/** Память экрана настроек на время работы приложения. */
+private object SettingsMemory { @Volatile var lastCategoryId: String? = null }
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun focusRing() = ClickableSurfaceDefaults.border(
@@ -452,6 +475,54 @@ private fun Modifier.settingsRowFocus(key: String, requester: FocusRequester): M
 
 // Строка-переключатель. OK или Вправо — следующее значение; Влево/Назад — к списку категорий.
 // Фокусируемая область — вся строка, высота достаточна для уверенного D-pad.
+/**
+ * Параметр со всеми вариантами в ряд (как чипы на смартфоне): стрелками выбираешь вариант, OK — применить.
+ * [dots] — цветные точки перед названиями (для акцентного цвета).
+ */
+@OptIn(ExperimentalTvMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun OptionRow(label: String, options: List<String>, selected: Int, dots: List<Color>? = null, onSelect: (Int) -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Column(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingSM, vertical = 10.dp)) {
+        Text(label, color = ZenithOnSurface, modifier = Modifier.padding(bottom = 8.dp))
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEachIndexed { i, title ->
+                val requester = remember { FocusRequester() }
+                val isSel = i == selected
+                Surface(
+                    onClick = { onSelect(i) },
+                    shape = ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(50)),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = if (isSel) accent.copy(alpha = 0.28f) else ZenithOnSurface.copy(alpha = 0.08f),
+                        contentColor = ZenithOnSurface,
+                        focusedContainerColor = accent.copy(alpha = if (isSel) 0.45f else 0.25f),
+                        focusedContentColor = ZenithOnSurface,
+                        pressedContainerColor = accent.copy(alpha = 0.5f),
+                        pressedContentColor = ZenithOnSurface
+                    ),
+                    border = ClickableSurfaceDefaults.border(
+                        border = if (isSel) Border(BorderStroke(1.5.dp, accent)) else Border.None,
+                        focusedBorder = Border(BorderStroke(2.dp, Color.White))
+                    ),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                    modifier = Modifier.settingsRowFocus("$label#$i", requester)
+                ) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        dots?.getOrNull(i)?.let {
+                            Box(Modifier.size(14.dp).clip(androidx.compose.foundation.shape.CircleShape).background(it))
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(title, maxLines = 1, color = ZenithOnSurface)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class) @Composable private fun CycleSetting(label: String, value: String, onClick: () -> Unit) {
     val requester = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }

@@ -6,6 +6,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
@@ -67,16 +80,15 @@ private val NO_CATEGORY = HiddenChannelsStore.NO_CATEGORY
 private fun categoryOf(ch: ChannelUiItem): String = ch.category?.trim()?.ifBlank { null } ?: NO_CATEGORY
 
 /**
- * ТВ: экран «Каналы». Раскладка выбирается в «Меню» (запоминается на устройстве):
- *  • 2 окна: слева категории и каналы, справа сведения (по умолчанию) — сведения меняются по фокусу:
- *    у канала — передача сейчас/далее, у категории — сводка по ней;
- *  • 2 окна: категории + каналы (без панели сведений);
- *  • 2 окна: каналы + сведения — категории полоской сверху.
- * Панели получают ширину по доле экрана (в разумных пределах), а категории и каналы лежат в сетках
- * GridCells.Adaptive — число колонок подстраивается под ширину панели и «Размер элементов».
- * Категория выбирается фокусом. OK на канале — смотреть; долгое OK на канале или категории — полный редактор
- * (избранное, скрытие, перемещение, категория, объединение с похожим, удаление). Все прежние кнопки шапки
- * («Проверить все», «Обновить программу», «Править», «Источники») — в окне «Меню».
+ * ТВ: экран «Каналы» — одна раскладка: слева категории, в центре каналы, справа сведения.
+ *  • Категория выбирается фокусом (каналы справа меняются сразу); OK или «Вправо» на категории прячет
+ *    панель категорий — остаются каналы и сведения; «Влево» у левого края каналов возвращает категории
+ *    (фокус — на выбранной категории). Сведения меняются по фокусу: у канала — передача сейчас/далее,
+ *    у категории — сводка по ней.
+ *  • OK на канале — смотреть; долгое OK на канале или категории — полный редактор. «Переместить»
+ *    в редакторе включает режим захвата: канал стрелками двигается прямо в списке (видно, куда он
+ *    встаёт), OK — оставить, «Назад» — вернуть на прежнее место.
+ *  • «Меню»: проверка источников, программа, правка, источники и вид карточек каналов (плитка / широкая / список).
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -103,7 +115,20 @@ fun ChannelsBrowseScreen(
         favorites = if (id in favorites) favorites - id else favorites + id
         prefs.edit().putStringSet(KEY_FAVS, favorites).apply()
     }
-    var layout by remember { mutableStateOf(ChannelsLayout.from(prefs.getString(KEY_LAYOUT, null))) }
+    val appearance = LocalAppearance.current
+    // Панель категорий: OK/«Вправо» на категории прячет её, «Влево» у левого края каналов — возвращает.
+    var categoriesVisible by remember { mutableStateOf(true) }
+    var focusCategoriesRequest by remember { mutableIntStateOf(0) }
+    val selectedCatRequester = remember { FocusRequester() }
+    // Режим «захвата»: канал двигают стрелками; [grabOrigin] — место до захвата (для отмены).
+    var grabbedId by remember { mutableStateOf<String?>(null) }
+    var grabOrigin by remember { mutableIntStateOf(-1) }
+    // Плитка, которой нужно вернуть фокус (после начала/конца захвата ключи плиток меняются и фокус теряется).
+    val grabRequester = remember { FocusRequester() }
+    var focusTileId by remember { mutableStateOf<String?>(null) }
+    val gridState = rememberLazyGridState()
+    var gridLeftPx by remember { mutableFloatStateOf(0f) }
+    var gridWidthPx by remember { mutableIntStateOf(0) }
 
     val allChannels = remember(uiState) {
         (uiState as? ChannelsUiState.Success)?.channels.orEmpty().sortedBy { it.channelNumber }
@@ -168,6 +193,58 @@ fun ChannelsBrowseScreen(
             .filter { ChannelNameMatcher.matchesQuery(it.canonicalName, searchQuery) }
     }
 
+    // Вернуть панель категорий и поставить фокус на выбранную категорию.
+    LaunchedEffect(focusCategoriesRequest) {
+        if (focusCategoriesRequest > 0) {
+            categoriesVisible = true
+            repeat(3) { withFrameNanos { } }
+            selectedCatRequester.safeRequestFocus()
+        }
+    }
+    fun collapseCategories() {
+        if (visibleChannels.isNotEmpty()) { firstRowRequester.safeRequestFocus(); categoriesVisible = false }
+    }
+    val categoryTitle = when (selectedCategory) { ALL_CATEGORY -> "Все каналы"; FAV_CATEGORY -> "★ Избранные"; else -> selectedCategory }
+    // Колонок в сетке каналов (та же формула, что у GridCells.Adaptive) — для шага «вверх/вниз» в режиме захвата.
+    val chStyleNow = appearance.styleOf(CardSection.CHANNELS, true)
+    val density = LocalDensity.current
+    val gridColumns = run {
+        val minCellDp = when (chStyleNow) { CardStyle.WIDE -> 280.dp; CardStyle.LIST -> 340.dp; else -> 150.dp } * appearance.sizeMultiplier
+        val minPx = with(density) { minCellDp.toPx() }
+        val spPx = with(density) { ZenithDimens.paddingS.toPx() }
+        maxOf(1, ((gridWidthPx + spPx) / (minPx + spPx)).toInt())
+    }
+    fun grabMove(delta: Int) {
+        val id = grabbedId ?: return
+        val cur = visibleChannels.indexOfFirst { it.id == id }
+        if (cur < 0) return
+        val target = (cur + delta).coerceIn(0, visibleChannels.lastIndex)
+        if (target != cur) viewModel.reorder(visibleChannels.map { it.id }, id, target)
+    }
+    fun grabEnd() { focusTileId = grabbedId; grabbedId = null }
+    fun grabCancel() {
+        val id = grabbedId ?: return
+        if (grabOrigin >= 0) viewModel.reorder(visibleChannels.map { it.id }, id, grabOrigin)
+        grabEnd()
+    }
+    LaunchedEffect(grabbedId) {
+        // Начало захвата: прячем категории (канал виден целиком) и ставим фокус на перемещаемую плитку.
+        if (grabbedId != null) { categoriesVisible = false; focusTileId = grabbedId }
+    }
+    LaunchedEffect(focusTileId) {
+        if (focusTileId != null) {
+            repeat(3) { withFrameNanos { } }
+            grabRequester.safeRequestFocus()
+            focusTileId = null
+        }
+    }
+    BackHandler(enabled = grabbedId != null) { grabCancel() }
+    // За перемещаемым каналом прокручиваем список, если он ушёл за край.
+    val grabIndex = grabbedId?.let { id -> visibleChannels.indexOfFirst { it.id == id } } ?: -1
+    LaunchedEffect(grabIndex) {
+        if (grabIndex >= 0 && gridState.layoutInfo.visibleItemsInfo.none { it.index == grabIndex }) gridState.animateScrollToItem(grabIndex)
+    }
+
     val hasVisible = visibleChannels.isNotEmpty()
     LaunchedEffect(hasVisible) {
         if (hasVisible && !initialFocusDone) {
@@ -182,6 +259,20 @@ fun ChannelsBrowseScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(start = ZenithDimens.tvOverscanPadding, top = ZenithDimens.paddingXL, end = ZenithDimens.tvOverscanPadding, bottom = ZenithDimens.paddingXL)
+            .onPreviewKeyEvent { e ->
+                if (grabbedId == null) return@onPreviewKeyEvent false
+                // Режим захвата: стрелки двигают канал, OK — оставить на месте. «Назад» — BackHandler выше.
+                if (e.type == KeyEventType.KeyDown) {
+                    when (e.key) {
+                        Key.DirectionLeft -> { grabMove(-1); true }
+                        Key.DirectionRight -> { grabMove(1); true }
+                        Key.DirectionUp -> { grabMove(-gridColumns); true }
+                        Key.DirectionDown -> { grabMove(gridColumns); true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { grabEnd(); true }
+                        else -> false
+                    }
+                } else e.key in setOf(Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown, Key.DirectionCenter, Key.Enter, Key.NumPadEnter)
+            }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Каналы", style = MaterialTheme.typography.titleLarge, color = ZenithOnSurface)
@@ -214,102 +305,126 @@ fun ChannelsBrowseScreen(
             }
         } else {
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                // Ширина панелей — доля экрана в разумных пределах (раньше была жёсткая 200/180 dp).
+                // Ширина панелей — доля экрана в разумных пределах.
                 val categoriesWidth = (maxWidth * 0.24f).coerceIn(170.dp, 240.dp)
                 val detailsWidth = (maxWidth * 0.30f).coerceIn(200.dp, 300.dp)
 
-                @Composable
-                fun CategoryCells(compact: Boolean) {
-                    // Три «служебных» пункта и категории — ячейки одной адаптивной сетки.
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(if (compact) 150.dp else 170.dp),
-                        modifier = if (compact) Modifier.fillMaxWidth().heightIn(max = 92.dp) else Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS),
-                        horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
+                Row(Modifier.fillMaxSize()) {
+                    // 1. Категории: выбираются фокусом; OK/«Вправо» — спрятать панель и перейти к каналам.
+                    AnimatedVisibility(
+                        visible = categoriesVisible,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
                     ) {
-                        item(key = "all") { CategoryRow("Все каналы", subscribedChannels.size, selectedCategory == ALL_CATEGORY, compact = compact) { selectedCategoryRaw = ALL_CATEGORY; focusOnCategory = true } }
-                        item(key = "fav") {
-                            CategoryRow("★ Избранные", favorites.count { id -> subscribedChannels.any { it.id == id } }, selectedCategory == FAV_CATEGORY, compact = compact) { selectedCategoryRaw = FAV_CATEGORY; focusOnCategory = true }
-                        }
-                        gridItems(categoryCounts, key = { "c_" + it.first }) { (category, count, hidden) ->
-                            // Долгое OK — редактор категории; в «Править» его открывает и обычное OK. Фокус по-прежнему выбирает категорию.
-                            CategoryRow(
-                                title = category, count = count, selected = selectedCategory == category,
-                                hiddenMark = editMode && hidden, compact = compact,
-                                onClick = if (editMode) { { categoryEditor = category } } else null,
-                                onLongClick = { categoryEditor = category }
-                            ) { selectedCategoryRaw = category; focusOnCategory = true }
+                        Box(Modifier.width(categoriesWidth + ZenithDimens.paddingL).fillMaxHeight().padding(end = ZenithDimens.paddingL)) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(170.dp),
+                                modifier = Modifier.fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS),
+                                horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS)
+                            ) {
+                                item(key = "all") {
+                                    CategoryRow("Все каналы", subscribedChannels.size, selectedCategory == ALL_CATEGORY,
+                                        requester = if (selectedCategory == ALL_CATEGORY) selectedCatRequester else null,
+                                        onPick = { selectedCategoryRaw = ALL_CATEGORY; focusOnCategory = true; if (it) collapseCategories() })
+                                }
+                                item(key = "fav") {
+                                    CategoryRow("★ Избранные", favorites.count { id -> subscribedChannels.any { it.id == id } }, selectedCategory == FAV_CATEGORY,
+                                        requester = if (selectedCategory == FAV_CATEGORY) selectedCatRequester else null,
+                                        onPick = { selectedCategoryRaw = FAV_CATEGORY; focusOnCategory = true; if (it) collapseCategories() })
+                                }
+                                gridItems(categoryCounts, key = { "c_" + it.first }) { (category, count, hidden) ->
+                                    // Долгое OK — редактор категории; в «Править» его открывает и обычное OK.
+                                    CategoryRow(
+                                        title = category, count = count, selected = selectedCategory == category,
+                                        hiddenMark = editMode && hidden,
+                                        requester = if (selectedCategory == category) selectedCatRequester else null,
+                                        onClick = if (editMode) { { categoryEditor = category } } else null,
+                                        onLongClick = { categoryEditor = category },
+                                        onPick = { selectedCategoryRaw = category; focusOnCategory = true; if (it) collapseCategories() }
+                                    )
+                                }
+                            }
                         }
                     }
-                }
-
-                Column(Modifier.fillMaxSize()) {
-                    if (layout == ChannelsLayout.CHANNELS_DETAILS) {
-                        CategoryCells(compact = true)
-                        Spacer(Modifier.height(ZenithDimens.paddingS))
-                    }
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingL)) {
-                        // 1. Категории.
-                        if (layout != ChannelsLayout.CHANNELS_DETAILS) {
-                            Box(Modifier.width(categoriesWidth).fillMaxHeight()) { CategoryCells(compact = false) }
+                    // 2. Каналы.
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        if (!categoriesVisible) {
+                            Text(
+                                "◀ $categoryTitle · ${visibleChannels.size}  —  «Влево» у края возвращает категории",
+                                style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface.copy(alpha = 0.55f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(bottom = ZenithDimens.paddingXS)
+                            )
                         }
-                        // 2. Каналы.
+                        if (grabbedId != null) {
+                            Text(
+                                "Перемещение: стрелки — двигать канал, OK — оставить здесь, «Назад» — отменить",
+                                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(bottom = ZenithDimens.paddingXS)
+                            )
+                        }
                         if (visibleChannels.isEmpty()) {
-                            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Text(
                                     if (selectedCategory == FAV_CATEGORY && searchQuery.isBlank()) "Избранных каналов пока нет.\nУдерживайте OK на канале и выберите «В избранное»." else "Ничего не найдено",
                                     color = ZenithOnSurface.copy(alpha = 0.6f)
                                 )
                             }
                         } else {
-                            // Форма — настройка «Внешний вид → Карточки: Каналы»: плитка, широкая плитка или список.
-                            val appearance = LocalAppearance.current
-                            val chStyle = appearance.styleOf(CardSection.CHANNELS, true)
-                            // Минимальная ширина ячейки растёт вместе с «Размером элементов»; список — тоже адаптивная сетка:
-                            // на широкой панели строки встают в две колонки.
+                            // Форма — «Меню каналов → Вид карточек»: плитка, широкая плитка или список.
+                            val chStyle = chStyleNow
                             val minCell = when (chStyle) {
                                 CardStyle.WIDE -> 280.dp
                                 CardStyle.LIST -> 340.dp
                                 else -> 150.dp
                             } * appearance.sizeMultiplier
                             LazyVerticalGrid(
+                                state = gridState,
                                 columns = GridCells.Adaptive(minCell),
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                                    .onGloballyPositioned { gridLeftPx = it.positionInRoot().x }
+                                    .onSizeChanged { gridWidthPx = it.width },
                                 verticalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS),
                                 horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
                             ) {
-                                // В режиме «Править» ключ только по id: порядок стабилен (по номеру), и фокус
-                                // не должен «прыгать», когда канал скрывают или переносят.
-                                gridItemsIndexed(visibleChannels, key = { i, c -> if (editMode) c.id else "${i}_${c.id}" }) { index, ch ->
+                                // Ключ только по id в «Править» и при захвате: порядок меняется на глазах,
+                                // а фокус должен оставаться на том же канале.
+                                gridItemsIndexed(visibleChannels, key = { i, c -> if (editMode || grabbedId != null) c.id else "${i}_${c.id}" }) { index, ch ->
+                                    val leftHolder = remember { FloatArray(1) }
                                     ChannelTileTv(
                                         item = ch,
                                         style = chStyle,
                                         isFavorite = !editMode && ch.id in favorites,
                                         editMode = editMode,
+                                        grabbed = grabbedId == ch.id,
                                         epgVersion = epgVersion,
                                         viewModel = viewModel,
                                         onClick = { if (editMode) editorId = ch.id else onPlayChannel(ch.id) },
                                         onLongClick = { editorId = ch.id },
                                         onFocused = { focusedId = ch.id; focusOnCategory = false },
-                                        modifier = if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier
+                                        modifier = (if (index == 0) Modifier.focusRequester(firstRowRequester) else Modifier)
+                                            .then(if (ch.id == (grabbedId ?: focusTileId)) Modifier.focusRequester(grabRequester) else Modifier)
+                                            .onGloballyPositioned { leftHolder[0] = it.positionInRoot().x }
+                                            .onPreviewKeyEvent { e ->
+                                                // «Влево» у левого края каналов при скрытых категориях — вернуть категории.
+                                                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && !categoriesVisible &&
+                                                    grabbedId == null && leftHolder[0] - gridLeftPx < 4f
+                                                ) { focusCategoriesRequest++; true } else false
+                                            }
                                     )
                                 }
                             }
                         }
-                        // 3. Сведения о выбранном канале.
-                        if (layout != ChannelsLayout.CATS_CHANNELS) {
-                            if (focusOnCategory) {
-                                val title = when (selectedCategory) {
-                                    ALL_CATEGORY -> "Все каналы"
-                                    FAV_CATEGORY -> "★ Избранные"
-                                    else -> selectedCategory
-                                }
-                                CategorySummaryPanel(title, visibleChannels, favorites, Modifier.width(detailsWidth).fillMaxHeight())
-                            } else {
-                                val panelChannel = visibleChannels.firstOrNull { it.id == focusedId } ?: visibleChannels.firstOrNull()
-                                ChannelPanel(panelChannel, viewModel, epgVersion, Modifier.width(detailsWidth).fillMaxHeight())
-                            }
-                        }
+                    }
+                    // 3. Сведения о выбранном канале / категории.
+                    Spacer(Modifier.width(ZenithDimens.paddingL))
+                    if (focusOnCategory) {
+                        CategorySummaryPanel(categoryTitle, visibleChannels, favorites, Modifier.width(detailsWidth).fillMaxHeight())
+                    } else {
+                        val panelChannel = visibleChannels.firstOrNull { it.id == focusedId } ?: visibleChannels.firstOrNull()
+                        ChannelPanel(panelChannel, viewModel, epgVersion, Modifier.width(detailsWidth).fillMaxHeight())
                     }
                 }
             }
@@ -324,12 +439,12 @@ fun ChannelsBrowseScreen(
             editMode = editMode,
             isChecking = isChecking,
             epgBusy = epgBusy,
-            layout = layout,
+            cardStyle = chStyleNow,
             onCheckAll = { viewModel.checkAll() },
             onRefreshEpg = { viewModel.refreshEpg { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } },
             onToggleEdit = { onEditModeChange(!editMode) },
             onOpenSources = onOpenSources,
-            onLayout = { mode -> layout = mode; prefs.edit().putString(KEY_LAYOUT, mode.name).apply() },
+            onCardStyle = { viewModel.setChannelCardStyle(it) },
             onDismiss = { menuOpen = false }
         )
     }
@@ -350,6 +465,9 @@ fun ChannelsBrowseScreen(
             onDown = { viewModel.reorder(viewIds, ch.id, pos) },
             onTop = { viewModel.reorder(viewIds, ch.id, 0) },
             onBottom = { viewModel.reorder(viewIds, ch.id, viewIds.lastIndex) },
+            onGrab = {
+                grabbedId = ch.id; grabOrigin = visibleChannels.indexOfFirst { it.id == ch.id }; editorId = null
+            },
             onToPosition = { positionTarget = ch; editorId = null },
             onSetNumber = { numberTarget = ch; editorId = null },
             onCategory = { categoryPickTarget = ch; editorId = null },
@@ -488,6 +606,7 @@ private fun ChannelTileTv(
     style: CardStyle,
     isFavorite: Boolean,
     editMode: Boolean,
+    grabbed: Boolean = false,
     epgVersion: Int,
     viewModel: ChannelsViewModel,
     onClick: () -> Unit,
@@ -512,6 +631,11 @@ private fun ChannelTileTv(
             containerColor = ZenithOnSurface.copy(alpha = 0.06f),
             focusedContainerColor = ZenithFocusContainerActive
         ),
+        // Захваченный канал выделен акцентной рамкой и «↕» — видно, что именно двигается.
+        border = ClickableSurfaceDefaults.border(
+            border = if (grabbed) Border(BorderStroke(3.dp, MaterialTheme.colorScheme.primary), shape = tileShape) else Border.None,
+            focusedBorder = Border(BorderStroke(if (grabbed) 3.dp else 2.dp, MaterialTheme.colorScheme.primary), shape = tileShape)
+        ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocused() }
     ) {
@@ -525,14 +649,15 @@ private fun ChannelTileTv(
                     Text("${item.channelNumber}", style = MaterialTheme.typography.labelMedium, color = ZenithOnSurface.copy(alpha = 0.5f), modifier = Modifier.width(44.dp))
                 }
                 Box(Modifier.width(88.dp).height(56.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)), Alignment.Center) {
-                    if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
+                    if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.8f))
                     else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.width(ZenithDimens.paddingSM))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(item.canonicalName, style = MaterialTheme.typography.titleSmall, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        if (editMode && !item.isVisible) Text("  скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                        if (grabbed) Text("  ↕", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                        else if (editMode && !item.isVisible) Text("  скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                         else if (isFavorite) Text("  ★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                     }
                     val program = now
@@ -554,10 +679,11 @@ private fun ChannelTileTv(
                 Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
                 Alignment.Center
             ) {
-                if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+                if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
                 else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium)
                 Text("${item.channelNumber}", style = MaterialTheme.typography.labelSmall, color = ZenithOnSurface.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                if (editMode && !item.isVisible) Text("скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                if (grabbed) Text("↕", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                else if (editMode && !item.isVisible) Text("скрыт", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
                 else if (isFavorite) Text("★", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Spacer(Modifier.height(ZenithDimens.paddingXS))
@@ -638,7 +764,7 @@ private fun CategorySummaryPanel(title: String, channels: List<ChannelUiItem>, f
 @Composable
 private fun ChannelLogo(item: ChannelUiItem, size: androidx.compose.ui.unit.Dp) {
     Box(Modifier.size(size).clip(CircleShape).background(ZenithOnSurface.copy(alpha = 0.08f)), Alignment.Center) {
-        if (item.logo != null) AsyncImage(model = item.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
+        if (item.logo != null) com.platinum.ott.presentation.components.ChannelLogoImage(model = item.logo, name = item.canonicalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.72f))
         else Text(item.canonicalName.take(2).uppercase(), color = ZenithOnSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.titleSmall)
     }
 }
@@ -651,20 +777,22 @@ private fun ProgressLine(fraction: Float) {
 }
 
 /**
- * Категория выбирается фокусом (быстрый просмотр без лишнего OK). Долгое OK — редактор категории ([onLongClick]).
- * [compact] — низкая плашка для полоски категорий над списком каналов.
+ * Категория выбирается фокусом (быстрый просмотр без лишнего OK): при фокусе вызывается [onPick] с false.
+ * OK (или «Вправо») — [onPick] с true: выбрать и спрятать панель категорий, перейти к каналам.
+ * Долгое OK — редактор категории ([onLongClick]); в «Править» обычное OK открывает его же ([onClick]).
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun CategoryRow(
     title: String, count: Int, selected: Boolean,
-    hiddenMark: Boolean = false, compact: Boolean = false,
+    hiddenMark: Boolean = false,
+    requester: FocusRequester? = null,
     onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null,
-    onSelect: () -> Unit
+    onPick: (confirm: Boolean) -> Unit
 ) {
     val accent = MaterialTheme.colorScheme.primary
     Surface(
-        onClick = onClick ?: onSelect,
+        onClick = onClick ?: { onPick(true) },
         onLongClick = onLongClick,
         shape = ClickableSurfaceDefaults.shape(ZenithShapeSmall),
         colors = ClickableSurfaceDefaults.colors(
@@ -677,10 +805,15 @@ private fun CategoryRow(
         ),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, accent))),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
-        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onSelect() }
+        modifier = Modifier.fillMaxWidth()
+            .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+            .onFocusChanged { if (it.isFocused) onPick(false) }
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onPick(true); true } else false
+            }
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = if (compact) ZenithDimens.paddingXS else ZenithDimens.paddingSM),
+            Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = ZenithDimens.paddingSM),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

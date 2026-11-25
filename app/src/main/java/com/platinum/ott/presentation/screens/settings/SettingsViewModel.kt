@@ -118,6 +118,8 @@ class SettingsViewModel @Inject constructor(
         val all = com.platinum.ott.ui.theme.ImageScaleMode.entries
         interfacePreferences.setImageScale(all[(all.indexOf(appearance.value.imageScale) + 1) % all.size])
     }
+    fun setCardStyle(section: com.platinum.ott.ui.theme.CardSection, style: com.platinum.ott.ui.theme.CardStyle) = interfacePreferences.setCardStyle(section, style)
+    fun setTvLayout(layout: com.platinum.ott.ui.theme.TvLayout) = interfacePreferences.setTvLayout(layout)
     fun cycleCardStyle(section: com.platinum.ott.ui.theme.CardSection, isTv: Boolean = true) {
         val all = com.platinum.ott.ui.theme.CardStyle.entries
         val cur = appearance.value.styleOf(section, isTv)

@@ -135,6 +135,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.androidx.media3.transformer)
     implementation(libs.onnxruntime.android)
@@ -150,6 +151,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
     implementation(libs.androidx.security.crypto)
 
     // DI — Hilt (миграция с ServiceLocator, см. NEXT_STEPS.md / REFACTOR_PROMPT.md)

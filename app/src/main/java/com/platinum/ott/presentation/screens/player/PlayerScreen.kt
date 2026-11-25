@@ -70,6 +70,7 @@ fun PlayerScreen(
     catchupEndMillis: Long? = null,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
+    com.platinum.ott.core.platform.KeepScreenOnEffect()
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl, catchupStartMillis, catchupEndMillis) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
@@ -324,7 +325,7 @@ fun PlayerScreen(
                 }
 
                 val kind = playerKindOf(movieId, ready)
-                val actions = overlayActions(kind, ready.previousEpisodeId != null, ready.nextEpisodeId != null, ready.audioTracks.isNotEmpty())
+                val actions = overlayActions(kind, ready.previousEpisodeId != null, ready.nextEpisodeId != null, ready.audioTracks.isNotEmpty(), ready.subtitleTracks.isNotEmpty())
                 val canSeek = !isChannel || ready.isCatchup
                 val isCenter = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
 
@@ -469,6 +470,7 @@ fun PlayerScreen(
                     hasNextEpisode = state.nextEpisodeId != null,
                     hasPreviousEpisode = state.previousEpisodeId != null,
                     hasAudioChoice = state.audioTracks.isNotEmpty(),
+                    hasSubtitleChoice = state.subtitleTracks.isNotEmpty(),
                     liveInfo = liveInfo,
                     isSeekActive = isDpadSeekActive,
                     bufferedPositionMs = if (showBuffered) bufferedPositionMs else 0L,
@@ -496,6 +498,7 @@ fun PlayerScreen(
                     PlayerModal.CHANNELS -> ChannelsModal(
                         channels = channelsList, currentId = viewModel.currentId,
                         nowPlaying = { id -> viewModel.nowPlaying(id) },
+                        onReorder = { ids, id, to -> viewModel.reorderChannel(ids, id, to) },
                         onPick = { c -> modal = PlayerModal.NONE; selectedAction = null; viewModel.switchToChannel(c) }
                     )
                     PlayerModal.PROGRAM -> ProgramModal(

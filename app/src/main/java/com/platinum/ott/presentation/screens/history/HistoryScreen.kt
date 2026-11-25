@@ -142,6 +142,10 @@ fun HistoryScreen(navController: NavHostController, onMovieClick: (String) -> Un
                                 contentScale = contentScaleForId(entry.contentId),
                                 wide = wide
                             )
+                            // «Сколько осталось» — и в видах «Постеры»/«Широкие», не только в списке.
+                            historyShortLeft(entry)?.let {
+                                Text(it, style = MaterialTheme.typography.labelMedium, color = ZenithOnSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
+                            }
                             // Удаление — отдельная фокусируемая кнопка под карточкой (долгое нажатие на пульте ненадёжно).
                             TvPillButton(
                                 Icons.Default.Delete, { pendingDelete = entry },

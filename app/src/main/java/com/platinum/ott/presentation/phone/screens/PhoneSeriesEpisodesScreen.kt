@@ -1,6 +1,8 @@
 package com.platinum.ott.presentation.phone.screens
 
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.presentation.components.episodeDisplayTitle
+import com.platinum.ott.presentation.components.PhoneFavoritePill
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -65,11 +67,9 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                 // диалога. Отметка "аниме" убрана с этого экрана — теперь
                 // только в едином меню на карточке в FavoritesScreen
                 // (PROMPT_FAVORITES_REDESIGN.md, п.1/п.3).
-                IconButton(onClick = {
+                PhoneFavoritePill(isFavorite = isFavorite, onClick = {
                     if (isFavorite) viewModel.removeFavorite() else showAddFavoriteDialog = true
-                }) {
-                    Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "В избранное", tint = if (isFavorite) ZenithFavorite else Color.Unspecified)
-                }
+                }, modifier = Modifier.padding(end = ZenithDimens.paddingS))
             }
         )
     }) { padding ->
@@ -128,7 +128,7 @@ fun PhoneSeriesEpisodesScreen(seriesId: String, navController: NavHostController
                                                     Icon(Icons.Default.CheckCircle, contentDescription = "Просмотрено", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                                                 }
                                             }
-                                            Text(ep.title)
+                                            Text(episodeDisplayTitle(ep))
                                             if (ep.description.isNotBlank()) {
                                                 Text(ep.description, style = MaterialTheme.typography.bodySmall, color = ZenithOnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = ZenithDimens.paddingXS))
                                             }

@@ -6,6 +6,7 @@ import com.platinum.ott.navigation.navigateToTab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +54,12 @@ val loadedItems by viewModel.items.collectAsState(initial = emptyList())
 val subtitles = remember(loadedItems) { loadedItems.associate { it.entry.contentId to it.subtitle } }
 var showClearAllConfirm by remember { mutableStateOf(false) }
 var pendingDelete by remember { mutableStateOf<com.platinum.ott.data.local.entity.WatchHistoryEntity?>(null) }
+// Фильтр по типу — как на ТВ: появляется, когда в истории больше одного типа записей.
+var filterName by rememberSaveable { mutableStateOf<String?>(null) }
+val kindOf = remember(history) { history.associate { it.contentId to com.platinum.ott.presentation.screens.history.historyKindOf(it) } }
+val kinds = com.platinum.ott.presentation.screens.history.HistoryKind.entries.filter { k -> kindOf.values.any { it == k } }
+val activeKind = com.platinum.ott.presentation.screens.history.HistoryKind.entries.firstOrNull { it.name == filterName }?.takeIf { it in kinds }
+val shown = if (activeKind == null) history else history.filter { kindOf[it.contentId] == activeKind }
 
 Scaffold(
     topBar = {
@@ -77,16 +85,29 @@ Scaffold(
             Text("Здесь появятся фильмы и сериалы, которые вы начали смотреть", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(ZenithDimens.paddingM))
         }
     } else {
+        Column(Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (kinds.size >= 2) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = ZenithDimens.paddingSM, vertical = ZenithDimens.paddingXS),
+                horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)
+            ) {
+                item { FilterChip(selected = activeKind == null, onClick = { filterName = null }, label = { Text("Все ${history.size}") }) }
+                items(kinds) { k ->
+                    FilterChip(selected = activeKind == k, onClick = { filterName = k.name }, label = { Text("${k.label} ${kindOf.values.count { it == k }}") })
+                }
+            }
+        }
         CardCollection(
-            items = history,
+            items = shown,
             key = { it.contentId },
             section = CardSection.HISTORY,
             isTv = false,
-            modifier = Modifier.padding(padding).background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(ZenithDimens.paddingSM),
             horizontalGap = ZenithDimens.paddingS,
             cardItem = { entry, _, wide ->
                 val p = if (entry.durationMs > 0) entry.positionMs.toFloat() / entry.durationMs else 0f
+                Column {
                 Box {
                     MovieCard(
                         title = entry.title, poster = entry.poster ?: "", year = 0,
@@ -100,6 +121,11 @@ Scaffold(
                         onClick = { pendingDelete = entry },
                         modifier = Modifier.align(Alignment.TopEnd).padding(ZenithDimens.paddingXS).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
                     ) { Icon(Icons.Default.Delete, "Удалить «${entry.title}» из истории", tint = ZenithOnSurface) }
+                }
+                // «Сколько осталось» под карточкой.
+                com.platinum.ott.presentation.screens.history.historyShortLeft(entry)?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = ZenithOnSurfaceVariant, maxLines = 1)
+                }
                 }
             },
             listItem = { entry, _ ->
@@ -160,6 +186,7 @@ Scaffold(
                 }
             }
         )
+        }
     }
 }
 

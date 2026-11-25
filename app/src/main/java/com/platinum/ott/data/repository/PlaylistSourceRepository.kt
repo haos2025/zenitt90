@@ -333,6 +333,40 @@ class PlaylistSourceRepository(
         }
     }
 
+    /** Текущий шаг загрузки источника («Скачиваю плейлист: 3,2 МБ», «Сохраняю каналы: 1200» …) — для экрана добавления. */
+    private val _refreshProgress = MutableStateFlow<String?>(null)
+    val refreshProgress: StateFlow<String?> get() = _refreshProgress.asStateFlow()
+
+    private fun mb(bytes: Long): String = String.format(java.util.Locale.US, "%.1f МБ", bytes / 1048576.0)
+
+    /** Скачивание плейлиста с показом хода (объём скачанного). */
+    private fun downloadTextWithProgress(url: String): String {
+        val req = Request.Builder().url(url).build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body ?: return ""
+            val total = body.contentLength()
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            var read = 0L
+            var lastTick = 0L
+            _refreshProgress.value = "Подключаюсь к серверу…"
+            body.byteStream().use { input ->
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    read += n
+                    val now = System.currentTimeMillis()
+                    if (now - lastTick > 250) {
+                        lastTick = now
+                        _refreshProgress.value = "Скачиваю плейлист: " + mb(read) + if (total > 0) " из " + mb(total) else ""
+                    }
+                }
+            }
+            return out.toString("UTF-8")
+        }
+    }
+
     suspend fun refresh(sourceId: String, forceRefresh: Boolean = true): Unit = withContext(Dispatchers.IO) {
         val source = sourceDao.getById(sourceId) ?: return@withContext
         if (!forceRefresh) {
@@ -350,8 +384,7 @@ class PlaylistSourceRepository(
                     val body = if (url.startsWith("file://")) {
                         File(url.removePrefix("file://")).readText()
                     } else {
-                        val req = Request.Builder().url(url).build()
-                        client.newCall(req).execute().use { it.body?.string() ?: "" }
+                        downloadTextWithProgress(url)
                     }
                     // Тело плейлиста по ссылке сохраняем рядом со снапшотами файловых источников —
                     // чтобы пересчитать разведение (переопределение группы) без повторной загрузки.
@@ -363,7 +396,9 @@ class PlaylistSourceRepository(
                 "xtream" -> {
                     val host = source.host; val user = source.username; val pass = source.password
                     if (host == null || user == null || pass == null) return@withContext
+                    _refreshProgress.value = "Загружаю каталог фильмов и сериалов…"
                     val vodItems = XtreamVodClient.fetch(client, host, user, pass)
+                    _refreshProgress.value = "Сохраняю фильмы и сериалы: ${vodItems.size}"
                     storeVodEntries(source, sourceId, vodItems)
 
                     // Живой эфир — отдельный эндпоинт Xtream, не зависит от
@@ -372,7 +407,9 @@ class PlaylistSourceRepository(
                     // сама ловит исключение "у панели вообще нет раздела live"
                     // и возвращает emptyList(), так что уже успешный VOD-фетч
                     // выше этим не роняется.
+                    _refreshProgress.value = "Загружаю список каналов…"
                     val liveStreams = XtreamVodClient.fetchLiveStreams(client, host, user, pass)
+                    _refreshProgress.value = "Сохраняю каналы: ${liveStreams.size}"
                     val storedStreams = channelMatchingRepository.matchAndStore(sourceId, liveStreams.map { it.toRawChannelCandidate() })
                     lastSplits[sourceId] = SourceSplit(liveStreams.size, vodItems.size)
 
@@ -393,6 +430,8 @@ class PlaylistSourceRepository(
             sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), "ok")
         } catch (e: Exception) {
             sourceDao.updateRefreshResult(sourceId, System.currentTimeMillis(), e.message ?: "Ошибка обновления")
+        } finally {
+            _refreshProgress.value = null
         }
     }
 
@@ -411,6 +450,7 @@ class PlaylistSourceRepository(
      * Пустой разбор (сетевой сбой, битый файл) ничего не стирает.
      */
     private suspend fun processM3uBody(source: PlaylistSourceEntity, sourceId: String, body: String) {
+        _refreshProgress.value = "Разбираю плейлист…"
         val parsed = M3uPlaylistParser.parseEntries(body)
         // PROMPT_EPG.md, подзадача 2: url-tvg из шапки; null пишется явно (см. историю в git).
         val epgUrl = M3uPlaylistParser.parseEpgUrl(body)
@@ -425,6 +465,7 @@ class PlaylistSourceRepository(
         if (parsed.isNotEmpty()) lastSplits[sourceId] = SourceSplit(channelEntries.size, vodEntries.size)
 
         if (parsed.isNotEmpty()) {
+            _refreshProgress.value = "Записей: ${parsed.size}. Сохраняю каналы: ${channelEntries.size}, фильмы и сериалы: ${vodEntries.size}"
             if (channelEntries.isNotEmpty()) {
                 // Живой эфир уходит в Channel/ChannelStream, не в playlist_movies.
                 channelMatchingRepository.matchAndStore(sourceId, channelEntries.map { it.entity.toRawChannelCandidate() })
@@ -552,9 +593,10 @@ class PlaylistSourceRepository(
             // Отдельный клиент: XMLTV — файл на десятки МБ, общий API-таймаут (15/30 с) его обрывал.
             // User-Agent «как у браузера» — часть серверов EPG отдаёт 403 библиотечным клиентам.
             val req = Request.Builder().url(url)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+                .header("User-Agent", EPG_USER_AGENT)
                 .build()
             val xmltvNames = mutableMapOf<String, MutableList<String>>()
+            val xmltvIcons = HashMap<String, String>()
             // Потоковый фильтр: в память попадают только программы каналов НАШИХ плейлистов
             // (по tvg-id или по названию из <channel>, которые в XMLTV идут раньше <programme>).
             // Раньше копились все программы всех каналов файла на 48 часов — на ТВ-приставке это
@@ -582,11 +624,20 @@ class PlaylistSourceRepository(
                     buffered.mark(2)
                     val b0 = buffered.read(); val b1 = buffered.read()
                     buffered.reset()
-                    val stream: java.io.InputStream =
-                        if (b0 == 0x1f && b1 == 0x8b) java.util.zip.GZIPInputStream(buffered, 8192) else buffered
-                    XmltvSaxParser.parse(stream, windowStart, windowEnd, accept = accept) { id, name ->
-                        xmltvNames.getOrPut(id) { mutableListOf() }.add(name)
+                    val stream: java.io.InputStream = when {
+                        b0 == 0x1f && b1 == 0x8b -> java.util.zip.GZIPInputStream(buffered, 8192)
+                        // .zip (например, teleguide.info): берём первый файл архива.
+                        b0 == 0x50 && b1 == 0x4b -> java.util.zip.ZipInputStream(buffered).also { z ->
+                            var e = z.nextEntry
+                            while (e != null && e.isDirectory) e = z.nextEntry
+                        }
+                        else -> buffered
                     }
+                    XmltvSaxParser.parse(
+                        stream, windowStart, windowEnd, accept = accept,
+                        onChannelName = { id, name -> xmltvNames.getOrPut(id) { mutableListOf() }.add(name) },
+                        onChannelIcon = { id, src -> xmltvIcons.putIfAbsent(id, src) }
+                    )
                 } ?: emptyList()
             }
             if (programs.isEmpty()) {
@@ -602,7 +653,7 @@ class PlaylistSourceRepository(
                     for (k in EpgNameMatcher.keys(n)) nameIndex.putIfAbsent(k, xid)
                 }
             }
-            var byId = 0; var byName = 0
+            var byId = 0; var byName = 0; var logosAdded = 0
             for (ch in channelMatchingRepository.allChannels()) {
                 // 1) по tvg-id без учёта регистра; 2) по названию (только если по id не нашлось).
                 var xid = ch.tvgId?.let { byLower[it.lowercase().trim()] }
@@ -613,6 +664,10 @@ class PlaylistSourceRepository(
                     viaName = xid != null
                 }
                 val list = byXmltv[xid ?: continue] ?: continue
+                // Нет логотипа в плейлисте — берём <icon> из XMLTV.
+                if (ch.logo.isNullOrBlank()) {
+                    xmltvIcons[xid]?.let { if (channelMatchingRepository.setLogoIfEmpty(ch.id, it)) logosAdded++ }
+                }
                 epgProgramRepository.replaceProgramsForChannel(
                     ch.id,
                     list.map { p ->
@@ -626,7 +681,7 @@ class PlaylistSourceRepository(
                 handled += ch.id
                 if (viaName) byName++ else byId++
             }
-            report?.add("$shortUrl: программ ${programs.size}, каналов в файле ${byXmltv.size}; сопоставлено по id $byId, по названию $byName")
+            report?.add("$shortUrl: программ ${programs.size}, каналов в файле ${byXmltv.size}; сопоставлено по id $byId, по названию $byName" + if (logosAdded > 0) "; логотипов добавлено $logosAdded" else "")
             true
         } catch (e: OutOfMemoryError) {
             // Error, не Exception: раньше такой сбой ронял приложение или молча обрывал загрузку.
@@ -644,12 +699,50 @@ class PlaylistSourceRepository(
         report: MutableList<String>? = null, handled: MutableSet<String> = mutableSetOf(),
         tried: MutableSet<String> = mutableSetOf(), totalChannels: Int = Int.MAX_VALUE
     ) {
-        // Идём по всем запасным источникам, пока остаются каналы без программы; уже пробованные адреса пропускаем.
-        for (url in EpgFallbackSources.URLS) {
+        // Сначала быстро и параллельно проверяем, какие адреса вообще отвечают (мёртвый не задерживает остальные),
+        // затем разбираем живые по приоритету, пока остаются каналы без программы.
+        val candidates = EpgFallbackSources.URLS.filter { it !in tried }
+        val alive = probeEpgUrls(candidates, report)
+        for (url in alive) {
             if (handled.size >= totalChannels) return
             if (!tried.add(url)) continue
             refreshEpgFromXmltv(url, report, handled)
         }
+    }
+
+    /**
+     * Параллельная проверка адресов: запрос уходит ко всем сразу, ждём только заголовки ответа
+     * (короткие таймауты), тело не читаем. Возвращает отвечающие адреса в исходном порядке приоритета.
+     * Причина каждого отказа попадает в отчёт («нет сети / DNS», «таймаут», «HTTP 403» …).
+     */
+    private suspend fun probeEpgUrls(urls: List<String>, report: MutableList<String>?): List<String> = coroutineScope {
+        if (urls.isEmpty()) return@coroutineScope emptyList()
+        report?.add("Проверяю доступность источников (${urls.size})…")
+        val results = urls.map { url ->
+            async<Pair<String, String?>>(Dispatchers.IO) {
+                val short = url.substringAfter("://").substringBefore('?').take(60)
+                try {
+                    val req = Request.Builder().url(url)
+                        .header("User-Agent", EPG_USER_AGENT)
+                        .header("Accept-Encoding", "identity")
+                        .build()
+                    epgProbeClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) url to null
+                        else url to "$short: HTTP ${resp.code}"
+                    }
+                } catch (e: java.net.SocketTimeoutException) {
+                    url to "$short: не отвечает (таймаут)"
+                } catch (e: java.net.UnknownHostException) {
+                    url to "$short: адрес не найден (DNS)"
+                } catch (e: javax.net.ssl.SSLException) {
+                    url to "$short: ошибка защищённого соединения"
+                } catch (e: Exception) {
+                    url to "$short: ${e.javaClass.simpleName}"
+                }
+            }
+        }.awaitAll()
+        results.mapNotNull { (_, err) -> err }.forEach { report?.add(it) }
+        results.filter { it.second == null }.map { it.first }
     }
 
     private val epgPrefs by lazy { appContext.getSharedPreferences("epg_state", Context.MODE_PRIVATE) }
@@ -710,11 +803,23 @@ class PlaylistSourceRepository(
             ok = ok, programs = programs, channelsWithEpg = channelsWithEpg, totalChannels = total
         )
     }
+    private val EPG_USER_AGENT = "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+    // Быстрая проверка адресов: ждём только заголовки, не больше ~10 с на источник.
+    private val epgProbeClient by lazy {
+        client.newBuilder()
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(12, TimeUnit.SECONDS)
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .build()
+    }
+
     private val epgClient by lazy {
         client.newBuilder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
-            .callTimeout(5, TimeUnit.MINUTES)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(4, TimeUnit.MINUTES)
             // iptvx.one обрывает HTTP/2 (PROTOCOL_ERROR) — для файлов программы используем HTTP/1.1.
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .build()

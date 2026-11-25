@@ -46,6 +46,9 @@ class AddSourceViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<AddSourceUiState>(AddSourceUiState.Idle)
     val uiState: StateFlow<AddSourceUiState> = _uiState.asStateFlow()
 
+    /** Ход загрузки («Скачиваю плейлист: 3,2 МБ» …) — показывается на экране вместо немого «Проверка…». */
+    val progress: StateFlow<String?> get() = repository.refreshProgress
+
     fun addM3uUrl(label: String, url: String, isLiveChannels: Boolean, onSuccess: () -> Unit) {
         if (url.isBlank()) { _uiState.value = AddSourceUiState.Error("Введите ссылку"); return }
         viewModelScope.launch {

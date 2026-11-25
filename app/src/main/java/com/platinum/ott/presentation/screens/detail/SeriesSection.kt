@@ -1,6 +1,7 @@
 package com.platinum.ott.presentation.screens.detail
 
 import androidx.compose.foundation.BorderStroke
+import com.platinum.ott.presentation.components.episodeDisplayTitle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -81,12 +82,16 @@ fun SeriesSection(
         buildList { add("Серии"); if (cast.isNotEmpty()) add("Актёры"); if (recommendations.isNotEmpty()) add("Похожие") }
     }
     Column(modifier) {
-        Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
-            tabs.forEachIndexed { i, title ->
-                SeriesChip(title, selected = tab == i, selectOnFocus = true, onSelect = { tab = i })
+        // Единственная вкладка «Серии» ничего не переключает — не рисуем её и не даём ей фокус:
+        // с кнопок вверху пульт сразу попадает в список серий.
+        if (tabs.size > 1) {
+            Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
+                tabs.forEachIndexed { i, title ->
+                    SeriesChip(title, selected = tab == i, selectOnFocus = true, onSelect = { tab = i })
+                }
             }
+            Spacer(Modifier.height(ZenithDimens.paddingM))
         }
-        Spacer(Modifier.height(ZenithDimens.paddingM))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tabs.getOrNull(tab)) {
                 "Актёры" -> CastRow(cast, showRoles = false, onMemberClick = { onCastClick(it.id) })
@@ -228,7 +233,7 @@ private fun EpisodeItem(ep: Movie, hist: WatchHistoryEntity?, compact: Boolean, 
         if (compact) {
             Row(Modifier.fillMaxWidth().padding(horizontal = ZenithDimens.paddingM, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(ep.episodeNumber?.let { "$it." } ?: "•", color = ZenithOnSurfaceVariant, modifier = Modifier.width(56.dp), maxLines = 1)
-                Text(ep.title, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(episodeDisplayTitle(ep), color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (completed) {
                     Icon(Icons.Default.CheckCircle, contentDescription = "Просмотрено", tint = accent, modifier = Modifier.size(18.dp))
                 } else if (progress != null) {
@@ -256,7 +261,7 @@ private fun EpisodeItem(ep: Movie, hist: WatchHistoryEntity?, compact: Boolean, 
                 ep.episodeNumber?.let { Text("$it.", color = ZenithOnSurfaceVariant, modifier = Modifier.padding(end = ZenithDimens.paddingSM)) }
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(ep.title, color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Text(episodeDisplayTitle(ep), color = ZenithOnSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         if (completed) {
                             Spacer(Modifier.width(ZenithDimens.paddingXS))
                             Icon(Icons.Default.CheckCircle, contentDescription = "Просмотрено", tint = accent, modifier = Modifier.size(16.dp))

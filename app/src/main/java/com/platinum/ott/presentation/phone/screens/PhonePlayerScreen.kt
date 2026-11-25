@@ -60,6 +60,7 @@ fun PhonePlayerScreen(
 ) {
     // onExit — для ExternalPlayerActivity (нет NavController, «Назад» закрывает экран).
     val exitPlayer: () -> Unit = { if (onExit != null) onExit() else navController?.popBackStack() }
+    com.platinum.ott.core.platform.KeepScreenOnEffect()
     LaunchedEffect(movieId) { viewModel.loadMovie(movieId, preferredVariantUrl, catchupStartMillis, catchupEndMillis) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()

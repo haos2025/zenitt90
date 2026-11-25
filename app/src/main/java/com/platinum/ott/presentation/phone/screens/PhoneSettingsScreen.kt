@@ -245,6 +245,9 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
             }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             NavCard("Управление кэшем", "Размер по категориям и очистка") { navController.navigate("cache_management") }
+            Spacer(Modifier.height(ZenithDimens.paddingS))
+            val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
+            NavCard("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}") { navController.navigate("sync_pairing") }
         }
         SettingsCategory.NOTIFICATIONS -> {
             val newEpisodes by viewModel.newEpisodes.collectAsStateWithLifecycle()
@@ -270,12 +273,6 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
             NavCard("Телепрограмма (EPG)", "Статус и обновление") { navController.navigate("epg_settings") }
             Spacer(Modifier.height(ZenithDimens.paddingS))
             NavCard("Плагины", "Каталог и управление плагинами") { navController.navigate("plugins") }
-        }
-        SettingsCategory.DEVICES -> {
-            val lastSyncedAtMs by viewModel.lastSyncedAtMs.collectAsStateWithLifecycle()
-            NavCard("Мои устройства", "Последняя синхронизация: ${formatLastSynced(lastSyncedAtMs)}") { navController.navigate("sync_pairing") }
-            Spacer(Modifier.height(ZenithDimens.paddingS))
-            // Не то же, что синхронизация: этот канал — напрямую по локальной сети, без бэкенда.
         }
         SettingsCategory.MAINTENANCE -> {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()

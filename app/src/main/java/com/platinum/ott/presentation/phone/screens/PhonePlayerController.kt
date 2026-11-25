@@ -255,7 +255,8 @@ fun PhonePlayerController(
                     }
                     Spacer(Modifier.weight(1f))
                     Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingXS), verticalAlignment = Alignment.CenterVertically) {
-                        SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled || autoSubtitleState != AutoSubtitleState.Off) { menuTab = PlaybackMenuTab.SUBTITLES }
+                        // В эфире без дорожек субтитров кнопка бесполезна — не показываем.
+                        if (!isLive || subtitleTracks.isNotEmpty() || subtitlesEnabled) SmallMenuIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", isActive = subtitlesEnabled || autoSubtitleState != AutoSubtitleState.Off) { menuTab = PlaybackMenuTab.SUBTITLES }
                         SmallMenuIconButton(icon = Icons.Default.MoreVert, contentDescription = "Ещё настройки", isActive = false) { moreSheetOpen = true; moreSheetCategory = null }
                         SmallMenuIconButton(icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "На весь экран", isActive = isFullscreen) { onToggleFullscreen() }
                     }

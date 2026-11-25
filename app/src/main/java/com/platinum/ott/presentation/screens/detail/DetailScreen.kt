@@ -1,6 +1,7 @@
 package com.platinum.ott.presentation.screens.detail
 
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
+import com.platinum.ott.presentation.components.TvFavoritePill
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -283,15 +284,13 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                             Button(onClick = onPlayClick, modifier = Modifier.focusRequester(playButtonFocusRequester)) { Text(if (state.watchProgress != null) "Продолжить ${(state.watchProgress * 100).toInt()}%" else "Смотреть") }
                                         }
                                     }
-                                    if (!state.tmdbOnly) OutlinedButton(onClick = {
+                                    if (!state.tmdbOnly) TvFavoritePill(isFavorite = state.isFavorite, onClick = {
                                         when {
                                             state.isFavorite -> viewModel.removeFavorite(movieId)
                                             folders.isEmpty() -> viewModel.addFavorite(movieId, state.movie.title, state.movie.poster, null)
                                             else -> showAddFavoriteDialog = true
                                         }
-                                    }) {
-                                        Text(if (state.isFavorite) "♥ В избранном" else "♡ В избранное")
-                                    }
+                                    })
                                 }
                                 if (series != null) {
                                     val seasonsCount = series.episodes.mapNotNull { it.seasonNumber }.distinct().size

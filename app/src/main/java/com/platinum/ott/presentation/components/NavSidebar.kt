@@ -8,7 +8,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -56,12 +55,8 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -83,6 +78,7 @@ import com.platinum.ott.core.SidebarLayoutStore
 import com.platinum.ott.core.platform.DpadKeyTracker
 import com.platinum.ott.core.platform.ZenithDimens
 import com.platinum.ott.core.platform.safeRequestFocus
+import com.platinum.ott.core.platform.swallowOpeningKeyRelease
 import com.platinum.ott.navigation.navigateToTab
 import com.platinum.ott.ui.theme.ZenithOnSurface
 import com.platinum.ott.ui.theme.ZenithOnSurfaceVariant
@@ -99,23 +95,20 @@ import com.platinum.ott.ui.theme.ZenithSurface
 //  • Вправо из панели → панель сразу сворачивается и фокус уходит в контент.
 //  • OK на уже открытом разделе → просто возвращает фокус в контент.
 //  • Фокус, пришедший без нажатия стрелки (начальный фокус экрана), панель не раскрывает, а отдаёт контенту.
-// Пункты: «Каналы», «Телепрограмма» и «Сериалы» — верхнеуровневые маршруты ("channels", "epg_grid", "series").
-private enum class SidebarGroup(val title: String?) { MAIN(null), TV("Телевидение"), CINEMA("Кино"), BOTTOM(null) }
-
+// Группы-заголовки и знак бренда убраны (24.11): только значки и подписи. Пункты: «Каналы», «Телепрограмма» и «Сериалы» — верхнеуровневые маршруты ("channels", "epg_grid", "series").
 private enum class SidebarItem(
     val route: String,
     val label: String,
     val icon: ImageVector,
-    val group: SidebarGroup,
 ) {
-    HOME("home", "Главная", Icons.Default.Home, SidebarGroup.MAIN),
-    SEARCH("search", "Поиск", Icons.Default.Search, SidebarGroup.MAIN),
-    CHANNELS("channels", "Каналы", Icons.Default.Tv, SidebarGroup.TV),
-    EPG("epg_grid", "Телепрограмма", Icons.Default.CalendarMonth, SidebarGroup.TV),
-    SERIES("series", "Сериалы", Icons.Default.Movie, SidebarGroup.CINEMA),
-    FAVORITES("favorites", "Избранное", Icons.Default.Favorite, SidebarGroup.CINEMA),
-    HISTORY("history", "История", Icons.Default.History, SidebarGroup.CINEMA),
-    SETTINGS("settings", "Настройки", Icons.Default.Settings, SidebarGroup.BOTTOM),
+    HOME("home", "Главная", Icons.Default.Home),
+    SEARCH("search", "Поиск", Icons.Default.Search),
+    CHANNELS("channels", "Каналы", Icons.Default.Tv),
+    EPG("epg_grid", "Телепрограмма", Icons.Default.CalendarMonth),
+    SERIES("series", "Сериалы", Icons.Default.Movie),
+    FAVORITES("favorites", "Избранное", Icons.Default.Favorite),
+    HISTORY("history", "История", Icons.Default.History),
+    SETTINGS("settings", "Настройки", Icons.Default.Settings),
 }
 
 private val CollapsedWidth = 88.dp
@@ -256,55 +249,9 @@ fun NavSidebar(
                 .padding(vertical = ZenithDimens.paddingL, horizontal = 10.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            // Знак бренда: на месте и в покое, и в раскрытом виде.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 4.dp, bottom = ZenithDimens.paddingM).height(48.dp)
-            ) {
-                BrandMark(Modifier.size(40.dp))
-                Text(
-                    "ZENITH",
-                    modifier = Modifier.padding(start = 12.dp).graphicsLayer { alpha = labelAlpha.value },
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 3.sp,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-
             // Все пункты, включая «Настройки», — в одной прокручиваемой области (на 720p колонка не помещается по высоте).
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)) {
-                var lastGroup: SidebarGroup? = null
                 visibleItems.forEach { item ->
-                    if (item.group != lastGroup && (lastGroup != null || item.group.title != null)) {
-                        // Заголовок группы — в раскрытом виде; в покое на его месте тонкий разделитель.
-                        Box(Modifier.fillMaxWidth().height(32.dp)) {
-                            Text(
-                                item.group.title.orEmpty(),
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 14.dp, bottom = 4.dp)
-                                    .graphicsLayer { alpha = labelAlpha.value },
-                                fontSize = 12.sp,
-                                letterSpacing = 2.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ZenithOnSurfaceVariant,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                            Box(
-                                Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 10.dp)
-                                    .width(28.dp)
-                                    .height(1.dp)
-                                    .graphicsLayer { alpha = (1f - labelAlpha.value) * 0.5f }
-                                    .background(ZenithOnSurface)
-                            )
-                        }
-                    }
-                    lastGroup = item.group
                     SidebarEntry(
                         item = item,
                         selected = item == activeItem,
@@ -355,7 +302,7 @@ private fun SidebarEntry(
         ),
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, accent))),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
-        modifier = Modifier.focusRequester(requester).padding(vertical = 3.dp).fillMaxWidth().height(52.dp)
+        modifier = Modifier.focusRequester(requester).padding(vertical = 1.dp).fillMaxWidth().height(46.dp)
     ) {
         Box(Modifier.fillMaxSize()) {
             if (selected) {
@@ -424,6 +371,7 @@ private fun SidebarEditorDialog(onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
+                .swallowOpeningKeyRelease()
                 .widthIn(max = 560.dp)
                 .clip(ZenithShapeLarge)
                 .background(ZenithSurface)
@@ -490,25 +438,6 @@ private fun SidebarEditorDialog(onDismiss: () -> Unit) {
     LaunchedEffect(Unit) {
         repeat(2) { withFrameNanos { } }
         firstFocus.safeRequestFocus()
-    }
-}
-
-// Знак «Zenith» (как в иконке): дуга, точка-зенит и треугольник-play.
-// Рисуется кодом в системе координат 108x108, как адаптивная иконка.
-@Composable
-private fun BrandMark(modifier: Modifier = Modifier) {
-    val accent = MaterialTheme.colorScheme.primary
-    Canvas(modifier) {
-        val k = size.minDimension / 108f
-        val arc = Path().apply {
-            arcTo(Rect(Offset(30f * k, 30f * k), Size(48f * k, 48f * k)), 228.7f, -277.4f, true)
-        }
-        drawPath(arc, accent, style = Stroke(width = 6f * k, cap = StrokeCap.Round))
-        drawCircle(ZenithOnSurface, radius = 4.6f * k, center = Offset(54f * k, 29.5f * k))
-        val play = Path().apply {
-            moveTo(46f * k, 47f * k); lineTo(46f * k, 69f * k); lineTo(67f * k, 58f * k); close()
-        }
-        drawPath(play, ZenithOnSurface)
     }
 }
 

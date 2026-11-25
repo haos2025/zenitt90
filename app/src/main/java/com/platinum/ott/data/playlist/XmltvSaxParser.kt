@@ -70,13 +70,15 @@ object XmltvSaxParser {
         // Фильтр по каналу XMLTV: false — программы этого канала отбрасываются сразу при разборе
         // (не попадают в память). null — брать все. Решение кэшируется на канал.
         accept: ((channelId: String) -> Boolean)? = null,
-        onChannelName: ((channelId: String, displayName: String) -> Unit)? = null
+        onChannelName: ((channelId: String, displayName: String) -> Unit)? = null,
+        // <icon src="..."/> внутри <channel> — логотип канала (используется, когда в плейлисте tvg-logo нет).
+        onChannelIcon: ((channelId: String, src: String) -> Unit)? = null
     ): List<XmltvProgram> {
         val result = mutableListOf<XmltvProgram>()
         val factory = SAXParserFactory.newInstance()
         disableExternalEntitiesQuietly(factory)
         val parser = factory.newSAXParser()
-        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis, accept, onChannelName) { result.add(it) })
+        parser.parse(input, XmltvHandler(windowStartMillis, windowEndMillis, accept, onChannelName, onChannelIcon) { result.add(it) })
         return result
     }
 
@@ -109,6 +111,7 @@ private class XmltvHandler(
     private val windowEndMillis: Long,
     private val accept: ((String) -> Boolean)?,
     private val onChannelName: ((String, String) -> Unit)?,
+    private val onChannelIcon: ((String, String) -> Unit)?,
     private val onProgramme: (XmltvProgram) -> Unit
 ) : DefaultHandler() {
     private var inProgramme = false
@@ -134,6 +137,11 @@ private class XmltvHandler(
         when (qName) {
             "channel" -> currentChannelDef = attributes.getValue("id")
             "display-name" -> if (currentChannelDef != null && onChannelName != null) startCapturing()
+            "icon" -> {
+                val id = currentChannelDef
+                val src = attributes.getValue("src")
+                if (id != null && !src.isNullOrBlank()) onChannelIcon?.invoke(id, src.trim())
+            }
             "programme" -> {
                 inProgramme = true
                 channel = attributes.getValue("channel")

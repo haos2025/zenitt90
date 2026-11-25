@@ -10,6 +10,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,11 +90,13 @@ private fun ModalRow(
     selected: Boolean,
     modifier: Modifier = Modifier,
     onFocus: (Boolean) -> Unit = {},
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     content: @Composable RowScope.() -> Unit
 ) {
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier.fillMaxWidth().onFocusChanged { onFocus(it.isFocused) },
         shape = ClickableSurfaceDefaults.shape(ZenithShapeMedium),
         colors = ClickableSurfaceDefaults.colors(
@@ -199,6 +207,8 @@ fun EpisodesModal(seriesTitle: String, episodes: List<Movie>?, currentId: String
 fun ChannelsModal(
     channels: List<ChannelUiItem>?, currentId: String?,
     nowPlaying: suspend (String) -> Pair<String, Float>? = { null },
+    // Перемещение канала прямо при просмотре: (id'ы показанного списка, id канала, новое место). null — без перемещения.
+    onReorder: ((List<String>, String, Int) -> Unit)? = null,
     onPick: (ChannelUiItem) -> Unit
 ) {
     ModalFrame(title = "Каналы", widthFraction = 0.7f) {
@@ -211,9 +221,38 @@ fun ChannelsModal(
                     listOf(allLabel) + channels.mapNotNull { it.category?.takeIf { c -> c.isNotBlank() } }.distinct().sorted()
                 }
                 var selectedCategory by remember { mutableStateOf(allLabel) }
-                val visible = remember(channels, selectedCategory) {
-                    if (selectedCategory == allLabel) channels else channels.filter { it.category == selectedCategory }
+                // Локальный порядок: при «захвате» канал сразу виден на новом месте, а сохраняется через onReorder.
+                val order = remember(channels) { mutableStateListOf<ChannelUiItem>().apply { addAll(channels) } }
+                var grabbedId by remember { mutableStateOf<String?>(null) }
+                var grabOrigin by remember { mutableIntStateOf(-1) }
+                val visible = if (selectedCategory == allLabel) order.toList() else order.filter { it.category == selectedCategory }
+                fun grabMove(delta: Int) {
+                    val id = grabbedId ?: return
+                    val cur = visible.indexOfFirst { it.id == id }
+                    val target = (cur + delta).coerceIn(0, visible.lastIndex)
+                    if (cur < 0 || target == cur) return
+                    val ids = visible.map { it.id }
+                    // В общем списке канал встаёт на место того, кого «подвинул».
+                    val item = order.first { it.id == id }
+                    val anchor = visible[target]
+                    order.remove(item)
+                    order.add(order.indexOfFirst { it.id == anchor.id }.let { if (delta > 0) it + 1 else it }, item)
+                    onReorder?.invoke(ids, id, target)
                 }
+                fun grabCancel() {
+                    val id = grabbedId ?: return
+                    val ids = visible.map { it.id }
+                    val cur = ids.indexOf(id)
+                    if (grabOrigin >= 0 && cur >= 0 && grabOrigin != cur) {
+                        val item = order.first { it.id == id }
+                        val anchor = visible[grabOrigin]
+                        order.remove(item)
+                        order.add(order.indexOfFirst { it.id == anchor.id }.let { if (grabOrigin > cur) it + 1 else it }, item)
+                        onReorder?.invoke(ids, id, grabOrigin)
+                    }
+                    grabbedId = null
+                }
+                androidx.activity.compose.BackHandler(enabled = grabbedId != null) { grabCancel() }
                 val listState = rememberLazyListState()
                 val focus = remember { FocusRequester() }
                 LaunchedEffect(channels) {
@@ -223,7 +262,18 @@ fun ChannelsModal(
                     focus.safeRequestFocus()
                 }
                 val focusId = (visible.firstOrNull { it.id == currentId } ?: visible.firstOrNull())?.id
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
+                Column(Modifier.fillMaxSize()) {
+                if (onReorder != null) {
+                    Text(
+                        if (grabbedId != null) "Перемещение: ▲▼ — двигать канал, OK — оставить здесь, «Назад» — отменить"
+                        else "Удерживайте OK на канале — переместить",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (grabbedId != null) MaterialTheme.colorScheme.primary else ZenithOnSurface.copy(alpha = 0.45f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = ZenithDimens.paddingXS)
+                    )
+                }
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingM)) {
                     LazyColumn(Modifier.width(210.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         items(categories, key = { it }) { cat ->
                             ModalRow(
@@ -235,12 +285,28 @@ fun ChannelsModal(
                             }
                         }
                     }
-                    LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f).fillMaxHeight().onPreviewKeyEvent { e ->
+                            if (grabbedId == null) return@onPreviewKeyEvent false
+                            val isOk = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                            when {
+                                e.key == Key.DirectionUp -> { if (e.type == KeyEventType.KeyDown) grabMove(-1); true }
+                                e.key == Key.DirectionDown -> { if (e.type == KeyEventType.KeyDown) grabMove(1); true }
+                                // OK оставляет канал на месте; отпускание клавиши после долгого нажатия тоже гасим — иначе переключится канал.
+                                isOk -> { if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) grabbedId = null; true }
+                                else -> false
+                            }
+                        },
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         items(visible, key = { it.id }) { ch ->
                             val isCurrent = ch.id == currentId
+                            val isGrabbed = ch.id == grabbedId
                             ModalRow(
-                                selected = isCurrent,
+                                selected = isCurrent || isGrabbed,
                                 modifier = if (ch.id == focusId) Modifier.focusRequester(focus) else Modifier,
+                                onLongClick = if (onReorder != null) { { grabbedId = ch.id; grabOrigin = visible.indexOfFirst { it.id == ch.id } } } else null,
                                 onClick = { onPick(ch) }
                             ) {
                                 Text("${ch.channelNumber}", color = ZenithOnSurface.copy(alpha = 0.5f), modifier = Modifier.width(44.dp))
@@ -270,10 +336,12 @@ fun ChannelsModal(
                                         }
                                     }
                                 }
-                                if (isCurrent) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                if (isGrabbed) Text("↕", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                                else if (isCurrent) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
+                }
                 }
             }
         }

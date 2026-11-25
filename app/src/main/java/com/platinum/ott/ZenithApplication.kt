@@ -9,6 +9,9 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.decode.SvgDecoder
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.platinum.ott.worker.SeriesUpdateWorker
@@ -87,7 +90,27 @@ class ZenithApplication : Application(), ImageLoaderFactory, Configuration.Provi
     // Без своего ImageLoader Coil использует дефолтные лимиты кэша, которые на
     // TV-экранах с сеткой из десятков карточек одновременно на экране приводят
     // к частым перезагрузкам одних и тех же постеров с сервера при скролле туда-обратно.
+    //
+    // Логотипы каналов: многие хостинги отдают 403 клиенту с UA «okhttp/…», поэтому запросы идут с
+    // браузерным User-Agent; поддержаны SVG (coil-svg); кэш-заголовки сервера игнорируются
+    // (часть хостингов шлёт no-cache, и логотипы перекачивались при каждом показе).
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .okHttpClient {
+            OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    chain.proceed(
+                        chain.request().newBuilder()
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+                            .header("Accept", "image/*,*/*;q=0.8")
+                            .build()
+                    )
+                }
+                .build()
+        }
+        .components { add(SvgDecoder.Factory()) }
+        .respectCacheHeaders(false)
         .crossfade(true)
         .memoryCache {
             MemoryCache.Builder(this)
