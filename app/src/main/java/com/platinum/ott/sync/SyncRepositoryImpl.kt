@@ -120,6 +120,7 @@ class SyncRepositoryImpl(
         }
         for (h in histDao.getSince(pushSince)) {
             if (h.contentId in hist.appliedIds) continue
+            if (h.contentId.startsWith("exth_")) continue // история внешнего плеера — только на этом устройстве (ссылки с токенами)
             if (!validId(h.contentId)) { hist.errors++; continue }
             hist.sent++
             items += SyncPushItemDto(KIND_HISTORY, h.contentId, h.watchedAt.coerceAtLeast(0), false, historyData(h))
@@ -261,7 +262,7 @@ class SyncRepositoryImpl(
     private suspend fun localChecksum(): String {
         val lines = ArrayList<String>()
         favDao.getAllFavorites().first().forEach { lines += "$KIND_FAVORITE|${it.contentId}|${it.updatedAt}" }
-        histDao.getRecent(Int.MAX_VALUE).first().forEach { lines += "$KIND_HISTORY|${it.contentId}|${it.watchedAt}" }
+        histDao.getRecent(Int.MAX_VALUE).first().forEach { if (!it.contentId.startsWith("exth_")) lines += "$KIND_HISTORY|${it.contentId}|${it.watchedAt}" }
         lines.sort()
         val digest = MessageDigest.getInstance("SHA-256").digest(lines.joinToString("\n").toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }

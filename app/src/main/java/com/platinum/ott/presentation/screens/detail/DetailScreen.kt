@@ -40,7 +40,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.platinum.ott.presentation.components.rememberRowFocusState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.*
@@ -89,6 +92,15 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
     // metadata (иначе фокус будет насильно дёргаться обратно на "Смотреть"
     // и после того, как пользователь сам уже ушёл дальше по экрану).
     val playButtonFocusRequester = remember(movieId) { FocusRequester() }
+    // Состояние страниц и рядов лежит ВЫШЕ блока Success: при возврате с экрана актёра/фильма load() на миг
+    // ставит Loading, блок Success пересоздаётся — и всё, что внутри, сбрасывалось (фокус уходил на «Смотреть»).
+    // Здесь же запоминаем, из какого ряда ушли («cast»/«rec»), чтобы вернуть фокус на ту же карточку.
+    val castFocus = rememberRowFocusState()
+    val recFocus = rememberRowFocusState()
+    var returnRow by rememberSaveable { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    var page by rememberSaveable(movieId) { mutableIntStateOf(0) }
+    var seriesTab by rememberSaveable(movieId) { mutableIntStateOf(0) }
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is DetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -104,7 +116,19 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // ниже каруселям перетянуть фокус на себя по умолчанию.
                 // ФИКС (аудит): safeRequestFocus() вместо голого requestFocus() —
                 // см. FocusUtils.kt про редкую IllegalStateException здесь.
-                LaunchedEffect(movieId) { playButtonFocusRequester.safeRequestFocus() }
+                LaunchedEffect(movieId) { if (returnRow.isEmpty()) playButtonFocusRequester.safeRequestFocus() }
+                // Вернулись с экрана актёра/фильма: открываем нижнюю страницу и ставим фокус на карточку, с которой ушли.
+                // returnRow сбрасываем не сразу: если Success тут же пересоздадут (load()), восстановление повторится.
+                LaunchedEffect(movieId) {
+                    val row = returnRow
+                    if (row.isNotEmpty()) {
+                        page = 1
+                        val target = if (row == "cast") castFocus else recFocus
+                        if (!target.restoreFocus()) playButtonFocusRequester.safeRequestFocus()
+                        delay(800)
+                        returnRow = ""
+                    }
+                }
                 // Раньше тут не было ни одной картинки — ни постера, ни backdrop'а,
                 // хотя TMDB-метаданные (state.metadata) уже приходили с backdropPath.
                 // Если TMDB backdrop недоступен — падаем на постер из бэкенда/плейлиста,
@@ -184,8 +208,6 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                 // пользователем выключена; страница переключается ровно одной анимацией по
                 // тому, в какой странице находится фокус. Вход в верхний блок всегда ставит
                 // фокус на «Смотреть» (а не на «Показать полностью»).
-                val listState = rememberLazyListState()
-                var page by remember(movieId) { mutableIntStateOf(0) }
                 val detailFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 var pendingDown by remember(movieId) { mutableStateOf(false) }
                 var pendingUp by remember(movieId) { mutableStateOf(false) }
@@ -379,25 +401,29 @@ fun DetailScreen(movieId: String, onPlayClick: () -> Unit, onBackPressed: () -> 
                                         cast = state.metadata?.cast.orEmpty(),
                                         recommendations = state.recommendations,
                                         onEpisodeClick = { ep -> viewModel.onEpisodeSelected(ep.id) { id, url -> onPlayEpisode(id, url) } },
-                                        onCastClick = onNavigateToPerson,
+                                        onCastClick = { id -> returnRow = "cast"; onNavigateToPerson(id) },
+                                        castFocus = castFocus,
+                                        recFocus = recFocus,
+                                        tab = seriesTab,
+                                        onTabChange = { seriesTab = it },
                                         onRecommendationClick = { rec ->
                                             scope.launch {
                                                 val foundId = viewModel.findInCatalog(rec)
-                                                if (foundId != null) onNavigateToMovie(foundId)
+                                                returnRow = "rec"; if (foundId != null) onNavigateToMovie(foundId)
                                                 else onNavigateToTmdb(rec.tmdbId, rec.isTv)
                                             }
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
                                 } else {
-                                if (hasCast) CastRow(state.metadata!!.cast, showRoles = false, onMemberClick = { member -> onNavigateToPerson(member.id) })
+                                if (hasCast) CastRow(state.metadata!!.cast, showRoles = false, focusState = castFocus, onMemberClick = { member -> returnRow = "cast"; onNavigateToPerson(member.id) })
                                 if (state.recommendations.isNotEmpty()) {
                                     // Нажатие: ищем совпадение в каталоге (DetailViewModel.findInCatalog()),
                                     // переходим либо явно сообщаем, что не нашли.
-                                    RecommendationsRow(state.recommendations, onItemClick = { rec ->
+                                    RecommendationsRow(state.recommendations, focusState = recFocus, onItemClick = { rec ->
                                         scope.launch {
                                             val foundId = viewModel.findInCatalog(rec)
-                                            if (foundId != null) onNavigateToMovie(foundId)
+                                            returnRow = "rec"; if (foundId != null) onNavigateToMovie(foundId)
                                             else onNavigateToTmdb(rec.tmdbId, rec.isTv)
                                         }
                                     })

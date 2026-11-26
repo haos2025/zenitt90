@@ -91,6 +91,7 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
         SettingsCategory.PLAYBACK -> {
             val quality by viewModel.quality.collectAsStateWithLifecycle()
             val subsByDefault by viewModel.subsByDefault.collectAsStateWithLifecycle()
+            val subsAuto by viewModel.subsAutoGenerate.collectAsStateWithLifecycle()
             SettingsCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Качество по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
@@ -100,6 +101,14 @@ private fun CategoryPage(category: SettingsCategory, navController: NavHostContr
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Субтитры по умолчанию", color = ZenithOnSurface, modifier = Modifier.weight(1f))
                     Switch(checked = subsByDefault, onCheckedChange = { viewModel.setSubsByDefault(it) })
+                }
+                CardDivider()
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Создавать автоматически", color = ZenithOnSurface)
+                        Text("Если у видео нет готовых субтитров", color = ZenithOnSurface.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = subsByDefault && subsAuto, enabled = subsByDefault, onCheckedChange = { viewModel.setSubsAutoGenerate(it) })
                 }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))

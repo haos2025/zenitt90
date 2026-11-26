@@ -34,7 +34,8 @@ import javax.inject.Inject
 /**
  * Режим «внешний плеер» (план 05): другие приложения открывают ссылку через «Открыть с помощью».
  * Играет ссылку полноценным плеером Zenith (тот же оверлей и меню субтитров), без каталога,
- * без истории и избранного. «Назад» закрывает экран — возвращает в вызвавшее приложение.
+ * без избранного; история просмотра ведётся (запись «exth_…», см. ExternalHistoryStore), список серий от
+ * приложения-источника показывается в окне «Серии». «Назад» закрывает экран — возвращает в вызвавшее приложение.
  */
 @AndroidEntryPoint
 class ExternalPlayerActivity : ComponentActivity() {
@@ -42,6 +43,47 @@ class ExternalPlayerActivity : ComponentActivity() {
 
     private var request by mutableStateOf<DirectPlayRequest?>(null)
     private var nonce by mutableIntStateOf(0)
+    private var playerViewModel: PlayerViewModel? = null
+    private var resultSent = false
+
+    /**
+     * Ответ вызвавшему приложению (Lampa/TorrServe-клиентам нужна позиция, чтобы запомнить, где остановились).
+     * Ключи двух форматов сразу: MX Player (position/duration в мс, end_by) и Just+ (index, *_ms, *_sec),
+     * плюс «extra_position» VLC. Какой формат ждёт приложение — берём по тому, как оно нас запустило.
+     */
+    override fun finish() {
+        if (!resultSent) {
+            resultSent = true
+            try {
+                val vm = playerViewModel
+                vm?.stopForExit()
+                val r = vm?.externalResult()
+                if (r != null) {
+                    val data = android.content.Intent()
+                        .putExtra("uri", r.url)
+                        .putExtra("index", r.index)
+                        .putExtra("position", r.positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+                        .putExtra("duration", r.durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+                        .putExtra("position_ms", r.positionMs)
+                        .putExtra("position_sec", (r.positionMs / 1000).toInt())
+                        .putExtra("duration_ms", r.durationMs)
+                        .putExtra("duration_sec", (r.durationMs / 1000).toInt())
+                        .putExtra("extra_position", r.positionMs)
+                        .putExtra("extra_duration", r.durationMs)
+                        .putExtra(
+                            "end_by",
+                            when {
+                                r.dialect == ExternalIntentParser.DIALECT_JUSTPLUS -> if (r.completed) "completion" else "user"
+                                r.completed -> "playback_completion"
+                                else -> "user"
+                            }
+                        )
+                    setResult(RESULT_OK, data)
+                }
+            } catch (_: Exception) { /* ответ необязателен */ }
+        }
+        super.finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +123,7 @@ class ExternalPlayerActivity : ComponentActivity() {
     private fun PlayerHost(isTv: Boolean) {
         val req = request ?: return
         val viewModel: PlayerViewModel = hiltViewModel()
+        androidx.compose.runtime.SideEffect { playerViewModel = viewModel }
         val id = "$EXTERNAL_PLAYER_ID_PREFIX$nonce"
         // remember выполняется при композиции — раньше LaunchedEffect внутри экрана плеера,
         // который вызывает loadMovie(id) и уже найдёт подготовленный запрос.

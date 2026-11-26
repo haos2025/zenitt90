@@ -47,31 +47,37 @@ private val posterHeight = 165.dp
  * нашлось. Не показывается вызывающей стороной вовсе, если items пуст.
  */
 @Composable
-fun PersonFilmographyRow(title: String, items: List<PersonCreditItem>, onItemClick: (PersonCreditItem) -> Unit = {}, modifier: Modifier = Modifier) {
+fun PersonFilmographyRow(
+    title: String,
+    items: List<PersonCreditItem>,
+    onItemClick: (PersonCreditItem) -> Unit = {},
+    modifier: Modifier = Modifier,
+    focusState: RowFocusState = rememberRowFocusState(),
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { posterWidth.roundToPx() }
     val heightPx = with(density) { posterHeight.roundToPx() }
 
     Column(modifier = modifier) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, modifier = Modifier.padding(start = RowContentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)))
         Spacer(Modifier.height(ZenithDimens.paddingS))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            itemsIndexed(items, key = { i, c -> "${i}_${c.tmdbId}${c.mediaType}" }) { _, credit ->
+        LazyRow(
+            state = focusState.listState,
+            contentPadding = RowContentPadding,
+            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+            modifier = Modifier.rowEntry(focusState)
+        ) {
+            itemsIndexed(items, key = { i, c -> "${i}_${c.tmdbId}${c.mediaType}" }) { index, credit ->
                 val request = remember(credit.posterPath, widthPx, heightPx) {
                     TmdbImage.posterUrl(credit.posterPath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
                     }
                 }
-                var isFocused by remember { mutableStateOf(false) }
-                Column(modifier = Modifier.width(posterWidth)) {
-                    Box(
-                        modifier = Modifier.width(posterWidth).height(posterHeight)
-                            .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
-                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
-                            .onFocusChanged { isFocused = it.isFocused }
-                            .clickable { onItemClick(credit) }
-                    ) {
+                FocusRowCard(
+                    width = posterWidth, imageHeight = posterHeight, state = focusState, index = index,
+                    onClick = { onItemClick(credit) },
+                    image = {
                         if (request != null) {
                             AsyncImage(
                                 model = request, contentDescription = credit.title, contentScale = ContentScale.Crop,
@@ -80,13 +86,14 @@ fun PersonFilmographyRow(title: String, items: List<PersonCreditItem>, onItemCli
                                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
                             )
                         }
+                    },
+                    caption = { focused ->
+                        Text(credit.title, color = if (focused) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        credit.character?.let {
+                            Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
-                    Spacer(Modifier.height(ZenithDimens.paddingXS))
-                    Text(credit.title, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    credit.character?.let {
-                        Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+                )
             }
         }
     }

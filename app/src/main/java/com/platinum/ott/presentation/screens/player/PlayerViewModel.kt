@@ -25,6 +25,10 @@ import com.platinum.ott.core.PlayerOverlaySettings
 import com.platinum.ott.core.SessionGraph
 import com.platinum.ott.core.SubtitlePreferences
 import com.platinum.ott.core.player.ArchiveOrgMirrorResolver
+import com.platinum.ott.external.ExternalHistoryStore
+import com.platinum.ott.external.ExternalStoredItem
+import com.platinum.ott.external.ExternalStoredPlaylist
+import com.platinum.ott.presentation.components.episodeDisplayTitle
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.domain.usecase.CatchupWindow
 import com.platinum.ott.core.subtitles.AutoSubtitleState
@@ -53,9 +57,39 @@ data class DirectPlayRequest(
     val url: String,
     val title: String,
     val headers: Map<String, String> = emptyMap(),
-    val startPositionMs: Long = 0L,
+    /** null — вызывающее приложение позицию не передало (тогда берём собственную историю). */
+    val startPositionMs: Long? = null,
     val subtitleUrl: String? = null,
+    /** Список серий от вызывающего приложения (включая текущую); пусто — одиночный файл. */
+    val playlist: List<DirectPlayItem> = emptyList(),
+    val startIndex: Int = 0,
+    /** Откуда пришёл запрос: «view» (обычный ACTION_VIEW), «mx» (MX/Lampa), «justplus» — по нему выбираем формат ответа. */
+    val dialect: String = "view",
 )
+
+/** Один файл списка внешнего плеера: [title] — название фильма/сериала, [label] — подпись серии в списке. */
+data class DirectPlayItem(
+    val url: String,
+    val title: String,
+    val label: String = title,
+    val headers: Map<String, String> = emptyMap(),
+    val subtitleUrl: String? = null,
+    val startPositionMs: Long? = null,
+    val season: Int? = null,
+    val episode: Int? = null,
+)
+
+/** Итог просмотра для ответа вызвавшему приложению (позиция, где остановились, доиграно ли). */
+data class ExternalResult(
+    val url: String,
+    val index: Int,
+    val positionMs: Long,
+    val durationMs: Long,
+    val completed: Boolean,
+    val dialect: String,
+)
+
+private data class ExternalEntry(val id: String, val item: DirectPlayItem)
 
 enum class PlaybackMenuTab { QUALITY, AUDIO, SUBTITLES, SPEED }
 
@@ -217,17 +251,13 @@ class PlayerViewModel @Inject constructor(
     }
 
     val exoPlayer: ExoPlayer = run {
-        // Некоторые IPTV-каналы кодируют звук в AC-3/E-AC-3 (Dolby Digital) —
-        // это лицензированный кодек, штатный MediaCodec большинства Android-
-        // устройств его не поддерживает: видео идёт, звука нет, без ошибки
-        // в логах. EXTENSION_RENDERER_MODE_PREFER готовит плеер использовать
-        // decoder-расширение (например FFmpeg) вместо платформенного, КОГДА
-        // такое расширение подключено в проект — само по себе оно звук не
-        // чинит, FFmpeg-модуль для Media3 не публикуется в Maven Central
-        // (юридические причины), собирается локально через NDK отдельным
-        // шагом сборки, которого в проекте пока нет.
+        // Некоторые IPTV-каналы кодируют звук в AC-3/E-AC-3/MP2: у части устройств платформенного
+        // декодера для них нет — видео идёт, звука нет. FFmpeg-расширение (app/libs/*.aar, см.
+        // build-ffmpeg-aar.yml) добавляет программный декодер. Режим ON: расширение подключается ПОСЛЕ
+        // штатного MediaCodec, то есть работает только там, где штатный декодер формат не берёт;
+        // AAC и остальное, как и раньше, идёт на железе. Нет AAR в сборке — режим ничего не меняет.
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(application)
-            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             // Если основной аппаратный декодер не создался/упал — пробуем следующий
             // из списка (в т.ч. программный) вместо молчаливого отсутствия звука/видео.
             .setEnableDecoderFallback(true)
@@ -354,7 +384,16 @@ class PlayerViewModel @Inject constructor(
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 // Конец серии — запускаем отсчёт; любое другое состояние (перемотали назад, начали заново) его отменяет.
-                if (playbackState == Player.STATE_ENDED) startAutoNext() else cancelAutoNext()
+                if (playbackState == Player.STATE_ENDED) { extEnded = true; startAutoNext() } else cancelAutoNext()
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int,
+            ) {
+                // Перемотка: автосубтитры должны сразу переключиться на новое место (см. SubtitleOrchestrator.onSeek).
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+                    subtitleOrchestrator.onSeek()
+                }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -491,6 +530,21 @@ class PlayerViewModel @Inject constructor(
                     subsAutoPicked = true
                     selectSubtitleTrack(autoPickSubtitle(subtitles))
                 }
+                // «Готовые + авто»: готовых субтитров нет совсем — через пару секунд запускаем автосубтитры
+                // (один раз на загрузку; не для эфира и не после ручного «Выключить»).
+                if (subtitlePrefs.getShowByDefault() && subtitlePrefs.getAutoGenerate() && !subsUserOff && !subsAutoGenTried &&
+                    subtitles.isEmpty() && externalSubtitleUrl == null && currentMovieId.isNotEmpty() && !currentMovieId.startsWith("ch_") &&
+                    tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO || it.type == C.TRACK_TYPE_VIDEO }
+                ) {
+                    subsAutoGenTried = true
+                    val forId = currentMovieId
+                    viewModelScope.launch {
+                        delay(2_000)
+                        if (currentMovieId == forId && !subsUserOff && subtitleOrchestrator.state.value is AutoSubtitleState.Off &&
+                            !exoPlayer.currentTracks.isTypeSelected(C.TRACK_TYPE_TEXT)
+                        ) enableAutoSubtitles(silent = true)
+                    }
+                }
                 _uiState.value = current.copy(
                     // Одна дорожка — выбирать не из чего: список пуст, меню покажет «Только одна дорожка».
                     audioTracks = if (audio.size > 1) audio else emptyList(),
@@ -575,41 +629,201 @@ class PlayerViewModel @Inject constructor(
     /** Вызывается ДО loadMovie("ext_direct…") — кладёт запрос, который loadMovie затем запустит. */
     fun prepareDirect(request: DirectPlayRequest) { pendingDirect = request }
 
-    private fun loadDirect(request: DirectPlayRequest) {
-        // Пустой id → saveHistoryNow() ничего не пишет; автосохранение не запускаем.
-        currentMovieId = ""
+    // ---- Внешний плеер: список серий, история, предзагрузка следующей ----
+    private val externalStore = ExternalHistoryStore(application)
+    private var extEntries: List<ExternalEntry> = emptyList()
+    private var extIndex = -1
+    private var extCardTitle: String = ""
+    private var extSeriesId: String? = null
+    private var extDialect: String = "view"
+    private var extEnded = false
+    private var prefetchJob: Job? = null
+    private var currentHistoryTitle: String? = null
+
+    /** Запуск или продолжение из истории: «ext_direct…» — свежий запрос, «exth_…» — файл из списка/истории. */
+    private fun loadExternal(movieId: String) {
+        var explicitStart: Long? = null
+        if (movieId.startsWith(EXTERNAL_PLAYER_ID_PREFIX)) {
+            val request = pendingDirect
+            if (request == null) { _uiState.value = PlayerUiState.Error("Нет ссылки для воспроизведения"); return }
+            setupExternalSession(request)
+            explicitStart = request.startPositionMs
+        } else {
+            if (extEntries.none { it.id == movieId }) {
+                val stored = externalStore.findByItem(movieId)
+                if (stored == null) {
+                    _uiState.value = PlayerUiState.Error("Ссылка из истории недоступна: откройте видео заново из приложения-источника")
+                    return
+                }
+                restoreExternalSession(stored)
+            }
+            extIndex = extEntries.indexOfFirst { it.id == movieId }
+        }
+        playExternalIndex(extIndex, explicitStart)
+    }
+
+    private fun setupExternalSession(request: DirectPlayRequest) {
+        val base: List<DirectPlayItem> = if (request.playlist.size > 1) request.playlist else listOf(
+            DirectPlayItem(
+                url = request.url, title = request.title, label = request.title, headers = request.headers,
+                subtitleUrl = request.subtitleUrl, startPositionMs = request.startPositionMs,
+            )
+        )
+        val start = request.startIndex.coerceIn(0, base.size - 1)
+        val items = base.toMutableList()
+        // Субтитры и заголовки запроса относятся к стартовому файлу.
+        items[start] = items[start].copy(
+            subtitleUrl = items[start].subtitleUrl ?: request.subtitleUrl,
+            headers = if (items[start].headers.isEmpty()) request.headers else items[start].headers,
+        )
+        var ids = items.map { ExternalHistoryStore.itemId(it.url) }
+        if (ids.distinct().size != ids.size) ids = ids.mapIndexed { i, id -> if (ids.count { it == id } > 1) "${id}_$i" else id }
+        extEntries = items.mapIndexed { i, it -> ExternalEntry(ids[i], it) }
+        extIndex = start
+        extCardTitle = request.title
+        extDialect = request.dialect
+        val key = if (items.size > 1) ExternalHistoryStore.playlistKey(ids) else ids[0]
+        extSeriesId = if (items.size > 1) ExternalHistoryStore.SERIES_PREFIX + key else null
+        val stored = ExternalStoredPlaylist(
+            key = key, cardTitle = request.title,
+            items = extEntries.map {
+                ExternalStoredItem(it.id, it.item.url, it.item.title, it.item.label, it.item.headers, it.item.subtitleUrl, it.item.startPositionMs ?: 0L)
+            },
+        )
+        viewModelScope.launch(Dispatchers.IO) { externalStore.remember(stored) }
+    }
+
+    private fun restoreExternalSession(stored: ExternalStoredPlaylist) {
+        extEntries = stored.items.map {
+            ExternalEntry(it.id, DirectPlayItem(it.url, it.title, it.label, it.headers, it.subtitleUrl, it.startPositionMs.takeIf { p -> p > 0 }))
+        }
+        extCardTitle = stored.cardTitle
+        extDialect = "view"
+        extSeriesId = if (stored.items.size > 1) ExternalHistoryStore.SERIES_PREFIX + stored.key else null
+    }
+
+    private fun playExternalIndex(index: Int, explicitStartMs: Long?) {
+        val entry = extEntries.getOrNull(index) ?: return
+        autoNextJob?.cancel(); autoNextJob = null; _autoNext.value = null
+        prefetchJob?.cancel()
         historyAutosaveJob?.cancel()
-        archiveMirrorAttempts = 0
-        genericRetryAttempts = 0
-        triedArchiveHosts.clear()
-        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
-        currentTitle = request.title
-        currentYear = 0
-        currentPoster = null
-        currentSeriesId = null
-        subtitleOrchestrator.stop()
         viewModelScope.launch {
             _uiState.value = PlayerUiState.Loading
             try {
-                val variant = StreamVariant("Ссылка", request.url, "Внешний", request.headers)
-                // Субтитры, пришедшие от вызывающего приложения (если есть), — в приоритете.
-                externalSubtitleUrl = request.subtitleUrl
+                // Прогресс предыдущего файла досохраняем ДО смены полей (при первом запуске id пустой — ничего не пишется).
+                runCatching { saveHistoryNow() }
+                archiveMirrorAttempts = 0
+                genericRetryAttempts = 0
+                triedArchiveHosts.clear()
+                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
+                extIndex = index
+                extEnded = false
+                currentMovieId = entry.id
+                currentTitle = extCardTitle.ifBlank { entry.item.title }
+                currentYear = 0
+                currentPoster = null
+                currentSeriesId = extSeriesId
+                val label = entry.item.label
+                currentHistoryTitle = if (extEntries.size > 1 && label.isNotBlank() && !label.equals(currentTitle, ignoreCase = true))
+                    "$currentTitle — ${episodeDisplayTitle(label, currentTitle, entry.item.episode ?: (index + 1))}" else currentTitle
+                subtitleOrchestrator.stop()
+
+                // Где продолжить: что явно передало приложение-источник; иначе наша история (доделанное — сначала); иначе позиция из списка.
+                val history = watchHistory.getByContentId(entry.id)
+                val start = when {
+                    explicitStartMs != null -> explicitStartMs
+                    history != null -> if (history.completed) 0L else history.positionMs
+                    else -> entry.item.startPositionMs ?: 0L
+                }.let { if (it < 5_000L) 0L else it }
+
+                val variant = StreamVariant("Ссылка", entry.item.url, "Внешний", entry.item.headers)
+                externalSubtitleUrl = entry.item.subtitleUrl
                 externalSubtitleLanguage = "ru"
-                externalSubtitleMimeType = if (request.subtitleUrl?.substringBefore('?')?.endsWith(".vtt", ignoreCase = true) == true)
+                externalSubtitleMimeType = if (entry.item.subtitleUrl?.substringBefore('?')?.endsWith(".vtt", ignoreCase = true) == true)
                     MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
-                applySubtitleDefault(forceOn = request.subtitleUrl != null)
-                playVariant(variant, request.startPositionMs)
-                _uiState.value = PlayerUiState.Ready(listOf(variant), variant, currentTitle)
+                applySubtitleDefault(forceOn = entry.item.subtitleUrl != null)
+                playVariant(variant, start)
+
+                val previous = extEntries.getOrNull(index - 1)
+                val next = extEntries.getOrNull(index + 1)
+                fun labelOf(e: ExternalEntry, i: Int) = episodeDisplayTitle(e.item.label, currentTitle, e.item.episode ?: (i + 1))
+                _uiState.value = PlayerUiState.Ready(
+                    listOf(variant), variant, currentTitle,
+                    nextEpisodeId = next?.id, previousEpisodeId = previous?.id,
+                    nextEpisodeTitle = next?.let { labelOf(it, index + 1) },
+                    previousEpisodeTitle = previous?.let { labelOf(it, index - 1) },
+                    seriesId = extSeriesId,
+                )
+                startHistoryAutosave()
+                startPrefetch()
             } catch (e: Exception) { _uiState.value = PlayerUiState.Error(e.message ?: "Ошибка") }
         }
     }
 
+    /** Список серий для окна «Серии» в плеере (ту же модель, что и у каталога). */
+    private fun externalEpisodeList(): List<com.platinum.ott.domain.model.Movie> = extEntries.mapIndexed { i, e ->
+        val number = e.item.episode ?: (i + 1)
+        com.platinum.ott.domain.model.Movie(
+            id = e.id, year = 0,
+            title = episodeDisplayTitle(e.item.label, extCardTitle, number),
+            poster = "", seriesId = extSeriesId, seriesTitle = extCardTitle,
+            seasonNumber = e.item.season, episodeNumber = number,
+        )
+    }
+
+    /**
+     * За полторы минуты до конца серии «прогреваем» следующую: запрашиваем первый мегабайт. TorrServe при этом
+     * заранее подключается к раздаче и начинает качать, так что следующая серия стартует без долгого ожидания.
+     */
+    private fun startPrefetch() {
+        val next = extEntries.getOrNull(extIndex + 1) ?: return
+        prefetchJob = viewModelScope.launch {
+            while (true) {
+                delay(5_000)
+                val duration = exoPlayer.duration
+                val position = exoPlayer.currentPosition
+                if (duration > 0 && (duration - position <= 90_000L || position.toFloat() / duration >= 0.92f)) break
+            }
+            withContext(Dispatchers.IO) { warmUp(next.item) }
+        }
+    }
+
+    private fun warmUp(item: DirectPlayItem) {
+        try {
+            val builder = okhttp3.Request.Builder().url(item.url).header("Range", "bytes=0-1048575")
+            (defaultHeaders + item.headers).forEach { (k, v) -> if (!k.equals("Range", ignoreCase = true)) builder.header(k, v) }
+            mediaHttpClient.newCall(builder.build()).execute().use { response ->
+                val stream = response.body?.byteStream() ?: return
+                val buffer = ByteArray(16 * 1024)
+                var left = 1_048_576
+                while (left > 0) {
+                    val n = stream.read(buffer, 0, minOf(buffer.size, left))
+                    if (n <= 0) break
+                    left -= n
+                }
+            }
+        } catch (_: Exception) { /* прогрев необязателен */ }
+    }
+
+    /** Ответ вызвавшему приложению: где остановились. null — это не внешний запуск. */
+    fun externalResult(): ExternalResult? {
+        val entry = extEntries.getOrNull(extIndex) ?: return null
+        val duration = exoPlayer.duration.takeIf { it > 0 } ?: 0L
+        val position = exoPlayer.currentPosition.coerceAtLeast(0L)
+        val completed = extEnded || (duration > 0 && position >= duration - 1_500L)
+        return ExternalResult(entry.item.url, extIndex, if (completed) duration else position, duration, completed, extDialect)
+    }
+
+    /** Перед закрытием экрана: пауза (она же досохраняет историю). */
+    fun stopForExit() { exoPlayer.pause() }
+
     fun loadMovie(movieId: String, preferredVariantUrl: String? = null, catchupStartMillis: Long? = null, catchupEndMillis: Long? = null) {
-        if (movieId.startsWith(EXTERNAL_PLAYER_ID_PREFIX)) {
-            val request = pendingDirect
-            if (request == null) _uiState.value = PlayerUiState.Error("Нет ссылки для воспроизведения") else loadDirect(request)
+        if (movieId.startsWith(EXTERNAL_PLAYER_ID_PREFIX) || ExternalHistoryStore.isExternalId(movieId)) {
+            loadExternal(movieId)
             return
         }
+        currentHistoryTitle = null
+        prefetchJob?.cancel()
         // Любой переход (ручной, из списка серий, автозапуск) гасит отсчёт автозапуска.
         autoNextJob?.cancel(); autoNextJob = null; _autoNext.value = null
         currentMovieId = movieId
@@ -856,7 +1070,8 @@ class PlayerViewModel @Inject constructor(
 
     // ---- Модальные окна оверлея (серии / каналы / программа) ----
     suspend fun getEpisodeList(seriesId: String): List<com.platinum.ott.domain.model.Movie> =
-        runCatching { playlistRepository.getEpisodesForSeries(seriesId) }.getOrDefault(emptyList())
+        if (seriesId.startsWith(ExternalHistoryStore.SERIES_PREFIX)) externalEpisodeList()
+        else runCatching { playlistRepository.getEpisodesForSeries(seriesId) }.getOrDefault(emptyList())
 
     fun playEpisode(id: String) { if (id != currentMovieId) loadMovie(id) }
 
@@ -976,7 +1191,7 @@ class PlayerViewModel @Inject constructor(
         if (currentMovieId.isEmpty()) return
         val duration = exoPlayer.duration
         if (duration <= 0) return // длительность ещё не определена — нечего сохранять
-        watchHistory.saveProgress(currentMovieId, currentTitle, currentPoster, exoPlayer.currentPosition, duration, currentSeriesId)
+        watchHistory.saveProgress(currentMovieId, currentHistoryTitle ?: currentTitle, currentPoster, exoPlayer.currentPosition, duration, currentSeriesId)
     }
 
     fun selectQuality(variant: StreamVariant) {
@@ -1019,9 +1234,11 @@ class PlayerViewModel @Inject constructor(
     // onTracksChanged сам выбирает лучшую (см. autoPickSubtitle).
     private var subsUserOff = false
     private var subsAutoPicked = false
+    private var subsAutoGenTried = false
     private fun applySubtitleDefault(forceOn: Boolean) {
         subsUserOff = false
         subsAutoPicked = false
+        subsAutoGenTried = false
         val on = subtitlePrefs.getShowByDefault()
         val builder = exoPlayer.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -1104,12 +1321,13 @@ class PlayerViewModel @Inject constructor(
     // не проверяет (открытый вопрос ещё с подзадачи 2), поэтому вызывать
     // эту функцию для каналов преждевременно, до появления отдельного
     // пути для live.
-    fun enableAutoSubtitles() {
+    fun enableAutoSubtitles(silent: Boolean = false) {
         // Раньше все три выхода были молчаливыми: нажатие «Автосубтитры» ничего не делало
-        // и не объясняло почему. Теперь причина показывается коротким сообщением.
+        // и не объясняло почему. Теперь причина показывается коротким сообщением
+        // (при запуске по настройке «по умолчанию» — только в лог, без всплывающих окон).
         fun refuse(reason: String) {
             android.util.Log.w("ZenithSubs", "enableAutoSubtitles refused: $reason")
-            android.widget.Toast.makeText(getApplication<Application>(), reason, android.widget.Toast.LENGTH_LONG).show()
+            if (!silent) android.widget.Toast.makeText(getApplication<Application>(), reason, android.widget.Toast.LENGTH_LONG).show()
         }
         if (currentTitle.isBlank()) { refuse("Автосубтитры: нет названия видео"); return }
         val current = _uiState.value as? PlayerUiState.Ready ?: run { refuse("Автосубтитры: видео ещё не готово"); return }
@@ -1210,6 +1428,7 @@ class PlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         historyAutosaveJob?.cancel()
+        prefetchJob?.cancel()
         // PROMPT_SUBTITLES.md, подзадача 6 — subtitleOrchestrator живёт в
         // SessionGraph (на весь процесс, переиспользуется между экранами
         // плеера), а не создаётся заново на каждый PlayerViewModel — явно

@@ -21,3 +21,5 @@
 -dontwarn androidx.media3.**; -keep class androidx.media3.decoder.** { *; }
 # TMDB models
 -keep class com.platinum.ott.data.remote.tmdb.dto.** { *; }
+# Внешний плеер: JSON-хранилище ссылок (Gson) — имена полей должны пережить R8
+-keep class com.platinum.ott.external.ExternalStored* { *; }

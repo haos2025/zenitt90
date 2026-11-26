@@ -151,7 +151,8 @@ fun ZenithNavHost(startDestination: String, isTV: Boolean, modifier: Modifier = 
             // Живой канал ("ch_") не имеет карточки фильма (бэкенд отвечает 404) —
             // записи истории/«Продолжить просмотр» ведут сюда же, поэтому одним
             // перехватом уводим сразу в плеер, не рисуя карточку.
-            if (id.startsWith("ch_")) {
+            // Записи внешнего плеера («exth_…») тоже без карточки: у них есть только ссылка и позиция.
+            if (id.startsWith("ch_") || id.startsWith("exth_")) {
                 LaunchedEffect(id) { navController.navigate("player/$id") { popUpTo("detail/{movieId}") { inclusive = true } } }
                 return@composable
             }

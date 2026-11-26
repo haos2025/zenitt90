@@ -13,6 +13,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -66,6 +67,31 @@ class SubtitleOrchestrator(
 
     private var job: Job? = null
 
+    // Конвейер распознавания можно перезапустить (перемотка): параметры и сам запуск хранятся отдельно от [job].
+    private class AiParams(
+        val streamUrl: String,
+        val headers: Map<String, String>,
+        val durationMs: Long,
+        val position: () -> Long,
+        val language: String,
+    )
+    private var aiParams: AiParams? = null
+    private var aiScope: CoroutineScope? = null
+    private var aiJob: Job? = null
+    private var seekJob: Job? = null
+    // Конвейер остановился сам (облако недоступно целиком) — перематывать и перезапускать нет смысла.
+    private var pipelineAborted = false
+    // Окно, которое обрабатывается сейчас (для решения «перезапускать ли после перемотки»).
+    @Volatile private var curWinStart = -1L
+    @Volatile private var curWinEnd = -1L
+    private var lastPollPosition = 0L
+
+    // Окна, которые не удалось распознать (сбой сети/звука, лимит): раньше они молча считались пройденными,
+    // и в субтитрах оставалась дыра навсегда. Теперь через GIVE_UP_RETRY_MS окно пробуем снова,
+    // пока просмотр до него не дошёл или не ушёл дальше.
+    private class GivenUp(val range: LongRange, val retryAtMs: Long)
+    private var givenUp: List<GivenUp> = emptyList()
+
     // Кэш распознанного (см. SubtitleCueCache): ключ текущего видео и уже покрытые куски [start, end).
     private var cacheKey: String? = null
     private var coveredRanges: List<LongRange> = emptyList()
@@ -115,6 +141,9 @@ class SubtitleOrchestrator(
         onOpenSubtitlesFound: (url: String, language: String, format: SubtitleFormat) -> Unit,
     ) {
         stop()
+        pipelineAborted = false
+        givenUp = emptyList()
+        lastPollPosition = 0L
         audioTag = if (audioInfo.isBlank()) "" else ";$audioInfo"
         extractRetriesTotal = 0
         _cues.value = emptyList()
@@ -155,13 +184,56 @@ class SubtitleOrchestrator(
             }
             // Скорость этого источника, запомненная в прошлых сессиях: не ждём «обучения» заново.
             sourceProfiles?.ratioFor(sourceTag(streamUrl))?.let { extractRatio = it; extractSamples = 2 }
-            runAiPipelineForVod(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language)
+            aiParams = AiParams(streamUrl, headers, contentDurationMs, currentPositionMsProvider, language)
+            aiScope = scope
+            launchAi()
+        }
+    }
+
+    private fun launchAi() {
+        val p = aiParams ?: return
+        val scope = aiScope ?: return
+        aiJob?.cancel()
+        aiJob = scope.launch { runAiPipelineForVod(p.streamUrl, p.headers, p.durationMs, p.position, p.language) }
+    }
+
+    /**
+     * Вызывается плеером после перемотки. Раньше конвейер перемотку не замечал: ждал очередного опроса
+     * (до 15 с) или дорабатывал окно, которое уже не нужно, поэтому после перемотки субтитры пропадали
+     * на минуту и больше, а при перемотке НАЗАД в пропущенное место не возвращались совсем.
+     * Теперь, если на новом месте реплик нет, текущая работа отменяется и конвейер стартует с новой позиции
+     * (с короткого первого окна — первые реплики приходят быстро). Серия быстрых перемоток считается одной.
+     */
+    fun onSeek() {
+        val p = aiParams ?: return
+        val scope = aiScope ?: return
+        if (pipelineAborted) return
+        seekJob?.cancel()
+        seekJob = scope.launch {
+            delay(SEEK_DEBOUNCE_MS)
+            val pos = p.position().coerceAtLeast(0L)
+            if (pos < lastPollPosition - 5_000L) givenUp = emptyList() // перемотали назад — сбойные окна пробуем снова
+            val needsNow = skipCovered(pos) < minOf(pos + MIN_REFILL_MS, p.durationMs)
+            val running = aiJob?.isActive == true
+            val ws = curWinStart
+            val we = curWinEnd
+            val inFlightUseful = running && ws >= 0 && pos >= ws - 5_000L && pos <= we
+            Log.d(TAG, "seek to $pos ms: needsNow=$needsNow running=$running inFlight=$inFlightUseful")
+            if (!running || (needsNow && !inFlightUseful)) launchAi()
         }
     }
 
     fun stop() {
         job?.cancel()
         job = null
+        aiJob?.cancel()
+        aiJob = null
+        seekJob?.cancel()
+        seekJob = null
+        aiParams = null
+        aiScope = null
+        curWinStart = -1L
+        curWinEnd = -1L
         _state.value = AutoSubtitleState.Off
         _cues.value = emptyList()
         cacheKey = null
@@ -200,16 +272,33 @@ class SubtitleOrchestrator(
 
     /** Куски, уже распознанные раньше: перепрыгиваем их, а новое окно обрезаем перед следующим из них. */
     private fun skipCovered(pos: Long): Long {
+        val blocked = blockedRanges()
         var p = pos
         while (true) {
-            val r = coveredRanges.firstOrNull { p >= it.first && p <= it.last } ?: return p
+            val r = blocked.firstOrNull { p >= it.first && p <= it.last } ?: return p
             p = r.last + 1
         }
     }
 
     private fun capToCovered(start: Long, duration: Long): Long {
-        val nextStart = coveredRanges.filter { it.first > start }.minOfOrNull { it.first } ?: return duration
+        val nextStart = blockedRanges().filter { it.first > start }.minOfOrNull { it.first } ?: return duration
         return minOf(duration, nextStart - start)
+    }
+
+    /** Что обходим: распознанное (кэш и этот сеанс) и недавно сбойные окна, до их повторной попытки. */
+    private fun blockedRanges(): List<LongRange> {
+        val now = System.currentTimeMillis()
+        return coveredRanges + givenUp.filter { it.retryAtMs > now }.map { it.range }
+    }
+
+    private fun giveUp(start: Long, end: Long) {
+        if (end <= start) return
+        givenUp = givenUp.filterNot { it.range.first < end && it.range.last >= start } +
+            GivenUp(start until end, System.currentTimeMillis() + GIVE_UP_RETRY_MS)
+    }
+
+    private fun dropCues(start: Long, end: Long) {
+        _cues.update { list -> list.filterNot { it.startMs in start until end } }
     }
 
     /** Помечает [start, end) покрытым и сохраняет реплики в кэш (если окно прошло без сбоев). */
@@ -255,9 +344,16 @@ class SubtitleOrchestrator(
 
             while (isActive && coveredUpToMs < contentDurationMs) {
                 val position = currentPositionMsProvider().coerceAtLeast(0L)
-                // Открыли с позиции или перемотали вперёд — пропущенный кусок не обрабатываем
-                // (раньше первое окно тянулось от нуля до позиции+5 минут одним куском).
-                if (position > coveredUpToMs) coveredUpToMs = position
+                // Перемотали назад — сбойные окна пробуем снова (раньше граница только росла, и всё, что
+                // осталось позади неразобранным, больше не возвращалось).
+                if (position < lastPollPosition - 5_000L) givenUp = emptyList()
+                lastPollPosition = position
+                curWinStart = -1L
+                curWinEnd = -1L
+                // Начало работы считаем от текущей позиции, а не от прежней границы: пропущенный кусок
+                // позади не обрабатываем (первое окно не тянется от нуля до позиции+5 минут), но после
+                // перемотки назад нужное место находится заново.
+                coveredUpToMs = position
                 // Предзагрузка, которая уже идёт с позиции около текущей, не выбрасываем: если
                 // извлечение первого окна заняло дольше его длины, воспроизведение успело уйти вперёд,
                 // и раньше такая предзагрузка отменялась из-за расхождения в секунды (вся работа зря).
@@ -274,11 +370,7 @@ class SubtitleOrchestrator(
                     if (adoptable) coveredUpToMs = prefetchStartMs
                 }
                 // Кусок уже распознан раньше (кэш) — перепрыгиваем.
-                val skipped = skipCovered(coveredUpToMs)
-                if (skipped != coveredUpToMs) {
-                    coveredUpToMs = skipped
-                    continue
-                }
+                coveredUpToMs = skipCovered(coveredUpToMs)
                 val target = position + WINDOW_AHEAD_MS
                 // Когда запас вперёд уже у потолка (5 минут), раньше брали окна по 1–5 с и слали по
                 // запросу каждые ~2 с (≈26 в минуту: впритык к лимиту, треть мелких кусков Whisper
@@ -312,6 +404,13 @@ class SubtitleOrchestrator(
                 }
                 val windowEnd = windowStart + windowDuration
                 windowIndex++
+                curWinStart = windowStart
+                curWinEnd = windowEnd
+                // Повтор окна, которое не получилось: убираем обрывки прошлой попытки, чтобы реплики не задвоились.
+                if (givenUp.any { it.range.first < windowEnd && it.range.last >= windowStart }) {
+                    dropCues(windowStart, windowEnd)
+                    givenUp = givenUp.filterNot { it.range.first < windowEnd && it.range.last >= windowStart }
+                }
 
                 // Раньше до первого запроса к облаку состояние оставалось «Выкл», и было не видно,
                 // что обработка вообще запущена. Теперь пользователь видит «Распознаём…» сразу.
@@ -343,7 +442,7 @@ class SubtitleOrchestrator(
                         continue
                     }
                     extractFailures = 0
-                    coveredUpToMs = windowEnd // после нескольких попыток всё же идём дальше, чтобы не застрять навсегда
+                    giveUp(windowStart, windowEnd) // идём дальше, но вернёмся к этому окну позже (не оставляем дыру навсегда)
                     continue
                 }
                 extractFailures = 0
@@ -397,10 +496,12 @@ class SubtitleOrchestrator(
                     File(chunk.filePath).delete()
                     Log.d(TAG, "window #$windowIndex (light) done after ${System.currentTimeMillis() - t0} ms")
                     if (stop) {
+                        pipelineAborted = true
                         prefetch?.cancel()
                         return@coroutineScope
                     }
                     recordCovered(windowStart, windowEnd)
+                    if (!windowOk) giveUp(windowStart, windowEnd)
                     coveredUpToMs = windowEnd
                     continue
                 }
@@ -410,7 +511,7 @@ class SubtitleOrchestrator(
                     Log.w(TAG, "VAD failed", segmentsResult.exceptionOrNull())
                     _state.value = AutoSubtitleState.Error("Не удалось найти речь: ${segmentsResult.exceptionOrNull()?.message}")
                     File(chunk.filePath).delete()
-                    coveredUpToMs = windowEnd
+                    giveUp(windowStart, windowEnd)
                     continue
                 }
                 val segments = segmentsResult.getOrThrow()
@@ -427,10 +528,12 @@ class SubtitleOrchestrator(
                 // Облако недоступно целиком — дальше нет смысла
                 // тратить процессор на извлечение звука.
                 if (aborted) {
+                    pipelineAborted = true
                     prefetch?.cancel()
                     return@coroutineScope
                 }
                 recordCovered(windowStart, windowEnd)
+                if (!windowOk) giveUp(windowStart, windowEnd)
                 coveredUpToMs = windowEnd
                 setProgress("готово")
             }
@@ -646,7 +749,9 @@ class SubtitleOrchestrator(
     }
 
     private fun addCue(cue: SubtitleCue) {
-        _cues.value = (_cues.value + cue).sortedBy { it.startMs }
+        // update{} — атомарно: окна обрабатываются параллельно, а «прочитал список → дописал → записал»
+        // без блокировки теряло реплики соседнего окна (и потерянное уходило в кэш на диск).
+        _cues.update { list -> (list + cue).sortedBy { it.startMs } }
     }
 
     companion object {
@@ -674,6 +779,8 @@ class SubtitleOrchestrator(
         const val MAX_EXTRACT_RETRIES = 2 // повторов извлечения звука одного окна
         const val EXTRACT_RETRY_DELAY_MS = 3_000L // пауза перед повтором: 3 с, затем 6 с
         const val UPLOAD_RETRY_DELAY_MS = 3_000L
+        const val SEEK_DEBOUNCE_MS = 800L // серия быстрых перемоток — одна
+        const val GIVE_UP_RETRY_MS = 45_000L // через сколько повторить окно, которое не получилось
         const val POLL_INTERVAL_MS = 15_000L // как часто проверяем, не пора ли расширить покрытое окно
     }
 }

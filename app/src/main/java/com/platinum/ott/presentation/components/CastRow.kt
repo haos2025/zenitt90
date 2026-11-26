@@ -65,31 +65,38 @@ private val photoHeight = 110.dp
  * не обновится сам (TTL 24ч).
  */
 @Composable
-fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {}, modifier: Modifier = Modifier, showRoles: Boolean = true) {
+fun CastRow(
+    members: List<CastMember>,
+    onMemberClick: (CastMember) -> Unit = {},
+    modifier: Modifier = Modifier,
+    showRoles: Boolean = true,
+    focusState: RowFocusState = rememberRowFocusState(),
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { photoWidth.roundToPx() }
     val heightPx = with(density) { photoHeight.roundToPx() }
 
     Column(modifier = modifier) {
-        Text("Актёры", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+        Text("Актёры", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, modifier = Modifier.padding(start = RowContentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)))
         Spacer(Modifier.height(ZenithDimens.paddingS))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            itemsIndexed(members, key = { index, m -> "${index}_${m.name}" }) { _, member ->
+        LazyRow(
+            state = focusState.listState,
+            contentPadding = RowContentPadding,
+            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+            modifier = Modifier.rowEntry(focusState)
+        ) {
+            itemsIndexed(members, key = { index, m -> "${index}_${m.name}" }) { index, member ->
                 val request = remember(member.profilePath, widthPx, heightPx) {
                     TmdbImage.profileUrl(member.profilePath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
                     }
                 }
-                var isFocused by remember { mutableStateOf(false) }
-                Column(modifier = Modifier.width(photoWidth)) {
-                    Box(
-                        modifier = Modifier.width(photoWidth).height(photoHeight)
-                            .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
-                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
-                            .onFocusChanged { isFocused = it.isFocused }
-                            .clickable { if (member.id != 0) onMemberClick(member) }
-                    ) {
+                FocusRowCard(
+                    width = photoWidth, imageHeight = photoHeight, state = focusState, index = index,
+                    // member.id == 0 — запись из кэша до появления id: карточка фокусируется, но никуда не ведёт.
+                    onClick = { if (member.id != 0) onMemberClick(member) },
+                    image = {
                         if (request != null) {
                             AsyncImage(
                                 model = request, contentDescription = member.name, contentScale = ContentScale.Crop,
@@ -98,18 +105,17 @@ fun CastRow(members: List<CastMember>, onMemberClick: (CastMember) -> Unit = {},
                                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
                             )
                         } else {
-                            // Плейсхолдер вместо пустой дырки в ряду — тот же
-                            // принцип, что уже применён для фильмов без постера.
                             Icon(Icons.Default.Person, contentDescription = member.name, tint = ZenithOnSurfaceVariant,
                                 modifier = Modifier.align(Alignment.Center).size(36.dp))
                         }
+                    },
+                    caption = { focused ->
+                        Text(member.name, color = if (focused) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (showRoles) member.character?.let {
+                            Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
-                    Spacer(Modifier.height(ZenithDimens.paddingXS))
-                    Text(member.name, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (showRoles) member.character?.let {
-                        Text(it, color = ZenithOnSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+                )
             }
         }
     }

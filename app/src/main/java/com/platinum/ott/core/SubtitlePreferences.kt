@@ -21,4 +21,9 @@ class SubtitlePreferences(context: Context) {
     // привычный дефолт Android, а не навязываем свой.
     fun getShowByDefault(): Boolean = prefs.getBoolean("show_by_default", false)
     fun setShowByDefault(enabled: Boolean) = prefs.edit().putBoolean("show_by_default", enabled).apply()
+
+    // «Готовые + авто»: если у видео нет ни своих, ни внешних субтитров — запускаются автосубтитры
+    // (OpenSubtitles → облако → локально). Работает только вместе с getShowByDefault().
+    fun getAutoGenerate(): Boolean = prefs.getBoolean("auto_generate", false)
+    fun setAutoGenerate(enabled: Boolean) = prefs.edit().putBoolean("auto_generate", enabled).apply()
 }

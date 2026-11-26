@@ -138,6 +138,9 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.androidx.media3.transformer)
+    // Аудио-декодеры FFmpeg (AC-3, E-AC-3, MP2) для Media3 1.4.0: AAR собирается вручную workflow'ом
+    // build-ffmpeg-aar.yml и лежит в app/libs. Нет файла — приложение собирается как раньше.
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     implementation(libs.onnxruntime.android)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.quickjs.android)

@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -40,6 +41,7 @@ import com.platinum.ott.domain.model.Movie
 import com.platinum.ott.domain.model.Recommendation
 import com.platinum.ott.domain.model.StreamVariant
 import com.platinum.ott.presentation.components.CastRow
+import com.platinum.ott.presentation.components.RowFocusState
 import com.platinum.ott.presentation.components.RecommendationsRow
 import com.platinum.ott.presentation.components.TvPillButton
 import com.platinum.ott.ui.theme.*
@@ -75,27 +77,39 @@ fun SeriesSection(
     onEpisodeClick: (Movie) -> Unit,
     onCastClick: (Int) -> Unit,
     onRecommendationClick: (Recommendation) -> Unit,
+    castFocus: RowFocusState,
+    recFocus: RowFocusState,
+    tab: Int,
+    onTabChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var tab by remember { mutableStateOf(0) }
     val tabs = remember(cast, recommendations) {
         buildList { add("Серии"); if (cast.isNotEmpty()) add("Актёры"); if (recommendations.isNotEmpty()) add("Похожие") }
     }
+    val tabIdx = tab.coerceIn(0, tabs.lastIndex)
+    // Свой FocusRequester у каждой вкладки: «Вверх» из ряда актёров/похожих должен вести на ЭТУ вкладку.
+    // Раньше фокус уходил на ближайшую по горизонтали вкладку — чаще соседнюю, и она тут же переключалась.
+    val chipRequesters = remember(tabs.size) { List(tabs.size) { FocusRequester() } }
     Column(modifier) {
         // Единственная вкладка «Серии» ничего не переключает — не рисуем её и не даём ей фокус:
         // с кнопок вверху пульт сразу попадает в список серий.
         if (tabs.size > 1) {
             Row(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingS)) {
                 tabs.forEachIndexed { i, title ->
-                    SeriesChip(title, selected = tab == i, selectOnFocus = true, onSelect = { tab = i })
+                    SeriesChip(title, selected = tabIdx == i, selectOnFocus = true, onSelect = { onTabChange(i) }, requester = chipRequesters[i])
                 }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tabs.getOrNull(tab)) {
-                "Актёры" -> CastRow(cast, showRoles = false, onMemberClick = { onCastClick(it.id) })
-                "Похожие" -> RecommendationsRow(recommendations, onItemClick = onRecommendationClick)
+        val singleRowTab = tabs.size > 1 && tabs[tabIdx] != "Серии"
+        val chipUp = chipRequesters.getOrNull(tabIdx) ?: FocusRequester.Default
+        Box(
+            Modifier.weight(1f).fillMaxWidth()
+                .then(if (singleRowTab) Modifier.focusProperties { up = chipUp } else Modifier)
+        ) {
+            when (tabs.getOrNull(tabIdx)) {
+                "Актёры" -> CastRow(cast, showRoles = false, focusState = castFocus, onMemberClick = { onCastClick(it.id) })
+                "Похожие" -> RecommendationsRow(recommendations, focusState = recFocus, onItemClick = onRecommendationClick)
                 else -> EpisodesPane(series, onEpisodeClick)
             }
         }
@@ -187,11 +201,12 @@ private fun EpisodesPane(series: SeriesInfo, onEpisodeClick: (Movie) -> Unit) {
 /** Вкладка/чип: фокус — заливка акцентом и рамка (без белого). selectOnFocus — выбор сразу при фокусе (вкладки). */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun SeriesChip(title: String, selected: Boolean, selectOnFocus: Boolean, onSelect: () -> Unit) {
+private fun SeriesChip(title: String, selected: Boolean, selectOnFocus: Boolean, onSelect: () -> Unit, requester: FocusRequester? = null) {
     val accent = MaterialTheme.colorScheme.primary
     Surface(
         onClick = onSelect,
-        modifier = Modifier.onFocusChanged { if (selectOnFocus && it.hasFocus) onSelect() },
+        modifier = (if (requester != null) Modifier.focusRequester(requester) else Modifier)
+            .onFocusChanged { if (selectOnFocus && it.hasFocus) onSelect() },
         shape = ClickableSurfaceDefaults.shape(ZenithShapePill),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) accent.copy(alpha = 0.28f) else ZenithOnSurface.copy(alpha = 0.08f),

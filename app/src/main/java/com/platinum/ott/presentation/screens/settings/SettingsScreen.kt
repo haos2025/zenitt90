@@ -198,10 +198,12 @@ private fun CategoryPage(
         SettingsCategory.PLAYBACK -> {
             val quality by viewModel.quality.collectAsStateWithLifecycle()
             val subsByDefault by viewModel.subsByDefault.collectAsStateWithLifecycle()
+            val subsAuto by viewModel.subsAutoGenerate.collectAsStateWithLifecycle()
             SettingsCard {
                 CycleSetting("Качество по умолчанию", quality) { viewModel.cycleQuality() }
                 SettingsDivider()
-                CycleSetting("Субтитры по умолчанию", if (subsByDefault) "Вкл" else "Выкл") { viewModel.setSubsByDefault(!subsByDefault) }
+                // Готовые — вшитые в файл и внешние; «+ авто» — если их нет, субтитры создаются сами.
+                CycleSetting("Субтитры по умолчанию", if (!subsByDefault) "Выкл" else if (!subsAuto) "Готовые" else "Готовые + авто") { viewModel.cycleSubsMode() }
             }
             Spacer(Modifier.height(ZenithDimens.paddingM))
             val overlay by viewModel.playerOverlay.collectAsState()

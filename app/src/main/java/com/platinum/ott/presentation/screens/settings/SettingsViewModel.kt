@@ -55,6 +55,17 @@ class SettingsViewModel @Inject constructor(
     private val _subsByDefault = MutableStateFlow(subtitlePrefs.getShowByDefault())
     val subsByDefault: StateFlow<Boolean> = _subsByDefault
     fun setSubsByDefault(enabled: Boolean) { subtitlePrefs.setShowByDefault(enabled); _subsByDefault.value = enabled }
+    private val _subsAutoGenerate = MutableStateFlow(subtitlePrefs.getAutoGenerate())
+    val subsAutoGenerate: StateFlow<Boolean> = _subsAutoGenerate
+    fun setSubsAutoGenerate(enabled: Boolean) { subtitlePrefs.setAutoGenerate(enabled); _subsAutoGenerate.value = enabled }
+    /** Выкл → Готовые → Готовые + авто → Выкл (для пульта ТВ: одна строка, перебор по OK). */
+    fun cycleSubsMode() {
+        when {
+            !_subsByDefault.value -> setSubsByDefault(true)
+            !_subsAutoGenerate.value -> setSubsAutoGenerate(true)
+            else -> { setSubsAutoGenerate(false); setSubsByDefault(false) }
+        }
+    }
 
     private val _newEpisodes = MutableStateFlow(notificationPreferences.isNewEpisodesEnabled())
     val newEpisodes: StateFlow<Boolean> = _newEpisodes
@@ -114,6 +125,7 @@ class SettingsViewModel @Inject constructor(
         val all = com.platinum.ott.ui.theme.AccentColor.entries
         setAccent(all[(all.indexOf(appearance.value.accent) + 1) % all.size])
     }
+    fun setImageScale(mode: com.platinum.ott.ui.theme.ImageScaleMode) = interfacePreferences.setImageScale(mode)
     fun cycleImageScale() {
         val all = com.platinum.ott.ui.theme.ImageScaleMode.entries
         interfacePreferences.setImageScale(all[(all.indexOf(appearance.value.imageScale) + 1) % all.size])

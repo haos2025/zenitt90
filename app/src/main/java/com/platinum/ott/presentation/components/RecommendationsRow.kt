@@ -52,31 +52,36 @@ private val posterHeight = 165.dp
  * переходе на TvLazyColumn.
  */
 @Composable
-fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation) -> Unit = {}, modifier: Modifier = Modifier) {
+fun RecommendationsRow(
+    items: List<Recommendation>,
+    onItemClick: (Recommendation) -> Unit = {},
+    modifier: Modifier = Modifier,
+    focusState: RowFocusState = rememberRowFocusState(),
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val widthPx = with(density) { posterWidth.roundToPx() }
     val heightPx = with(density) { posterHeight.roundToPx() }
 
     Column(modifier = modifier) {
-        Text("Смотрите также", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface)
+        Text("Смотрите также", style = MaterialTheme.typography.titleMedium, color = ZenithOnSurface, modifier = Modifier.padding(start = RowContentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)))
         Spacer(Modifier.height(ZenithDimens.paddingS))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM)) {
-            itemsIndexed(items, key = { i, r -> "${i}_${r.tmdbId}" }) { _, rec ->
+        LazyRow(
+            state = focusState.listState,
+            contentPadding = RowContentPadding,
+            horizontalArrangement = Arrangement.spacedBy(ZenithDimens.paddingSM),
+            modifier = Modifier.rowEntry(focusState)
+        ) {
+            itemsIndexed(items, key = { i, r -> "${i}_${r.tmdbId}" }) { index, rec ->
                 val request = remember(rec.posterPath, widthPx, heightPx) {
                     TmdbImage.posterUrl(rec.posterPath, widthPx)?.let {
                         ImageRequest.Builder(context).data(it).size(widthPx, heightPx).crossfade(true).build()
                     }
                 }
-                var isFocused by remember { mutableStateOf(false) }
-                Column(modifier = Modifier.width(posterWidth)) {
-                    Box(
-                        modifier = Modifier.width(posterWidth).height(posterHeight)
-                            .clip(ZenithShapeSmall).background(MaterialTheme.colorScheme.surface)
-                            .border(if (isFocused) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, ZenithShapeSmall)
-                            .onFocusChanged { isFocused = it.isFocused }
-                            .clickable { onItemClick(rec) }
-                    ) {
+                FocusRowCard(
+                    width = posterWidth, imageHeight = posterHeight, state = focusState, index = index,
+                    onClick = { onItemClick(rec) },
+                    image = {
                         if (request != null) {
                             AsyncImage(
                                 model = request, contentDescription = rec.title, contentScale = ContentScale.Crop,
@@ -85,10 +90,11 @@ fun RecommendationsRow(items: List<Recommendation>, onItemClick: (Recommendation
                                 error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
                             )
                         }
+                    },
+                    caption = { focused ->
+                        Text(rec.title, color = if (focused) ZenithOnSurface else ZenithOnSurface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Spacer(Modifier.height(ZenithDimens.paddingXS))
-                    Text(rec.title, color = ZenithOnSurface, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                )
             }
         }
     }
