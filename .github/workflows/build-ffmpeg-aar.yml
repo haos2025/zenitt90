@@ -69,6 +69,10 @@ jobs:
       - name: Pin NDK version for the module
         run: |
           echo "android.ndkVersion = '$NDK_VERSION'" >> media/libraries/decoder_ffmpeg/build.gradle
+          # Media3 1.4.0 объявляет minSdk 19, а NDK r26 собирает от 21 и без этого рвёт сборку Gradle
+          # ([CXX1110] Platform version 19 is unsupported). Нативные библиотеки уже собраны выше под API 26,
+          # так что подавление ошибки безопасно; в приложении minSdk 26.
+          printf '\nandroid.ndk.suppressMinSdkVersionError=21\n' >> media/gradle.properties
 
       - name: Assemble AAR
         working-directory: media
