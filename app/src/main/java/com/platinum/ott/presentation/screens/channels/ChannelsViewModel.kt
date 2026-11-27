@@ -64,6 +64,8 @@ class ChannelsViewModel @Inject constructor(
                 was = s.running
             }
         }
+        // Каналам без логотипа подбираем его по названию (база iptv-org), в фоне.
+        sessionGraph.playlistSourceRepository.startLogoFill()
         // Программа не обновлялась больше 6 часов (или никогда) — тихо обновляем в фоне.
         viewModelScope.launch {
             try {

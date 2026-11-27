@@ -103,12 +103,17 @@ fun PlayerScreen(
     // сама гаснет через 700ms — независимо от капсулы снизу, которая
     // (с четвёртого раунда) больше не автоскрывается вообще.
     var seekToast by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(seekToast) {
-        if (seekToast != null) {
-            delay(700)
+    // Таймер завязан на счётчик, а не на сам текст. Раньше эффект зависел от текста: если на стыке «таймер сбросил
+    // в null» и «пришло следующее нажатие» значение снова становилось тем же «+10 сек», Compose видел его
+    // неизменным, новый таймер не запускался, и надпись зависала навсегда.
+    var seekToastNonce by remember { mutableStateOf(0) }
+    LaunchedEffect(seekToastNonce) {
+        if (seekToastNonce > 0) {
+            delay(900)
             seekToast = null
         }
     }
+    val showSeekToast: (String) -> Unit = { text -> seekToast = text; seekToastNonce++ }
 
     // PROMPT_EPG.md, подзадача 6 (заппинг по номерам) — только для живых
     // каналов (movieId с префиксом "ch_", проверяется и здесь, и ещё раз в
@@ -317,8 +322,8 @@ fun PlayerScreen(
                     Key.MediaPlay -> { viewModel.exoPlayer.play(); return@onKeyEvent true }
                     Key.MediaPause -> { viewModel.exoPlayer.pause(); return@onKeyEvent true }
                     Key.MediaPlayPause -> { touchControls(); viewModel.togglePlayPause(); return@onKeyEvent true }
-                    Key.MediaFastForward -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekForward(); seekToast = "+10 сек"; return@onKeyEvent true }
-                    Key.MediaRewind -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekBackward(); seekToast = "-10 сек"; return@onKeyEvent true }
+                    Key.MediaFastForward -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekForward(); showSeekToast("+10 сек"); return@onKeyEvent true }
+                    Key.MediaRewind -> { if (isChannel && !ready.isCatchup) return@onKeyEvent false; viewModel.seekBackward(); showSeekToast("-10 сек"); return@onKeyEvent true }
                     Key.ChannelUp -> { if (isChannel) { viewModel.zapToNextChannel(); touchControls(); return@onKeyEvent true } else return@onKeyEvent false }
                     Key.ChannelDown -> { if (isChannel) { viewModel.zapToPreviousChannel(); touchControls(); return@onKeyEvent true } else return@onKeyEvent false }
                     else -> {}
@@ -398,12 +403,12 @@ fun PlayerScreen(
                     liveNow && arrowMode == LiveArrowMode.CLASSIC && event.key == Key.DirectionUp -> { modal = PlayerModal.CHANNELS; true }
                     event.key == Key.DirectionRight -> {
                         touchControls()
-                        if (canSeek) { seekToast = "+10 сек"; seekPulseNonce++; viewModel.seekForward() }
+                        if (canSeek) { showSeekToast("+10 сек"); seekPulseNonce++; viewModel.seekForward() }
                         true
                     }
                     event.key == Key.DirectionLeft -> {
                         touchControls()
-                        if (canSeek) { seekToast = "-10 сек"; seekPulseNonce++; viewModel.seekBackward() }
+                        if (canSeek) { showSeekToast("-10 сек"); seekPulseNonce++; viewModel.seekBackward() }
                         true
                     }
                     event.key == Key.DirectionDown -> {

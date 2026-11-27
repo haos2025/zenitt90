@@ -38,6 +38,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -283,6 +284,23 @@ class PlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading)
     val uiState: StateFlow<PlayerUiState> = _uiState
 
+    /** Диагностика звука: есть ли FFmpeg-декодер в сборке, загрузился ли он и берёт ли этот кодек (через рефлексию — AAR необязателен). */
+    private fun ffmpegStatus(mime: String?): String = try {
+        val c = Class.forName("androidx.media3.decoder.ffmpeg.FfmpegLibrary")
+        val loaded = c.getMethod("isAvailable").invoke(null) as Boolean
+        if (!loaded) {
+            "FFmpeg есть в сборке, но библиотека не загрузилась"
+        } else {
+            val version = runCatching { c.getMethod("getVersion").invoke(null) as? String }.getOrNull()
+            val supports = mime?.let { runCatching { c.getMethod("supportsFormat", String::class.java).invoke(null, it) as Boolean }.getOrNull() }
+            "FFmpeg ${version ?: ""}: " + if (supports == true) "декодер ${mime} есть, но плеер его не выбрал" else "декодера ${mime ?: "?"} в нём нет"
+        }
+    } catch (_: ClassNotFoundException) {
+        "FFmpeg-декодера нет в приложении"
+    } catch (e: Throwable) {
+        "FFmpeg: ${e.javaClass.simpleName}"
+    }
+
     // Звук есть в потоке, но ни одна аудиодорожка не поддерживается устройством
     // (AC-3/E-AC-3/DTS и т.п. без декодера) — раньше канал просто молчал без
     // объяснений. Текст показывает PlayerScreen; null — проблем нет.
@@ -491,15 +509,17 @@ class PlayerViewModel @Inject constructor(
                 var audioGroups = 0
                 var audioSupported = 0
                 val unsupportedMimes = linkedSetOf<String>()
+                val unsupportedRaw = linkedSetOf<String>()
                 for (g in tracks.groups) if (g.type == C.TRACK_TYPE_AUDIO) {
                     for (i in 0 until g.length) {
                         audioGroups++
                         if (g.isTrackSupported(i)) audioSupported++
-                        else g.getTrackFormat(i).sampleMimeType?.let { unsupportedMimes += it.substringAfter('/').uppercase() }
+                        else g.getTrackFormat(i).sampleMimeType?.let { unsupportedMimes += it.substringAfter('/').uppercase(); unsupportedRaw += it }
                     }
                 }
                 _audioIssue.value = if (audioGroups > 0 && audioSupported == 0)
-                    "Звук не воспроизводится: кодек ${unsupportedMimes.joinToString().ifEmpty { "неизвестен" }} не поддерживается устройством"
+                    "Звук не воспроизводится: кодек ${unsupportedMimes.joinToString().ifEmpty { "неизвестен" }} не поддерживается устройством" +
+                        " [${ffmpegStatus(unsupportedRaw.firstOrNull())}]"
                 else null
                 val current = _uiState.value as? PlayerUiState.Ready ?: return
                 val audio = mutableListOf<TrackOption>()
@@ -643,11 +663,13 @@ class PlayerViewModel @Inject constructor(
     /** Запуск или продолжение из истории: «ext_direct…» — свежий запрос, «exth_…» — файл из списка/истории. */
     private fun loadExternal(movieId: String) {
         var explicitStart: Long? = null
+        var enrichFor: DirectPlayRequest? = null
         if (movieId.startsWith(EXTERNAL_PLAYER_ID_PREFIX)) {
             val request = pendingDirect
             if (request == null) { _uiState.value = PlayerUiState.Error("Нет ссылки для воспроизведения"); return }
             setupExternalSession(request)
             explicitStart = request.startPositionMs
+            if (request.playlist.size <= 1) enrichFor = request
         } else {
             if (extEntries.none { it.id == movieId }) {
                 val stored = externalStore.findByItem(movieId)
@@ -660,6 +682,68 @@ class PlayerViewModel @Inject constructor(
             extIndex = extEntries.indexOfFirst { it.id == movieId }
         }
         playExternalIndex(extIndex, explicitStart)
+        enrichFor?.let { enrichFromTorrServe(it) }
+    }
+
+    /** Сообщения для экрана вызывающей активити (тост): например, «TorrServe не отдал список файлов». */
+    val externalNotice = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    /**
+     * Приложение-источник прислало одну ссылку без списка серий. Если это поток TorrServe — спрашиваем у него
+     * список файлов торрента и подставляем: появляется окно «Серии», кнопки «Предыдущая/Следующая» и автопереход.
+     * Воспроизведение при этом не прерывается: текущий файл остаётся тем же (тот же id и ссылка).
+     */
+    private fun enrichFromTorrServe(request: DirectPlayRequest) {
+        val ref = com.platinum.ott.external.TorrServePlaylist.parseStreamUrl(request.url) ?: return
+        viewModelScope.launch {
+            val entries = withContext(Dispatchers.IO) { com.platinum.ott.external.TorrServePlaylist.fetch(ref, request.headers) }
+            if (entries == null) {
+                externalNotice.tryEmit("Zenith: TorrServe не отдал список серий (сервер недоступен или не поддерживает плейлист)")
+                return@launch
+            }
+            if (entries.size < 2) return@launch
+            val cur = extEntries.getOrNull(extIndex) ?: return@launch
+            if (cur.id != ExternalHistoryStore.itemId(request.url)) return@launch // за это время открыли другой файл
+            val idx = entries.indexOfFirst { it.index == ref.index }
+            if (idx < 0) return@launch
+            val items = entries.mapIndexed { i, e ->
+                if (i == idx) cur.item.copy(
+                    label = e.name, season = e.season ?: cur.item.season, episode = e.episode ?: cur.item.episode,
+                ) else DirectPlayItem(
+                    url = e.url, title = request.title, label = e.name, headers = request.headers,
+                    season = e.season, episode = e.episode,
+                )
+            }
+            var ids = items.map { ExternalHistoryStore.itemId(it.url) }
+            if (ids.distinct().size != ids.size) ids = ids.mapIndexed { i, id -> if (ids.count { it == id } > 1) "${id}_$i" else id }
+            // Текущий файл сохраняет прежний id — история и позиция не «теряются».
+            ids = ids.toMutableList().also { it[idx] = cur.id }
+            extEntries = items.mapIndexed { i, it -> ExternalEntry(ids[i], it) }
+            extIndex = idx
+            val key = ExternalHistoryStore.playlistKey(ids)
+            extSeriesId = ExternalHistoryStore.SERIES_PREFIX + key
+            currentSeriesId = extSeriesId
+            currentHistoryTitle = "$extCardTitle — ${episodeDisplayTitle(items[idx].label, extCardTitle, items[idx].episode ?: (idx + 1))}"
+            val stored = ExternalStoredPlaylist(
+                key = key, cardTitle = extCardTitle,
+                items = extEntries.map {
+                    ExternalStoredItem(it.id, it.item.url, it.item.title, it.item.label, it.item.headers, it.item.subtitleUrl, it.item.startPositionMs ?: 0L)
+                },
+            )
+            launch(Dispatchers.IO) { externalStore.remember(stored) }
+            val previous = extEntries.getOrNull(idx - 1)
+            val next = extEntries.getOrNull(idx + 1)
+            fun labelOf(e: ExternalEntry, i: Int) = episodeDisplayTitle(e.item.label, extCardTitle, e.item.episode ?: (i + 1))
+            (_uiState.value as? PlayerUiState.Ready)?.let { r ->
+                _uiState.value = r.copy(
+                    nextEpisodeId = next?.id, previousEpisodeId = previous?.id,
+                    nextEpisodeTitle = next?.let { labelOf(it, idx + 1) },
+                    previousEpisodeTitle = previous?.let { labelOf(it, idx - 1) },
+                    seriesId = extSeriesId,
+                )
+            }
+            startPrefetch()
+        }
     }
 
     private fun setupExternalSession(request: DirectPlayRequest) {

@@ -116,6 +116,11 @@ class ExternalPlayerActivity : ComponentActivity() {
         }
         request = parsed
         nonce += 1
+        // Список серий не пришёл и это не ссылка TorrServe (откуда его можно взять самим) — показываем, что прислали:
+        // по этому видно, в каком виде приложение-источник передаёт серии.
+        if (parsed.playlist.size <= 1 && TorrServePlaylist.parseStreamUrl(parsed.url) == null) {
+            Toast.makeText(this, "Zenith: список серий не получен. " + ExternalIntentParser.describe(intent), Toast.LENGTH_LONG).show()
+        }
         return true
     }
 
@@ -124,6 +129,9 @@ class ExternalPlayerActivity : ComponentActivity() {
         val req = request ?: return
         val viewModel: PlayerViewModel = hiltViewModel()
         androidx.compose.runtime.SideEffect { playerViewModel = viewModel }
+        androidx.compose.runtime.LaunchedEffect(viewModel) {
+            viewModel.externalNotice.collect { Toast.makeText(this@ExternalPlayerActivity, it, Toast.LENGTH_LONG).show() }
+        }
         val id = "$EXTERNAL_PLAYER_ID_PREFIX$nonce"
         // remember выполняется при композиции — раньше LaunchedEffect внутри экрана плеера,
         // который вызывает loadMovie(id) и уже найдёт подготовленный запрос.

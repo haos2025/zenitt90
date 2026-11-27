@@ -314,7 +314,45 @@ class PlaylistSourceRepository(
         backgroundScope.launch {
             epgMutex.withLock {
                 try { block() } catch (_: Exception) { /* EPG — дополнение, не ломает каталог */ }
+                // Логотипы — после XMLTV: его <icon> важнее, подбор по базе — для оставшихся без логотипа.
+                try { fillMissingLogos() } catch (_: Exception) { }
             }
+        }
+    }
+
+    private val logoResolver by lazy { ChannelLogoResolver(appContext, client) }
+    private val logoFillMutex = Mutex()
+
+    /**
+     * Каналам без логотипа (в плейлисте нет tvg-logo, в XMLTV нет <icon>) подбирает его по названию
+     * из базы iptv-org. Уже заданные логотипы не трогает. Возвращает, сколько подобрано.
+     */
+    private suspend fun fillMissingLogos(report: MutableList<String>? = null): Int {
+        if (!logoFillMutex.tryLock()) return 0
+        try {
+            val missing = channelMatchingRepository.allChannels().filter { it.logo.isNullOrBlank() }
+            if (missing.isEmpty()) return 0
+            val index = logoResolver.index()
+            if (index == null) {
+                report?.add("Логотипы: база iptv-org недоступна, без логотипа ${missing.size} каналов")
+                return 0
+            }
+            var added = 0
+            for (ch in missing) {
+                val url = logoResolver.find(index, ch.canonicalName) ?: continue
+                if (channelMatchingRepository.setLogoIfEmpty(ch.id, url)) added++
+            }
+            report?.add("Логотипы: подобрано $added из ${missing.size} каналов без логотипа")
+            return added
+        } finally {
+            logoFillMutex.unlock()
+        }
+    }
+
+    /** Фоновый подбор логотипов (при открытии списка каналов); безопасно вызывать часто. */
+    fun startLogoFill() {
+        backgroundScope.launch {
+            try { fillMissingLogos() } catch (_: Exception) { }
         }
     }
 
@@ -863,6 +901,7 @@ class PlaylistSourceRepository(
             if (handled.size > before) anyOk = true
         }
         if (anyOk) epgPrefs.edit().putLong("last_ok", System.currentTimeMillis()).apply()
+        try { fillMissingLogos(report) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
         anyOk
     }
 

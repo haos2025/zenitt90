@@ -54,8 +54,20 @@ object ExternalIntentParser {
         val subtitle = parseSubtitle(raw("subs"), raw("subtitles_location"))
 
         // Список серий MX: video_list (Uri[]) + video_list.name (String[]).
-        val mxUris = (raw("video_list") as? Array<*>)?.map { it?.toString() }.orEmpty()
-        val mxNames = (raw("video_list.name") as? Array<*>)?.map { it?.toString() }.orEmpty()
+        // Приложения кладут список по-разному: Uri[] (как требует MX), ArrayList<Uri> или ArrayList<String>.
+        // Кроме MX-ключей пробуем и другие распространённые: «playlist»/«urls»/«uris» (списком, не Bundle),
+        // EXTRA_STREAM и несколько ссылок в ClipData; имена — «video_list.name», «titles», «names».
+        fun clipUris(): List<String?> {
+            val cd = intent.clipData ?: return emptyList()
+            return (0 until cd.itemCount).map { cd.getItemAt(it).uri?.toString() }
+        }
+        val mxUris = listOf(
+            asStringList(raw("video_list")), asStringList(raw("playlist")), asStringList(raw("urls")),
+            asStringList(raw("uris")), asStringList(raw(Intent.EXTRA_STREAM)), clipUris(),
+        ).firstOrNull { it.size > 1 }.orEmpty()
+        val mxNames = listOf(
+            asStringList(raw("video_list.name")), asStringList(raw("titles")), asStringList(raw("names")),
+        ).firstOrNull { it.isNotEmpty() }.orEmpty()
         var playlist: List<DirectPlayItem> = emptyList()
         var startIndex = 0
         if (mxUris.size > 1 && mxUris.size <= MAX_PLAYLIST) {
@@ -82,6 +94,34 @@ object ExternalIntentParser {
             startIndex = startIndex,
             dialect = if (playlist.isNotEmpty() || raw("return_result") != null || raw("video_list") != null) DIALECT_MX else DIALECT_VIEW,
         )
+    }
+
+    private fun asStringList(v: Any?): List<String?> = when (v) {
+        is Array<*> -> v.map { it?.toString() }
+        is Collection<*> -> v.map { it?.toString() }
+        else -> emptyList()
+    }
+
+    /** Короткая «справка» о том, что прислало приложение: только ключи и размеры, без значений (там бывают токены). */
+    fun describe(intent: Intent?): String {
+        if (intent == null) return "интент пуст"
+        val sb = StringBuilder()
+        intent.data?.let { u ->
+            sb.append(u.scheme).append("://").append(u.host ?: "").append(if (u.port > 0) ":${u.port}" else "")
+                .append(u.path.orEmpty().take(20)).append("; ")
+        }
+        val keys = intent.extras?.keySet().orEmpty().sorted()
+        sb.append("extras: ")
+        if (keys.isEmpty()) sb.append("нет")
+        keys.joinTo(sb, ", ") { k ->
+            when (val v = intent.extras?.get(k)) {
+                is Array<*> -> "$k[${v.size}]"
+                is Collection<*> -> "$k[${v.size}]"
+                is Bundle -> "$k{${v.keySet().size}}"
+                else -> k
+            }
+        }
+        return sb.toString().take(380)
     }
 
     // ---- Just+ Player: Bundle "playlist" ----
